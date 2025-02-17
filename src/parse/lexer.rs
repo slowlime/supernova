@@ -1,7 +1,7 @@
 use std::fmt::{self, Display};
 
 use miette::{Diagnostic, SourceOffset};
-use num_bigint::BigUint;
+use num::{BigUint, Num};
 use thiserror::Error;
 
 use crate::location::Span;
@@ -65,6 +65,17 @@ pub enum LexerErrorKind {
     #[error("the number is malformed")]
     #[diagnostic(code(lexer::malformed_number))]
     MalformedNumber,
+
+    #[error("the address literal is malformed")]
+    #[diagnostic(code(lexer::malformed_address))]
+    MalformedAddress,
+
+    #[error("the address literal is unterminated")]
+    #[diagnostic(
+        code(lexer::unterminated_address),
+        help("the address literal must be immediately followed by '>'"),
+    )]
+    UnterminatedAddress,
 }
 
 pub struct Lexer<'a> {
@@ -87,6 +98,10 @@ impl Lexer<'_> {
             || ('\u{d8}'..='\u{de}').contains(&c)
             || ('\u{df}'..='\u{f6}').contains(&c)
             || ('\u{f8}'..='\u{ff}').contains(&c)
+    }
+
+    fn is_address_digit(c: char) -> bool {
+        c.is_ascii_hexdigit()
     }
 
     fn is_digit(c: char) -> bool {
@@ -142,6 +157,20 @@ impl<'a> Lexer<'a> {
         }
 
         Ok(())
+    }
+
+    fn scan_address(&mut self) -> ScanResult<'a> {
+        self.cursor.consume_expecting("<0x").unwrap();
+        let digits = self.cursor.consume_while(Self::is_address_digit);
+        let Ok(value) = BigUint::from_str_radix(digits, 16) else {
+            return Err(self.make_error_at_pos(LexerErrorKind::MalformedAddress));
+        };
+
+        if self.cursor.consume_expecting(">").is_none() {
+            return Err(self.make_error_at_pos(LexerErrorKind::UnterminatedAddress));
+        }
+
+        Ok(TokenValue::Address(value))
     }
 
     fn scan_int(&mut self) -> ScanResult<'a> {
@@ -201,6 +230,8 @@ impl<'a> Iterator for Lexer<'a> {
 
                     continue;
                 }
+
+                Some('<') if self.cursor.starts_with("<0x") => self.scan_address(),
 
                 Some(c) if Self::is_digit(c) => self.scan_int(),
 

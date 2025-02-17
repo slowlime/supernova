@@ -1,5 +1,5 @@
 use phf::phf_map;
-use num_bigint::BigUint;
+use num::BigUint;
 
 use crate::location::Span;
 
@@ -7,6 +7,12 @@ use crate::location::Span;
 pub struct Token<'a> {
     pub span: Span,
     pub value: TokenValue<'a>,
+}
+
+impl Token<'_> {
+    pub fn kind(&self) -> TokenKind {
+        self.value.kind()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -17,6 +23,29 @@ pub enum TokenValue<'a> {
     Extension(Span),
     Address(BigUint),
     Int(BigUint),
+}
+
+impl TokenValue<'_> {
+    pub fn kind(&self) -> TokenKind {
+        match self {
+            Self::Eof => TokenKind::Eof,
+            Self::Symbol(sym) => TokenKind::Symbol(*sym),
+            Self::Ident(_) => TokenKind::Ident,
+            Self::Extension(_) => TokenKind::Extension,
+            Self::Address(_) => TokenKind::Address,
+            Self::Int(_) => TokenKind::Int,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum TokenKind {
+    Eof,
+    Symbol(Symbol),
+    Ident,
+    Extension,
+    Address,
+    Int,
 }
 
 macro_rules! symbols {
