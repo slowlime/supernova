@@ -1,3 +1,4 @@
+mod ast;
 mod location;
 mod parse;
 mod sourcemap;
