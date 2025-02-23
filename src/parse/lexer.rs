@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 use std::fmt::{self, Display};
 
 use miette::{Diagnostic, SourceOffset};
@@ -70,10 +71,14 @@ pub enum LexerErrorKind {
     #[diagnostic(code(lexer::malformed_address))]
     MalformedAddress,
 
+    #[error("the extension name is malformed")]
+    #[diagnostic(code(lexer::malformed_extension))]
+    MalformedExtension,
+
     #[error("the address literal is unterminated")]
     #[diagnostic(
         code(lexer::unterminated_address),
-        help("the address literal must be immediately followed by '>'"),
+        help("the address literal must be immediately followed by '>'")
     )]
     UnterminatedAddress,
 }
@@ -81,6 +86,7 @@ pub enum LexerErrorKind {
 pub struct Lexer<'a> {
     cursor: Cursor<'a>,
     eof: bool,
+    buf: VecDeque<(Result<Token<'a>, LexerError>, SourceOffset)>,
 }
 
 impl Lexer<'_> {
@@ -104,6 +110,10 @@ impl Lexer<'_> {
         c.is_ascii_hexdigit()
     }
 
+    fn is_extension_letter(c: char) -> bool {
+        "-_".contains(c) || Self::is_letter(c) || Self::is_digit(c)
+    }
+
     fn is_digit(c: char) -> bool {
         c.is_ascii_digit()
     }
@@ -119,11 +129,11 @@ impl Lexer<'_> {
 
 impl<'a> Lexer<'a> {
     pub fn new(cursor: Cursor<'a>) -> Self {
-        Self { cursor, eof: false }
-    }
-
-    pub fn pos(&self) -> SourceOffset {
-        self.cursor.pos()
+        Self {
+            cursor,
+            eof: false,
+            buf: Default::default(),
+        }
     }
 
     fn make_error_at_pos(&self, kind: LexerErrorKind) -> PosLexerError {
@@ -173,6 +183,17 @@ impl<'a> Lexer<'a> {
         Ok(TokenValue::Address(value))
     }
 
+    fn scan_extension(&mut self) -> ScanResult<'a> {
+        self.cursor.consume_expecting("#").unwrap();
+        let name = self.cursor.consume_while(Self::is_extension_letter);
+
+        if name.is_empty() {
+            return Err(self.make_error_at_pos(LexerErrorKind::MalformedExtension));
+        }
+
+        Ok(TokenValue::Extension(name))
+    }
+
     fn scan_int(&mut self) -> ScanResult<'a> {
         let digits = self.cursor.consume_while(Self::is_digit);
         let value = digits.parse::<BigUint>().unwrap();
@@ -191,16 +212,8 @@ impl<'a> Lexer<'a> {
             .map(TokenValue::Symbol)
             .unwrap_or(TokenValue::Ident(ident)))
     }
-}
 
-impl<'a> Iterator for Lexer<'a> {
-    type Item = Result<Token<'a>, LexerError>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.eof {
-            return None;
-        }
-
+    fn scan_next(&mut self) -> Option<Result<Token<'a>, LexerError>> {
         let mut start = self.cursor.pos();
 
         let scan_result: ScanResult = (|| loop {
@@ -233,6 +246,8 @@ impl<'a> Iterator for Lexer<'a> {
 
                 Some('<') if self.cursor.starts_with("<0x") => self.scan_address(),
 
+                Some('#') => self.scan_extension(),
+
                 Some(c) if Self::is_digit(c) => self.scan_int(),
 
                 Some(c) if Self::is_ident_start(c) => self.scan_ident_or_symbol(),
@@ -261,5 +276,38 @@ impl<'a> Iterator for Lexer<'a> {
                 Err(e.with_start(start))
             }
         })
+    }
+
+    pub fn next(&mut self) -> Option<Result<Token<'a>, LexerError>> {
+        self.buf
+            .pop_front()
+            .map(|entry| entry.0)
+            .or_else(|| self.scan_next())
+    }
+
+    pub fn peek(&mut self) -> Option<&Result<Token<'a>, LexerError>> {
+        self.peek_nth(0)
+    }
+
+    pub fn peek_nth(&mut self, n: usize) -> Option<&Result<Token<'a>, LexerError>> {
+        while self.buf.len() < n {
+            let pos = self.cursor.pos();
+
+            if let Some(r) = self.scan_next() {
+                self.buf.push_back((r, pos));
+            } else {
+                return None;
+            }
+        }
+
+        Some(&self.buf[n].0)
+    }
+
+    pub fn pos(&self) -> SourceOffset {
+        // FIXME: WRONG
+        self.buf
+            .front()
+            .map(|entry| entry.1)
+            .unwrap_or(self.cursor.pos())
     }
 }

@@ -2,7 +2,7 @@ mod ast;
 mod location;
 mod parse;
 mod sourcemap;
-mod util;
+pub mod util;
 
 fn main() {
     println!("Hello, world!");

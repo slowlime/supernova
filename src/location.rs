@@ -1,4 +1,3 @@
-use std::borrow::Cow;
 use std::ops::{Range, RangeBounds};
 
 use miette::{SourceOffset, SourceSpan};
@@ -70,13 +69,6 @@ impl Span {
     pub fn len(&self) -> usize {
         self.len
     }
-
-    pub fn convex_hull(&self, other: &Self) -> Self {
-        let start = self.start.min(other.start);
-        let end = self.end().offset().max(other.end().offset());
-
-        Self::new_spanning(start..end)
-    }
 }
 
 impl From<SourceSpan> for Span {
@@ -118,16 +110,6 @@ impl Location {
     pub fn span(&self) -> Option<Span> {
         try_match!(*self, Location::UserCode(span) => span)
     }
-
-    pub fn convex_hull(&self, other: Location) -> Location {
-        match (self, other) {
-            (Location::UserCode(lhs), Location::UserCode(ref rhs)) => {
-                Location::UserCode(lhs.convex_hull(rhs))
-            }
-
-            _ => Location::Builtin,
-        }
-    }
 }
 
 impl From<Location> for Option<SourceSpan> {
@@ -138,55 +120,65 @@ impl From<Location> for Option<SourceSpan> {
 
 impl From<Option<Span>> for Location {
     fn from(span: Option<Span>) -> Self {
-        span.map(Self::UserCode).unwrap_or_default()
+        span.map(Into::into).unwrap_or_default()
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Spanned<T> {
-    pub location: Location,
-    pub value: T,
-}
-
-impl<T> Spanned<T> {
-    pub fn new(value: T, location: Location) -> Self {
-        Self { location, value }
-    }
-
-    pub fn new_builtin(value: T) -> Self {
-        Self {
-            location: Location::Builtin,
-            value,
-        }
-    }
-
-    pub fn new_spanning(value: T, span: Span) -> Self {
-        Self {
-            location: Location::UserCode(span),
-            value,
-        }
-    }
-
-    pub fn span(&self) -> Option<Span> {
-        self.location.span()
-    }
-
-    pub fn map<F, U>(self, f: F) -> Spanned<U>
-    where
-        F: FnOnce(T) -> U,
-    {
-        Spanned {
-            location: self.location,
-            value: f(self.value),
-        }
+impl From<Span> for Location {
+    fn from(span: Span) -> Self {
+        Self::UserCode(span)
     }
 }
 
-impl<T: ?Sized> Spanned<Cow<'_, T>>
-where
-    T: ToOwned,
-{
-    pub fn into_owned(self) -> Spanned<T::Owned> {
-        self.map(Cow::into_owned)
+impl From<Range<SourceOffset>> for Location {
+    fn from(range: Range<SourceOffset>) -> Self {
+        Self::UserCode(range.into())
+    }
+}
+
+pub trait ConvexHull<Rhs = Self> {
+    type Result;
+
+    fn convex_hull(&self, other: &Rhs) -> Self::Result;
+}
+
+impl ConvexHull for Span {
+    type Result = Span;
+
+    fn convex_hull(&self, other: &Self) -> Self {
+        let start = self.start.min(other.start);
+        let end = self.end().offset().max(other.end().offset());
+
+        Self::new_spanning(start..end)
+    }
+}
+
+impl ConvexHull<Location> for Span {
+    type Result = Location;
+
+    fn convex_hull(&self, other: &Location) -> Location {
+        other.convex_hull(self)
+    }
+}
+
+impl ConvexHull<Span> for Location {
+    type Result = Location;
+
+    fn convex_hull(&self, other: &Span) -> Self {
+        self.convex_hull(&Location::from(*other))
+    }
+}
+
+impl ConvexHull for Location {
+    type Result = Location;
+
+    fn convex_hull(&self, other: &Location) -> Location {
+        match (self, other) {
+            (Location::UserCode(lhs), Location::UserCode(ref rhs)) => {
+                Location::UserCode(lhs.convex_hull(rhs))
+            }
+
+            _ => Location::Builtin,
+        }
     }
 }

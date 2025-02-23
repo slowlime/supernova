@@ -1,7 +1,11 @@
-use phf::phf_map;
+use std::fmt::{self, Display};
+
+use derive_more::{Display, From};
 use num::BigUint;
+use phf::phf_map;
 
 use crate::location::Span;
+use crate::util::try_match;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Token<'a> {
@@ -15,17 +19,28 @@ impl Token<'_> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Display, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TokenValue<'a> {
+    #[display("EOF")]
     Eof,
+
+    #[display("{_0}")]
     Symbol(Symbol),
+
+    #[display("`{_0}`")]
     Ident(&'a str),
-    Extension(Span),
+
+    #[display("`#{_0}`")]
+    Extension(&'a str),
+
+    #[display("`<0x{_0:x}>`")]
     Address(BigUint),
+
+    #[display("`{_0}`")]
     Int(BigUint),
 }
 
-impl TokenValue<'_> {
+impl<'a> TokenValue<'a> {
     pub fn kind(&self) -> TokenKind {
         match self {
             Self::Eof => TokenKind::Eof,
@@ -36,15 +51,46 @@ impl TokenValue<'_> {
             Self::Int(_) => TokenKind::Int,
         }
     }
+
+    pub fn as_symbol(&self) -> Option<Symbol> {
+        try_match!(*self, Self::Symbol(sym) => sym)
+    }
+
+    pub fn as_ident(&self) -> Option<&'a str> {
+        try_match!(*self, Self::Ident(v) => v)
+    }
+
+    pub fn as_extension(&self) -> Option<&'a str> {
+        try_match!(*self, Self::Extension(v) => v)
+    }
+
+    pub fn into_address(self) -> Option<BigUint> {
+        try_match!(self, Self::Address(v) => v)
+    }
+
+    pub fn into_int(self) -> Option<BigUint> {
+        try_match!(self, Self::Int(v) => v)
+    }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(From, Display, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TokenKind {
+    #[display("EOF")]
     Eof,
+
+    #[display("{_0}")]
     Symbol(Symbol),
+
+    #[display("an identifier")]
     Ident,
+
+    #[display("an extension")]
     Extension,
+
+    #[display("an address")]
     Address,
+
+    #[display("an integer")]
     Int,
 }
 
@@ -59,6 +105,12 @@ macro_rules! symbols {
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
         pub enum Symbol {
             $($($variant,)+)+
+        }
+
+        impl Display for Symbol {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                write!(f, "`{}`", self.to_str())
+            }
         }
 
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -151,7 +203,7 @@ macro_rules! symbols {
                 Self::SYMBOLS.get(input).copied()
             }
 
-            pub fn to_str(self) -> &'static str {
+            pub const fn to_str(self) -> &'static str {
                 match self {
                     $($(Self::$variant => $lit,)+)+
                 }
@@ -185,7 +237,6 @@ symbols! {
         "cast" => Cast,
         "catch" => Catch,
         "cons" => Cons,
-        "core" => Core,
         "else" => Else,
         "exception" => Exception,
         "extend" => Extend,
@@ -228,8 +279,8 @@ symbols! {
         ";" => Semicolon,
         "(" => LParen,
         ")" => RParen,
-        "{" => LCurly,
-        "}" => RCurly,
+        "{" => LBrace,
+        "}" => RBrace,
         "=" => Equals,
         ":" => Colon,
         "->" => Arrow,

@@ -22,6 +22,12 @@ pub struct Program<'src> {
 #[derive(Debug, Clone, Copy)]
 pub enum Extension {}
 
+impl Extension {
+    pub fn from_str(s: &str) -> Option<Self> {
+        None
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Decl<'src> {
     pub id: DeclId,
@@ -42,11 +48,12 @@ pub enum DeclKind<'src> {
 
 #[derive(Debug, Clone)]
 pub struct DeclFn<'src> {
-    pub annotations: Vec<Annotation<'src>>,
+    pub annotations: Vec<Annotation>,
     pub fn_kw: Option<Token<'src>>,
+    pub name: Name<'src>,
     pub generics: Vec<Name<'src>>,
     pub params: Vec<Param<'src>>,
-    pub ret_kw: Option<Token<'src>>,
+    pub ret_token: Option<Token<'src>>,
     pub ret: Option<TyExpr<'src>>,
     pub throws_kw: Option<Token<'src>>,
     pub throws: Vec<TyExpr<'src>>,
@@ -76,14 +83,29 @@ pub struct DeclExceptionVariant<'src> {
 }
 
 #[derive(Debug, Clone)]
-pub enum Annotation<'src> {
-    Inline(Option<Token<'src>>),
+pub struct Annotation {
+    pub location: Location,
+    pub kind: AnnotationKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum AnnotationKind {
+    Inline,
 }
 
 #[derive(Debug, Clone)]
 pub enum Name<'src> {
     Token(Token<'src>),
     Synthetic(String),
+}
+
+impl Name<'_> {
+    pub fn location(&self) -> Location {
+        match self {
+            Self::Token(token) => token.span.into(),
+            Self::Synthetic(_) => Location::Builtin,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -105,7 +127,7 @@ pub struct TyExpr<'src> {
     pub kind: TyExprKind<'src>,
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(From, Debug, Default, Clone)]
 pub enum TyExprKind<'src> {
     #[default]
     Dummy,
@@ -142,9 +164,9 @@ pub struct TyExprRef<'src> {
 
 #[derive(Debug, Clone)]
 pub struct TyExprSum<'src> {
-    pub left: Box<TyExpr<'src>>,
+    pub lhs: Box<TyExpr<'src>>,
     pub plus_token: Option<Token<'src>>,
-    pub right: Box<TyExpr<'src>>,
+    pub rhs: Box<TyExpr<'src>>,
 }
 
 #[derive(Debug, Clone)]
@@ -156,7 +178,7 @@ pub struct TyExprFn<'src> {
 
 #[derive(Debug, Clone)]
 pub struct TyExprForAll<'src> {
-    pub forall_kw: Option<Token<'src>>,
+    pub forall_location: Location,
     pub name: Name<'src>,
     pub ty_expr: Box<TyExpr<'src>>,
 }
@@ -192,7 +214,7 @@ pub struct TyExprVariant<'src> {
 #[derive(Debug, Clone)]
 pub struct TyExprVariantField<'src> {
     pub name: Name<'src>,
-    pub ty_expr: TyExpr<'src>,
+    pub ty_expr: Option<TyExpr<'src>>,
 }
 
 #[derive(Debug, Clone)]
@@ -224,7 +246,7 @@ pub struct Expr<'src> {
     pub kind: ExprKind<'src>,
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(From, Debug, Default, Clone)]
 pub enum ExprKind<'src> {
     #[default]
     Dummy,
@@ -245,7 +267,7 @@ pub enum ExprKind<'src> {
     Unfold(ExprUnfold<'src>),
     Apply(ExprApply<'src>),
     TyApply(ExprTyApply<'src>),
-    Asc(ExprAsc<'src>),
+    Ascription(ExprAscription<'src>),
     Cast(ExprCast<'src>),
     Fn(ExprFn<'src>),
     Tuple(ExprTuple<'src>),
@@ -309,7 +331,6 @@ pub struct ExprThrow<'src> {
 pub struct ExprTry<'src> {
     pub try_expr: Box<Expr<'src>>,
     pub fallback: ExprTryFallback<'src>,
-    pub arm: Box<Arm<'src>>,
 }
 
 #[derive(Debug, Clone)]
@@ -341,7 +362,7 @@ pub struct ExprFold<'src> {
 
 #[derive(Debug, Clone)]
 pub struct ExprUnfold<'src> {
-    pub fold_kw: Option<Token<'src>>,
+    pub unfold_kw: Option<Token<'src>>,
     pub ty_expr: TyExpr<'src>,
     pub expr: Box<Expr<'src>>,
 }
@@ -362,6 +383,16 @@ pub enum Callee<'src> {
     },
 
     Expr(Box<Expr<'src>>),
+}
+
+impl Callee<'_> {
+    pub fn location(&self) -> Location {
+        match self {
+            Self::Builtin { kw: Some(kw), .. } => kw.span.into(),
+            Self::Builtin { .. } => Location::Builtin,
+            Self::Expr(expr) => expr.location,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -386,7 +417,7 @@ pub struct ExprTyApply<'src> {
 }
 
 #[derive(Debug, Clone)]
-pub struct ExprAsc<'src> {
+pub struct ExprAscription<'src> {
     pub expr: Box<Expr<'src>>,
     pub as_kw: Option<Token<'src>>,
     pub ty_expr: TyExpr<'src>,
@@ -401,7 +432,7 @@ pub struct ExprCast<'src> {
 
 #[derive(Debug, Clone)]
 pub struct ExprFn<'src> {
-    pub params: Vec<Name<'src>>,
+    pub params: Vec<Param<'src>>,
     pub body: Box<Body<'src>>,
 }
 
@@ -454,13 +485,13 @@ pub struct ExprSeq<'src> {
 pub struct ExprLet<'src> {
     pub let_kw: Option<Token<'src>>,
     pub rec: bool,
-    pub binding: Vec<Binding<'src>>,
+    pub bindings: Vec<Binding<'src>>,
     pub body: Box<Expr<'src>>,
 }
 
 #[derive(Debug, Clone)]
 pub struct Binding<'src> {
-    pub name: Name<'src>,
+    pub pat: Pat<'src>,
     pub expr: Expr<'src>,
 }
 
@@ -521,7 +552,7 @@ pub struct Pat<'src> {
     pub kind: PatKind<'src>,
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(From, Debug, Default, Clone)]
 pub enum PatKind<'src> {
     #[default]
     Dummy,
@@ -535,7 +566,7 @@ pub enum PatKind<'src> {
     Unit(PatUnit),
     Int(PatInt),
     Name(PatName<'src>),
-    Asc(PatAsc<'src>),
+    Ascription(PatAscription<'src>),
     Cast(PatCast<'src>),
 }
 
@@ -599,7 +630,7 @@ pub struct PatName<'src> {
 }
 
 #[derive(Debug, Clone)]
-pub struct PatAsc<'src> {
+pub struct PatAscription<'src> {
     pub pat: Box<Pat<'src>>,
     pub ty_expr: TyExpr<'src>,
 }
