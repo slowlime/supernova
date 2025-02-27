@@ -1,12 +1,14 @@
 use std::collections::VecDeque;
 use std::fmt::{self, Display};
 
-use miette::{Diagnostic, SourceOffset};
+use ariadne::{Report, ReportBuilder, ReportKind};
 use num::{BigUint, Num};
 use thiserror::Error;
 
+use crate::diag::IntoReportBuilder;
 use crate::location::Span;
 use crate::parse::token::Symbol;
+use crate::sourcemap::SourceId;
 
 use super::cursor::Cursor;
 use super::token::{Token, TokenValue};
@@ -15,26 +17,32 @@ type ScanResult<'a> = Result<TokenValue<'a>, PosLexerError>;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 struct PosLexerError {
-    end: SourceOffset,
+    end: u64,
     kind: LexerErrorKind,
 }
 
 impl PosLexerError {
-    fn with_start(self, start: SourceOffset) -> LexerError {
+    fn with_start(self, source_id: SourceId, start: u64) -> LexerError {
         LexerError {
             kind: self.kind,
-            span: (start.offset()..self.end.offset()).into(),
+            span: (source_id, start..self.end).into(),
         }
     }
 }
 
-#[derive(Error, Diagnostic, Debug, Clone, Eq, PartialEq)]
+#[derive(Error, Debug, Clone, Eq, PartialEq)]
 #[error("lexical analysis failed: {kind}")]
 pub struct LexerError {
     pub kind: LexerErrorKind,
-
-    #[label]
     pub span: Span,
+}
+
+impl IntoReportBuilder for LexerError {
+    fn into_report_builder(self) -> ReportBuilder<'static, Span> {
+        let report = Report::build(ReportKind::Error, self.span);
+
+        self.kind.update_report(report)
+    }
 }
 
 fn format_char(c: char) -> impl Display {
@@ -53,40 +61,58 @@ fn format_char(c: char) -> impl Display {
     CharFormatter(c)
 }
 
-#[derive(Error, Diagnostic, Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Error, Debug, Clone, Copy, Eq, PartialEq)]
 pub enum LexerErrorKind {
     #[error("the multiline comment is not terminated")]
-    #[diagnostic(code(lexer::unterminated_comment))]
     UnterminatedComment,
 
     #[error("encountered an unrecognized character {}", format_char(*.0))]
-    #[diagnostic(code(lexer::unrecognized_character))]
     UnrecognizedCharacter(char),
 
     #[error("the number is malformed")]
-    #[diagnostic(code(lexer::malformed_number))]
     MalformedNumber,
 
     #[error("the address literal is malformed")]
-    #[diagnostic(code(lexer::malformed_address))]
     MalformedAddress,
 
     #[error("the extension name is malformed")]
-    #[diagnostic(code(lexer::malformed_extension))]
     MalformedExtension,
 
     #[error("the address literal is unterminated")]
-    #[diagnostic(
-        code(lexer::unterminated_address),
-        help("the address literal must be immediately followed by '>'")
-    )]
     UnterminatedAddress,
+}
+
+impl LexerErrorKind {
+    fn update_report(&self, mut report: ReportBuilder<'static, Span>) -> ReportBuilder<'static, Span> {
+        report.set_message(self);
+
+        match self {
+            LexerErrorKind::UnterminatedComment => report
+                .with_code("lexer::unterminated_comment"),
+
+            LexerErrorKind::UnrecognizedCharacter(_) => report
+                .with_code("lexer::unrecognized_character"),
+
+            LexerErrorKind::MalformedNumber => report
+                .with_code("lexer::malformed_number"),
+
+            LexerErrorKind::MalformedAddress => report
+                .with_code("lexer::malformed_address"),
+
+            LexerErrorKind::MalformedExtension => report
+                .with_code("lexer::malformed_extension"),
+
+            LexerErrorKind::UnterminatedAddress => report
+                .with_code("lexer::unterminated_address")
+                .with_help("the address literal must be immediately followed by '>'"),
+        }
+    }
 }
 
 pub struct Lexer<'a> {
     cursor: Cursor<'a>,
     eof: bool,
-    buf: VecDeque<(Result<Token<'a>, LexerError>, SourceOffset)>,
+    buf: VecDeque<(Result<Token<'a>, LexerError>, u64)>,
 }
 
 impl Lexer<'_> {
@@ -266,18 +292,19 @@ impl<'a> Lexer<'a> {
 
         Some(match scan_result {
             Ok(value) => Ok(Token {
-                span: (start..self.cursor.pos()).into(),
+                span: (self.source_id(), start..self.cursor.pos()).into(),
                 value,
             }),
 
             Err(e) => {
                 self.eof = true;
 
-                Err(e.with_start(start))
+                Err(e.with_start(self.source_id(), start))
             }
         })
     }
 
+    #[allow(clippy::should_implement_trait)]
     pub fn next(&mut self) -> Option<Result<Token<'a>, LexerError>> {
         self.buf
             .pop_front()
@@ -303,8 +330,11 @@ impl<'a> Lexer<'a> {
         Some(&self.buf[n].0)
     }
 
-    pub fn pos(&self) -> SourceOffset {
-        // FIXME: WRONG
+    pub fn source_id(&self) -> SourceId {
+        self.cursor.source_id()
+    }
+
+    pub fn pos(&self) -> u64 {
         self.buf
             .front()
             .map(|entry| entry.1)

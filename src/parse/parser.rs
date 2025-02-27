@@ -1,68 +1,95 @@
 use std::borrow::Cow;
 
+use ariadne::{Label, Report, ReportBuilder, ReportKind};
 use fxhash::FxHashMap;
-use miette::Diagnostic;
+use strum::VariantArray;
 use thiserror::Error;
 
 use crate::ast;
+use crate::diag::IntoReportBuilder;
 use crate::location::{ConvexHull, Span};
 use crate::util::format_list;
 
 use super::token::Symbol;
 use super::{Lexer, LexerError, Token, TokenKind, TokenValue};
 
-#[derive(Error, Diagnostic, Debug, Clone, PartialEq)]
+#[derive(Error, Debug, Clone, PartialEq)]
 pub enum ParserError<'src> {
     #[error(
         "unexpected token {}, expected {}",
         token.value,
         format_list(expected, "or", "nothing"),
     )]
-    #[diagnostic(code(parser::unexpected_token))]
     UnexpectedToken {
         token: Token<'src>,
         expected: Vec<Cow<'static, str>>,
     },
 
     #[error("unknown language `{language}`")]
-    #[diagnostic(
-        code(parser::unknown_language),
-        help("the only supported language is `core`")
-    )]
-    UnknownLanguage {
-        #[label]
-        span: Span,
-        language: String,
-    },
+    UnknownLanguage { span: Span, language: String },
 
     #[error("unknown extension `{extension}`")]
-    #[diagnostic(code(parser::unknown_extension))]
-    UnknownExtension {
-        #[label]
-        span: Span,
-        extension: String,
-    },
+    UnknownExtension { span: Span, extension: String },
 
     #[error("duplicate annotation")]
-    #[diagnostic(code(parser::duplicate_annotation))]
-    DuplicateAnnotation {
-        #[label]
-        span: Span,
-
-        #[label = "the previous such annotation was here"]
-        prev_span: Span,
-    },
+    DuplicateAnnotation { span: Span, prev_span: Span },
 
     #[error("the tuple index is too large")]
-    #[diagnostic(code(parser::tuple_index_too_large))]
-    TupleIndexTooLarge {
-        #[label]
-        span: Span,
-    },
+    TupleIndexTooLarge { span: Span },
 
     #[error(transparent)]
-    #[diagnostic(transparent)]
     LexerError(#[from] LexerError),
+}
+
+impl IntoReportBuilder for ParserError<'_> {
+    fn into_report_builder(self) -> ReportBuilder<'static, Span> {
+        match self {
+            Self::UnexpectedToken {
+                ref token,
+                ref expected,
+            } => Report::build(ReportKind::Error, token.span)
+                .with_message(format!("unexpected token {}", token.value))
+                .with_code("parser::unexpected_token")
+                .with_help(format!(
+                    "expected {}",
+                    format_list(expected, "or", "nothing")
+                )),
+
+            Self::UnknownLanguage { span, language: _ } => Report::build(ReportKind::Error, span)
+                .with_message(&self)
+                .with_code("parser::unknown_language")
+                .with_help("the only supported language is `core`"),
+
+            Self::UnknownExtension { span, extension: _ } => Report::build(ReportKind::Error, span)
+                .with_message(&self)
+                .with_code("parser::unknown_extension")
+                .with_help(format!(
+                    "supported extensions are {}",
+                    format_list(
+                        &ast::Extension::VARIANTS
+                            .iter()
+                            .map(|ext| format!("#{ext}"))
+                            .collect::<Vec<_>>(),
+                        "and",
+                        "none",
+                    )
+                )),
+
+            Self::DuplicateAnnotation { span, prev_span } => Report::build(ReportKind::Error, span)
+                .with_message(&self)
+                .with_code("parser::duplicate_annotation")
+                .with_label(
+                    Label::new(prev_span)
+                        .with_message("the previous such annotation was provided here"),
+                ),
+
+            Self::TupleIndexTooLarge { span } => Report::build(ReportKind::Error, span)
+                .with_message(&self)
+                .with_code("parser::tuple_index_too_large"),
+
+            Self::LexerError(e) => e.into_report_builder(),
+        }
+    }
 }
 
 trait Matcher {
@@ -586,7 +613,7 @@ impl<'src> Parser<'src> {
         self.expect(TokenKind::Eof)?;
 
         Ok(ast::Program {
-            location: (start..self.lexer.pos()).into(),
+            location: (self.lexer.source_id(), start..self.lexer.pos()).into(),
             extensions,
             decls,
         })
@@ -621,7 +648,7 @@ impl<'src> Parser<'src> {
                 match name.parse::<ast::Extension>() {
                     Ok(ext) => result.push(ext),
 
-                    Err(()) => {
+                    Err(_) => {
                         return Err(ParserError::UnknownExtension {
                             span: extension.span,
                             extension: name.to_owned(),

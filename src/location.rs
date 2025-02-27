@@ -1,40 +1,41 @@
 use std::ops::{Range, RangeBounds};
 
-use miette::{SourceOffset, SourceSpan};
-
+use crate::sourcemap::SourceId;
 use crate::util::try_match;
 
 pub trait Offset: Copy {
-    fn offset(self) -> usize;
+    fn offset(self) -> u64;
 }
 
 impl Offset for usize {
-    fn offset(self) -> usize {
-        self
+    fn offset(self) -> u64 {
+        self as u64
     }
 }
 
-impl Offset for SourceOffset {
-    fn offset(self) -> usize {
-        SourceOffset::offset(&self)
+impl Offset for u64 {
+    fn offset(self) -> u64 {
+        self
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Span {
-    pub start: usize,
-    pub len: usize,
+    source_id: SourceId,
+    start: u64,
+    len: u32,
 }
 
 impl Span {
-    pub fn new_with_extent(start: impl Offset, len: usize) -> Self {
+    pub fn new_with_extent(source_id: SourceId, start: impl Offset, len: u32) -> Self {
         Self {
+            source_id,
             start: start.offset(),
             len,
         }
     }
 
-    pub fn new_spanning<T: Offset>(range: impl RangeBounds<T>) -> Self {
+    pub fn new_spanning<T: Offset>(source_id: SourceId, range: impl RangeBounds<T>) -> Self {
         use std::ops::Bound;
 
         let start = match range.start_bound() {
@@ -51,15 +52,15 @@ impl Span {
 
         assert!(start <= end, "end offset precedes start offset");
 
-        Self::new_with_extent(start, end - start)
+        Self::new_with_extent(source_id, start, (end - start).try_into().unwrap())
     }
 
-    pub fn start(&self) -> SourceOffset {
-        self.start.into()
+    pub fn start(&self) -> usize {
+        self.start as usize
     }
 
-    pub fn end(&self) -> SourceOffset {
-        (self.start + self.len).into()
+    pub fn end(&self) -> usize {
+        self.start() + self.len()
     }
 
     pub fn is_empty(&self) -> bool {
@@ -67,34 +68,37 @@ impl Span {
     }
 
     pub fn len(&self) -> usize {
-        self.len
+        self.len as usize
     }
 }
 
-impl From<SourceSpan> for Span {
-    fn from(span: SourceSpan) -> Self {
-        Self {
-            start: span.offset(),
-            len: span.len(),
-        }
+impl ariadne::Span for Span {
+    type SourceId = SourceId;
+
+    fn source(&self) -> &SourceId {
+        &self.source_id
+    }
+
+    fn start(&self) -> usize {
+        self.start()
+    }
+
+    fn end(&self) -> usize {
+        self.end()
+    }
+
+    fn len(&self) -> usize {
+        self.len()
+    }
+
+    fn is_empty(&self) -> bool {
+        self.is_empty()
     }
 }
 
-impl From<Span> for SourceSpan {
-    fn from(span: Span) -> Self {
-        Self::new(span.start.into(), span.len.into())
-    }
-}
-
-impl From<Range<usize>> for Span {
-    fn from(range: Range<usize>) -> Self {
-        Self::new_spanning(range)
-    }
-}
-
-impl From<Range<SourceOffset>> for Span {
-    fn from(range: Range<SourceOffset>) -> Self {
-        Self::new_spanning(range.start.offset()..range.end.offset())
+impl<I: Offset> From<(SourceId, Range<I>)> for Span {
+    fn from((source_id, range): (SourceId, Range<I>)) -> Self {
+        Self::new_spanning(source_id, range)
     }
 }
 
@@ -112,12 +116,6 @@ impl Location {
     }
 }
 
-impl From<Location> for Option<SourceSpan> {
-    fn from(location: Location) -> Self {
-        try_match!(location, Location::UserCode(span) => span.into())
-    }
-}
-
 impl From<Option<Span>> for Location {
     fn from(span: Option<Span>) -> Self {
         span.map(Into::into).unwrap_or_default()
@@ -130,9 +128,9 @@ impl From<Span> for Location {
     }
 }
 
-impl From<Range<SourceOffset>> for Location {
-    fn from(range: Range<SourceOffset>) -> Self {
-        Self::UserCode(range.into())
+impl<I: Offset> From<(SourceId, Range<I>)> for Location {
+    fn from(v: (SourceId, Range<I>)) -> Self {
+        Self::UserCode(v.into())
     }
 }
 
@@ -146,10 +144,11 @@ impl ConvexHull for Span {
     type Result = Span;
 
     fn convex_hull(&self, other: &Self) -> Self {
+        assert_eq!(self.source_id, other.source_id);
         let start = self.start.min(other.start);
         let end = self.end().offset().max(other.end().offset());
 
-        Self::new_spanning(start..end)
+        Self::new_spanning(self.source_id, start..end)
     }
 }
 

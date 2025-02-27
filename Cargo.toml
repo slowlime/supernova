@@ -4,11 +4,12 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+ariadne = { version = "0.5.0", features = ["auto-color"] }
 derive_more = { version = "2.0.1", features = ["display", "from"] }
 fxhash = "0.2.1"
-miette = { version = "7.5.0", features = ["fancy"] }
 num = "0.4.3"
 num-bigint = "0.4.6"
 phf = { version = "0.11.3", features = ["macros"] }
 slotmap = "1.0.7"
+strum = { version = "0.27.1", features = ["derive"] }
 thiserror = "2.0.11"

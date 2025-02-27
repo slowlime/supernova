@@ -1,11 +1,10 @@
-use miette::SourceOffset;
-
-use crate::sourcemap::SourceFile;
+use crate::sourcemap::{SourceFile, SourceId};
 
 #[derive(Debug, Clone)]
 pub struct Cursor<'a> {
     iter: std::str::Chars<'a>,
-    pos: SourceOffset,
+    source_id: SourceId,
+    pos: u64,
     eof: bool,
 }
 
@@ -13,13 +12,18 @@ impl<'a> Cursor<'a> {
     pub fn new(file: &'a SourceFile) -> Self {
         Self {
             iter: file.contents().chars(),
-            pos: file.base_offset().into(),
+            source_id: file.id(),
+            pos: 0,
             eof: false,
         }
     }
 
+    pub fn source_id(&self) -> SourceId {
+        self.source_id
+    }
+
     /// Returns the position of the immediately following character.
-    pub fn pos(&self) -> SourceOffset {
+    pub fn pos(&self) -> u64 {
         self.pos
     }
 
@@ -43,15 +47,15 @@ impl<'a> Cursor<'a> {
 
     pub fn consume_n(&mut self, n: usize) -> &'a str {
         let remaining = self.remaining();
-        let start = self.pos.offset();
+        let start = self.pos;
 
         for _ in 0..n {
             self.next();
         }
 
-        let end = self.pos.offset();
+        let end = self.pos;
 
-        &remaining[0..(end - start)]
+        &remaining[0..(end - start) as usize]
     }
 
     pub fn consume_while(&mut self, mut predicate: impl FnMut(char) -> bool) -> &'a str {
@@ -77,16 +81,15 @@ impl Iterator for Cursor<'_> {
             return None;
         }
 
-        let c = match self.iter.next() {
-            Some(c) => c,
-            None => {
-                self.eof = true;
+        let c = if let Some(c) = self.iter.next() {
+            c
+        } else {
+            self.eof = true;
 
-                return None;
-            }
+            return None;
         };
 
-        self.pos = (self.pos.offset() + c.len_utf8()).into();
+        self.pos = self.pos + c.len_utf8() as u64;
 
         Some(c)
     }

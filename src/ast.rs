@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use derive_more::From;
 use num::BigUint;
 
@@ -14,15 +12,10 @@ pub struct Program<'src> {
     pub decls: Vec<Decl<'src>>,
 }
 
-#[derive(Debug, Clone, Copy)]
-pub enum Extension {}
-
-impl FromStr for Extension {
-    type Err = ();
-
-    fn from_str(_s: &str) -> Result<Self, ()> {
-        Err(())
-    }
+#[derive(strum::Display, strum::EnumString, strum::VariantArray, Debug, Clone, Copy)]
+#[strum(serialize_all = "kebab-case")]
+pub enum Extension {
+    UnitType,
 }
 
 #[derive(Debug, Clone)]

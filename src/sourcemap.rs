@@ -1,29 +1,33 @@
+use std::fmt::{Debug, Display};
+
+use ariadne::Source;
 use fxhash::FxHashMap;
-use miette::{MietteError, MietteSpanContents, SourceCode, SourceSpan};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct SourceId(u32);
 
 #[derive(Debug, Clone)]
 pub struct SourceFile {
+    id: SourceId,
     name: String,
-    contents: String,
-    offset: usize,
+    source: Source<String>,
 }
 
 impl SourceFile {
-    pub fn base_offset(&self) -> usize {
-        self.offset
+    pub fn id(&self) -> SourceId {
+        self.id
     }
 
     pub fn name(&self) -> &str {
         &self.name
     }
 
-    pub fn contents(&self) -> &str {
-        &self.contents
+    pub fn source(&self) -> &Source<String> {
+        &self.source
     }
 
-    fn next_offset(&self) -> usize {
-        // the plus one makes sure empty files have disjoint ranges
-        self.offset + self.contents.len() + 1
+    pub fn contents(&self) -> &str {
+        self.source.text()
     }
 }
 
@@ -39,11 +43,16 @@ impl SourceMap {
     }
 
     pub fn add_source(&mut self, name: String, contents: String) -> &SourceFile {
-        let offset = self.files.last().map(SourceFile::next_offset).unwrap_or(0);
+        assert!(
+            !self.file_names.contains_key(&name),
+            "source `{name}` already added",
+        );
+
+        let id = SourceId(self.files.len() as u32);
         let file = SourceFile {
+            id,
             name: name.clone(),
-            contents,
-            offset,
+            source: contents.into(),
         };
 
         self.file_names.insert(name, self.files.len());
@@ -57,47 +66,25 @@ impl SourceMap {
             .get(name.as_ref())
             .map(|&idx| &self.files[idx])
     }
+
+    pub fn to_cache(&self) -> SourceMapCache<'_> {
+        SourceMapCache { source_map: self }
+    }
 }
 
-impl SourceCode for SourceMap {
-    fn read_span<'a>(
-        &'a self,
-        span: &SourceSpan,
-        context_lines_before: usize,
-        context_lines_after: usize,
-    ) -> Result<Box<dyn miette::SpanContents<'a> + 'a>, MietteError> {
-        if self.files.is_empty() {
-            return Err(MietteError::OutOfBounds);
-        }
+#[derive(Debug, Clone, Copy)]
+pub struct SourceMapCache<'src> {
+    source_map: &'src SourceMap,
+}
 
-        let file_idx = match self
-            .files
-            .binary_search_by_key(&span.offset(), SourceFile::base_offset)
-        {
-            Ok(idx) => idx,
-            Err(idx) => idx.saturating_sub(1),
-        };
+impl ariadne::Cache<SourceId> for SourceMapCache<'_> {
+    type Storage = String;
 
-        let file = &self.files[file_idx];
-        debug_assert!(file.offset <= span.offset());
-        let offset = span.offset() - file.offset;
-        let len = span.len();
+    fn fetch(&mut self, id: &SourceId) -> Result<&Source<String>, Box<dyn Debug + '_>> {
+        Ok(self.source_map.files[id.0 as usize].source())
+    }
 
-        let span = SourceSpan::new(offset.into(), len.into());
-        let contents = file
-            .contents
-            .read_span(&span, context_lines_before, context_lines_after)?;
-
-        Ok(Box::new(MietteSpanContents::new_named(
-            file.name.clone(),
-            contents.data(),
-            SourceSpan::new(
-                (contents.span().offset() + file.offset).into(),
-                contents.span().len().into(),
-            ),
-            contents.line(),
-            contents.column(),
-            contents.line_count(),
-        )))
+    fn display<'a>(&self, id: &'a SourceId) -> Option<Box<dyn Display + 'a>> {
+        Some(Box::new(self.source_map.files.get(id.0 as usize)?.name.clone()))
     }
 }
