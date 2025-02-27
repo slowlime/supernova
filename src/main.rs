@@ -1,7 +1,9 @@
-mod ast;
-mod location;
-mod parse;
-mod sourcemap;
+pub mod ast;
+pub mod diag;
+pub mod location;
+pub mod parse;
+pub mod sema;
+pub mod sourcemap;
 pub mod util;
 
 fn main() {

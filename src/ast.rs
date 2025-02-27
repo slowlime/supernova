@@ -1,16 +1,11 @@
+use std::str::FromStr;
+
 use derive_more::From;
 use num::BigUint;
-use slotmap::new_key_type;
 
 use crate::location::Location;
 use crate::parse::Token;
-
-new_key_type! {
-    pub struct DeclId;
-    pub struct TyExprId;
-    pub struct ExprId;
-    pub struct PatId;
-}
+use crate::sema::{DeclId, ExprId, PatId, TyExprId};
 
 #[derive(Debug, Clone)]
 pub struct Program<'src> {
@@ -22,9 +17,11 @@ pub struct Program<'src> {
 #[derive(Debug, Clone, Copy)]
 pub enum Extension {}
 
-impl Extension {
-    pub fn from_str(s: &str) -> Option<Self> {
-        None
+impl FromStr for Extension {
+    type Err = ();
+
+    fn from_str(_s: &str) -> Result<Self, ()> {
+        Err(())
     }
 }
 

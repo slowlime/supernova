@@ -618,10 +618,10 @@ impl<'src> Parser<'src> {
                 let extension = self.expect(TokenKind::Extension)?;
                 let name = extension.value.as_extension().unwrap();
 
-                match ast::Extension::from_str(name) {
-                    Some(ext) => result.push(ext),
+                match name.parse::<ast::Extension>() {
+                    Ok(ext) => result.push(ext),
 
-                    None => {
+                    Err(()) => {
                         return Err(ParserError::UnknownExtension {
                             span: extension.span,
                             extension: name.to_owned(),
@@ -1556,7 +1556,7 @@ impl<'src> Parser<'src> {
         lhs: ast::Expr<'src>,
     ) -> Result<ast::Expr<'src>, ParserError<'src>> {
         let as_kw = self.expect(Symbol::As)?;
-        let ty_expr = self.parse_ty_expr_impl(2)?;
+        let ty_expr = self.parse_ty_expr_impl(primary_ty_expr_prec())?;
 
         Ok(ast::Expr {
             id: Default::default(),
@@ -1577,7 +1577,7 @@ impl<'src> Parser<'src> {
     ) -> Result<ast::Expr<'src>, ParserError<'src>> {
         let cast_kw = self.expect(Symbol::Cast)?;
         self.expect(Symbol::As)?;
-        let ty_expr = self.parse_ty_expr_impl(2)?;
+        let ty_expr = self.parse_ty_expr_impl(primary_ty_expr_prec())?;
 
         Ok(ast::Expr {
             id: Default::default(),
@@ -2130,7 +2130,7 @@ impl<'src> Parser<'src> {
                 let name = self.parse_name("a record field name")?;
                 self.expect(Symbol::Equals)?;
                 let pat = self.parse_pat_impl(0)?;
-                fields.push(ast::PatRecordField { name, pat }.into());
+                fields.push(ast::PatRecordField { name, pat });
 
                 let token = self.expect([Symbol::Comma, Symbol::RBrace])?;
 
