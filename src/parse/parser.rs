@@ -8,7 +8,7 @@ use thiserror::Error;
 use crate::ast;
 use crate::diag::IntoReportBuilder;
 use crate::location::{ConvexHull, Location, Span};
-use crate::util::format_list;
+use crate::util::{format_iter, format_list};
 
 use super::token::Symbol;
 use super::{Lexer, LexerError, Token, TokenKind, TokenValue};
@@ -42,12 +42,12 @@ pub enum ParserError<'src> {
 }
 
 impl IntoReportBuilder for ParserError<'_> {
-    fn into_report_builder(self) -> ReportBuilder<'static, Span> {
+    fn into_report_builder(self) -> ReportBuilder<'static, Location> {
         match self {
             Self::UnexpectedToken {
                 ref token,
                 ref expected,
-            } => Report::build(ReportKind::Error, token.span)
+            } => Report::build(ReportKind::Error, token.span.into())
                 .with_message(format!("unexpected token {}", token.value))
                 .with_code("parser::unexpected_token")
                 .with_help(format!(
@@ -55,35 +55,38 @@ impl IntoReportBuilder for ParserError<'_> {
                     format_list(expected, "or", "nothing")
                 )),
 
-            Self::UnknownLanguage { span, language: _ } => Report::build(ReportKind::Error, span)
-                .with_message(&self)
-                .with_code("parser::unknown_language")
-                .with_help("the only supported language is `core`"),
+            Self::UnknownLanguage { span, language: _ } => {
+                Report::build(ReportKind::Error, span.into())
+                    .with_message(&self)
+                    .with_code("parser::unknown_language")
+                    .with_help("the only supported language is `core`")
+            }
 
-            Self::UnknownExtension { span, extension: _ } => Report::build(ReportKind::Error, span)
-                .with_message(&self)
-                .with_code("parser::unknown_extension")
-                .with_help(format!(
-                    "supported extensions are {}",
-                    format_list(
-                        &ast::Extension::VARIANTS
-                            .iter()
-                            .map(|ext| format!("#{ext}"))
-                            .collect::<Vec<_>>(),
-                        "and",
-                        "none",
+            Self::UnknownExtension { span, extension: _ } => {
+                Report::build(ReportKind::Error, span.into())
+                    .with_message(&self)
+                    .with_code("parser::unknown_extension")
+                    .with_help(format!(
+                        "supported extensions are {}",
+                        format_iter(
+                            ast::Extension::VARIANTS.iter().map(|ext| format!("#{ext}")),
+                            "and",
+                            "none",
+                        )
+                    ))
+            }
+
+            Self::DuplicateAnnotation { span, prev_span } => {
+                Report::build(ReportKind::Error, span.into())
+                    .with_message(&self)
+                    .with_code("parser::duplicate_annotation")
+                    .with_label(
+                        Label::new(prev_span.into())
+                            .with_message("the previous such annotation was provided here"),
                     )
-                )),
+            }
 
-            Self::DuplicateAnnotation { span, prev_span } => Report::build(ReportKind::Error, span)
-                .with_message(&self)
-                .with_code("parser::duplicate_annotation")
-                .with_label(
-                    Label::new(prev_span)
-                        .with_message("the previous such annotation was provided here"),
-                ),
-
-            Self::TupleIndexTooLarge { span } => Report::build(ReportKind::Error, span)
+            Self::TupleIndexTooLarge { span } => Report::build(ReportKind::Error, span.into())
                 .with_message(&self)
                 .with_code("parser::tuple_index_too_large"),
 
@@ -727,13 +730,13 @@ impl<'src> Parser<'src> {
         &mut self,
         annotations: Vec<ast::Annotation>,
     ) -> Result<ast::Decl<'src>, ParserError<'src>> {
-        let generic = self.consume(Symbol::Generic)?;
+        let generic_kw = self.consume(Symbol::Generic)?;
         let fn_kw = self.expect_with_message(Symbol::Fn, "a function declaration")?;
         let name = self.parse_name("a function name")?;
 
         let mut generics = vec![];
 
-        if generic.is_some() {
+        if generic_kw.is_some() {
             self.expect_with_message(Symbol::LBracket, "a generic parameter list")?;
 
             loop {
@@ -794,7 +797,7 @@ impl<'src> Parser<'src> {
         let start = annotations
             .iter()
             .flat_map(|annotation| annotation.location.span())
-            .chain(generic.map(|token| token.span))
+            .chain(generic_kw.as_ref().map(|token| token.span))
             .next()
             .unwrap_or(fn_kw.span);
         let span = start.convex_hull(&end.span);
@@ -804,6 +807,7 @@ impl<'src> Parser<'src> {
             location: span.into(),
             kind: ast::DeclFn {
                 annotations,
+                generic_kw,
                 fn_kw: Some(fn_kw),
                 name,
                 generics,

@@ -21,6 +21,8 @@ impl<'ast, 'm> Pass<'ast, 'm> {
     }
 
     fn run(mut self) {
+        self.m.location = self.ast.as_ref().unwrap().location;
+
         self.load_features();
         self.assign_ids();
         self.set_defs();

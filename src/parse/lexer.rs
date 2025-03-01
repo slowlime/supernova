@@ -6,7 +6,7 @@ use num::{BigUint, Num};
 use thiserror::Error;
 
 use crate::diag::IntoReportBuilder;
-use crate::location::Span;
+use crate::location::{Location, Span};
 use crate::parse::token::Symbol;
 use crate::sourcemap::SourceId;
 
@@ -38,8 +38,8 @@ pub struct LexerError {
 }
 
 impl IntoReportBuilder for LexerError {
-    fn into_report_builder(self) -> ReportBuilder<'static, Span> {
-        let report = Report::build(ReportKind::Error, self.span);
+    fn into_report_builder(self) -> ReportBuilder<'static, Location> {
+        let report = Report::build(ReportKind::Error, self.span.into());
 
         self.kind.update_report(report)
     }
@@ -83,24 +83,24 @@ pub enum LexerErrorKind {
 }
 
 impl LexerErrorKind {
-    fn update_report(&self, mut report: ReportBuilder<'static, Span>) -> ReportBuilder<'static, Span> {
+    fn update_report(
+        &self,
+        mut report: ReportBuilder<'static, Location>,
+    ) -> ReportBuilder<'static, Location> {
         report.set_message(self);
 
         match self {
-            LexerErrorKind::UnterminatedComment => report
-                .with_code("lexer::unterminated_comment"),
+            LexerErrorKind::UnterminatedComment => report.with_code("lexer::unterminated_comment"),
 
-            LexerErrorKind::UnrecognizedCharacter(_) => report
-                .with_code("lexer::unrecognized_character"),
+            LexerErrorKind::UnrecognizedCharacter(_) => {
+                report.with_code("lexer::unrecognized_character")
+            }
 
-            LexerErrorKind::MalformedNumber => report
-                .with_code("lexer::malformed_number"),
+            LexerErrorKind::MalformedNumber => report.with_code("lexer::malformed_number"),
 
-            LexerErrorKind::MalformedAddress => report
-                .with_code("lexer::malformed_address"),
+            LexerErrorKind::MalformedAddress => report.with_code("lexer::malformed_address"),
 
-            LexerErrorKind::MalformedExtension => report
-                .with_code("lexer::malformed_extension"),
+            LexerErrorKind::MalformedExtension => report.with_code("lexer::malformed_extension"),
 
             LexerErrorKind::UnterminatedAddress => report
                 .with_code("lexer::unterminated_address")

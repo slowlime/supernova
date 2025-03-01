@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::ops::{Range, RangeBounds};
 
 use crate::sourcemap::SourceId;
@@ -19,7 +20,7 @@ impl Offset for u64 {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Span {
     source_id: SourceId,
     start: u64,
@@ -112,7 +113,15 @@ pub enum Location {
 
 impl Location {
     pub fn span(&self) -> Option<Span> {
-        try_match!(*self, Location::UserCode(span) => span)
+        try_match!(*self, Self::UserCode(span) => span)
+    }
+
+    pub fn has_span(&self) -> bool {
+        matches!(self, Self::UserCode(_))
+    }
+
+    pub fn is_builtin(&self) -> bool {
+        matches!(self, Self::Builtin)
     }
 }
 
@@ -131,6 +140,50 @@ impl From<Span> for Location {
 impl<I: Offset> From<(SourceId, Range<I>)> for Location {
     fn from(v: (SourceId, Range<I>)) -> Self {
         Self::UserCode(v.into())
+    }
+}
+
+impl PartialOrd for Location {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Location {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match (self, other) {
+            (Self::UserCode(lhs), Self::UserCode(rhs)) => lhs.cmp(rhs),
+            (Self::UserCode(_), _) => Ordering::Less,
+            (_, Self::UserCode(_)) => Ordering::Greater,
+            _ => Ordering::Equal,
+        }
+    }
+}
+
+impl ariadne::Span for Location {
+    type SourceId = SourceId;
+
+    fn source(&self) -> &SourceId {
+        match self {
+            Self::UserCode(span) => span.source(),
+            Self::Builtin => &SourceId::UNKNOWN,
+        }
+    }
+
+    fn start(&self) -> usize {
+        self.span().map(|span| span.start()).unwrap_or(0)
+    }
+
+    fn end(&self) -> usize {
+        self.span().map(|span| span.end()).unwrap_or(0)
+    }
+
+    fn len(&self) -> usize {
+        self.span().map(|span| span.len()).unwrap_or(0)
+    }
+
+    fn is_empty(&self) -> bool {
+        self.span().map(|span| span.is_empty()).unwrap_or(true)
     }
 }
 

@@ -1,4 +1,5 @@
 pub mod feature;
+mod error;
 mod load_ast;
 mod process_features;
 pub mod ty;
@@ -6,11 +7,14 @@ pub mod ty;
 use fxhash::FxHashMap;
 use slotmap::{new_key_type, SlotMap};
 
-use self::feature::{Feature, FeatureKind};
-use self::ty::{Ty, TyKind, WellKnownTys};
 use crate::ast;
 use crate::diag::DiagCtx;
 use crate::location::Location;
+
+use self::feature::{Feature, FeatureKind};
+use self::ty::{Ty, TyKind, WellKnownTys};
+
+pub use self::error::SemaError;
 
 new_key_type! {
     pub struct DeclId;
@@ -59,6 +63,7 @@ pub struct Scope {
 
 #[derive(Debug)]
 pub struct Module<'ast> {
+    pub location: Location,                            // initialized by load_ast
     pub features: FxHashMap<FeatureKind, Feature>, // initialized by load_ast and process_features
     pub decls: SlotMap<DeclId, DeclInfo<'ast>>,    // initialized by load_ast
     pub ty_exprs: SlotMap<TyExprId, TyExprInfo<'ast>>, // initialized by load_ast
@@ -75,6 +80,7 @@ pub struct Module<'ast> {
 impl Module<'_> {
     fn new() -> Self {
         Self {
+            location: Default::default(),
             features: Default::default(),
             decls: Default::default(),
             ty_exprs: Default::default(),
@@ -87,6 +93,10 @@ impl Module<'_> {
             ty_dedup: Default::default(),
             well_known_tys: Default::default(),
         }
+    }
+
+    fn is_feature_enabled(&self, feature: FeatureKind) -> bool {
+        self.features.contains_key(&feature)
     }
 }
 

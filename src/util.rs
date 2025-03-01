@@ -46,3 +46,59 @@ pub fn format_list<'a, T: Display>(
 
     ListFormatter(values, conj, on_empty)
 }
+
+pub fn format_iter<'a, T, I, II>(
+    values: II,
+    conj: &'a str,
+    on_empty: &'a str,
+) -> impl Display + use<'a, T, I, II>
+where
+    T: Display,
+    I: Iterator<Item = T> + Clone,
+    II: IntoIterator<Item = T, IntoIter = I>,
+{
+    struct IterFormatter<'a, I> {
+        iter: I,
+        conj: &'a str,
+        on_empty: &'a str,
+    }
+
+    impl<I, T> Display for IterFormatter<'_, I>
+    where
+        T: Display,
+        I: Iterator<Item = T> + Clone,
+    {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            let mut iter = self.iter.clone();
+
+            let Some(first) = iter.next() else {
+                return self.on_empty.fmt(f);
+            };
+
+            let Some(second) = iter.next() else {
+                return first.fmt(f);
+            };
+
+            match iter.next() {
+                None => write!(f, "{first} {} {second}", self.conj),
+
+                Some(mut prev) => {
+                    write!(f, "{first}, {second}")?;
+
+                    while let Some(v) = iter.next() {
+                        write!(f, ", {prev}")?;
+                        prev = v;
+                    }
+
+                    write!(f, " {} {prev}", self.conj)
+                }
+            }
+        }
+    }
+
+    IterFormatter {
+        iter: values.into_iter(),
+        conj,
+        on_empty,
+    }
+}

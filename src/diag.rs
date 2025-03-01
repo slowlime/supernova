@@ -1,30 +1,30 @@
 use ariadne::{Report, ReportBuilder};
 
-use crate::location::Span;
+use crate::location::Location;
 use crate::sourcemap::SourceMap;
 
 pub trait IntoReportBuilder: Sized {
-    fn into_report_builder(self) -> ReportBuilder<'static, Span>;
+    fn into_report_builder(self) -> ReportBuilder<'static, Location>;
 }
 
 pub trait IntoReport: Sized {
-    fn into_report(self) -> Report<'static, Span>;
+    fn into_report(self) -> Report<'static, Location>;
 }
 
 impl<T: IntoReportBuilder> IntoReport for T {
-    fn into_report(self) -> Report<'static, Span> {
+    fn into_report(self) -> Report<'static, Location> {
         self.into_report_builder().finish()
     }
 }
 
-impl IntoReportBuilder for ReportBuilder<'static, Span> {
-    fn into_report_builder(self) -> ReportBuilder<'static, Span> {
+impl IntoReportBuilder for ReportBuilder<'static, Location> {
+    fn into_report_builder(self) -> ReportBuilder<'static, Location> {
         self
     }
 }
 
-impl IntoReport for Report<'static, Span> {
-    fn into_report(self) -> Report<'static, Span> {
+impl IntoReport for Report<'static, Location> {
+    fn into_report(self) -> Report<'static, Location> {
         self
     }
 }

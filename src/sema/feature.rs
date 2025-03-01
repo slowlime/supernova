@@ -1,5 +1,5 @@
-use std::fmt::{self, Display};
 use derive_more::Display;
+use std::fmt::{self, Display};
 
 use crate::ast;
 use crate::location::Location;
@@ -20,7 +20,7 @@ macro_rules! define_ext {
             $name:ident $str:literal $(($($ext:tt)+))? $(=> $($dep:ident),+)?;
         )+
     } => {
-        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
         pub enum FeatureKind {
             $($name,)+
         }
@@ -123,8 +123,9 @@ define_ext! {
     IsorecursiveTypes "iso-recursive types" => RecursiveTypes;
 
     // Universal types.
+    TypeParameters "type parameters";
     TypeInference "type inference";
-    UniversalTypes "universal types";
+    UniversalTypes "universal types" => TypeParameters;
 }
 
 #[derive(Debug, Clone)]
@@ -134,15 +135,16 @@ pub struct Feature {
 }
 
 impl Feature {
+    pub const MUTUALLY_EXCLUSIVE_FEATURES: &[&[FeatureKind]] = &[
+        &[FeatureKind::EquirecursiveTypes, FeatureKind::IsorecursiveTypes],
+        &[FeatureKind::ExceptionTypeDeclaration, FeatureKind::OpenVariantExceptions],
+    ];
+
     pub fn from_extension(extension: ast::Extension, location: Location) -> Option<Self> {
-        if let Some(kind) = FeatureKind::from_extension(extension) {
-            Some(Self {
-                kind,
-                reason: EnableReason::Extension(location),
-            })
-        } else {
-            None
-        }
+        FeatureKind::from_extension(extension).map(|kind| Self {
+            kind,
+            reason: EnableReason::Extension(location),
+        })
     }
 }
 

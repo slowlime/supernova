@@ -112,6 +112,7 @@ impl<'src> AstRecurse<'src> for DeclKind<'src> {
 #[derive(Debug, Clone)]
 pub struct DeclFn<'src> {
     pub annotations: Vec<Annotation>,
+    pub generic_kw: Option<Token<'src>>,
     pub fn_kw: Option<Token<'src>>,
     pub name: Name<'src>,
     pub generics: Vec<Name<'src>>,

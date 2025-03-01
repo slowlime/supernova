@@ -3,8 +3,12 @@ use std::fmt::{Debug, Display};
 use ariadne::Source;
 use fxhash::FxHashMap;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SourceId(u32);
+
+impl SourceId {
+    pub const UNKNOWN: Self = Self(0);
+}
 
 #[derive(Debug, Clone)]
 pub struct SourceFile {
@@ -14,6 +18,14 @@ pub struct SourceFile {
 }
 
 impl SourceFile {
+    fn new_unknown() -> Self {
+        Self {
+            id: SourceId::UNKNOWN,
+            name: "<unknown>".into(),
+            source: String::new().into(),
+        }
+    }
+
     pub fn id(&self) -> SourceId {
         self.id
     }
@@ -31,7 +43,7 @@ impl SourceFile {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct SourceMap {
     files: Vec<SourceFile>,
     file_names: FxHashMap<String, usize>,
@@ -72,6 +84,15 @@ impl SourceMap {
     }
 }
 
+impl Default for SourceMap {
+    fn default() -> Self {
+        Self {
+            files: vec![SourceFile::new_unknown()],
+            file_names: Default::default(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct SourceMapCache<'src> {
     source_map: &'src SourceMap,
@@ -85,6 +106,8 @@ impl ariadne::Cache<SourceId> for SourceMapCache<'_> {
     }
 
     fn display<'a>(&self, id: &'a SourceId) -> Option<Box<dyn Display + 'a>> {
-        Some(Box::new(self.source_map.files.get(id.0 as usize)?.name.clone()))
+        Some(Box::new(
+            self.source_map.files.get(id.0 as usize)?.name.clone(),
+        ))
     }
 }
