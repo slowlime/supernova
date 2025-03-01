@@ -1,12 +1,16 @@
+pub mod feature;
+mod load_ast;
+mod process_features;
 pub mod ty;
 
 use fxhash::FxHashMap;
 use slotmap::{new_key_type, SlotMap};
-use ty::{TyKind, WellKnownTys};
 
+use self::feature::{Feature, FeatureKind};
+use self::ty::{Ty, TyKind, WellKnownTys};
 use crate::ast;
+use crate::diag::DiagCtx;
 use crate::location::Location;
-use self::ty::Ty;
 
 new_key_type! {
     pub struct DeclId;
@@ -17,6 +21,8 @@ new_key_type! {
     pub struct BindingId;
     pub struct ScopeId;
 }
+
+pub type Result<T = (), E = ()> = std::result::Result<T, E>;
 
 #[derive(Debug, Clone)]
 pub struct DeclInfo<'ast> {
@@ -53,14 +59,49 @@ pub struct Scope {
 
 #[derive(Debug)]
 pub struct Module<'ast> {
-    pub decls: SlotMap<DeclId, DeclInfo<'ast>>,
-    pub ty_exprs: SlotMap<TyExprId, TyExprInfo<'ast>>,
-    pub exprs: SlotMap<ExprId, ExprInfo<'ast>>,
-    pub pats: SlotMap<PatId, PatInfo<'ast>>,
+    pub features: FxHashMap<FeatureKind, Feature>, // initialized by load_ast and process_features
+    pub decls: SlotMap<DeclId, DeclInfo<'ast>>,    // initialized by load_ast
+    pub ty_exprs: SlotMap<TyExprId, TyExprInfo<'ast>>, // initialized by load_ast
+    pub exprs: SlotMap<ExprId, ExprInfo<'ast>>,    // initialized by load_ast
+    pub pats: SlotMap<PatId, PatInfo<'ast>>,       // initialized by load_ast
     pub bindings: SlotMap<BindingId, BindingInfo>,
     pub scopes: SlotMap<ScopeId, Scope>,
     pub root_scope_id: ScopeId,
     pub tys: SlotMap<TyId, Ty>,
     ty_dedup: FxHashMap<TyKind, TyId>,
     pub well_known_tys: WellKnownTys,
+}
+
+impl Module<'_> {
+    fn new() -> Self {
+        Self {
+            features: Default::default(),
+            decls: Default::default(),
+            ty_exprs: Default::default(),
+            exprs: Default::default(),
+            pats: Default::default(),
+            bindings: Default::default(),
+            scopes: Default::default(),
+            root_scope_id: Default::default(),
+            tys: Default::default(),
+            ty_dedup: Default::default(),
+            well_known_tys: Default::default(),
+        }
+    }
+}
+
+pub fn process<'ast>(
+    ast: &'ast mut ast::Program<'ast>,
+    diag: &mut impl DiagCtx,
+) -> (Module<'ast>, Result) {
+    let mut module = Module::new();
+    module.load_ast(ast);
+
+    let result = (|| -> Result {
+        module.process_features(diag)?;
+
+        Ok(())
+    })();
+
+    (module, result)
 }

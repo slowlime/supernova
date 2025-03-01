@@ -7,7 +7,7 @@ use thiserror::Error;
 
 use crate::ast;
 use crate::diag::IntoReportBuilder;
-use crate::location::{ConvexHull, Span};
+use crate::location::{ConvexHull, Location, Span};
 use crate::util::format_list;
 
 use super::token::Symbol;
@@ -635,7 +635,7 @@ impl<'src> Parser<'src> {
         Ok(())
     }
 
-    fn parse_extensions(&mut self) -> Result<Vec<ast::Extension>, ParserError<'src>> {
+    fn parse_extensions(&mut self) -> Result<Vec<(ast::Extension, Location)>, ParserError<'src>> {
         let mut result = vec![];
 
         while self.consume(Symbol::Extend)?.is_some() {
@@ -646,7 +646,7 @@ impl<'src> Parser<'src> {
                 let name = extension.value.as_extension().unwrap();
 
                 match name.parse::<ast::Extension>() {
-                    Ok(ext) => result.push(ext),
+                    Ok(ext) => result.push((ext, extension.span.into())),
 
                     Err(_) => {
                         return Err(ParserError::UnknownExtension {

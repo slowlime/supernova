@@ -1,5 +1,7 @@
 pub mod visit;
 
+use std::sync::LazyLock;
+
 use derive_more::From;
 use num::BigUint;
 use visit::{AstRecurse, Visitor, VisitorMut};
@@ -11,22 +13,46 @@ use crate::sema::{DeclId, ExprId, PatId, TyExprId};
 #[derive(Debug, Clone)]
 pub struct Program<'src> {
     pub location: Location,
-    pub extensions: Vec<Extension>,
+    pub extensions: Vec<(Extension, Location)>,
     pub decls: Vec<Decl<'src>>,
 }
 
-#[derive(strum::Display, strum::EnumString, strum::VariantArray, Debug, Clone, Copy)]
+#[derive(
+    strum::Display, strum::EnumString, strum::VariantArray, Debug, Clone, Copy, PartialEq, Eq, Hash,
+)]
 #[strum(serialize_all = "kebab-case")]
 pub enum Extension {
     UnitType,
+    Pairs,
+    Tuples,
+    Records,
+    TypeAscriptions,
+    SumTypes,
+    Lists,
+    Variants,
+    FixpointCombinator,
+    NaturalLiterals,
+    NestedFunctionDeclarations,
+    NullaryFunctions,
+    MultiparameterFunctions,
+    StructuralPatterns,
+    NullaryVariantLabels,
+    LetBindings,
+    LetrecBindings,
+    PatternAscriptions,
+    ArithmeticOperations,
+    ComparisonOperations,
+    Sequencing,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct Decl<'src> {
     pub id: DeclId,
     pub location: Location,
     pub kind: DeclKind<'src>,
 }
+
+pub static DUMMY_DECL: LazyLock<Decl<'_>> = LazyLock::new(Default::default);
 
 impl<'src> AstRecurse<'src> for Decl<'src> {
     fn recurse<'ast, V: Visitor<'src, 'ast> + ?Sized>(&'ast self, visitor: &mut V)
@@ -285,12 +311,14 @@ impl<'src> AstRecurse<'src> for Body<'src> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct TyExpr<'src> {
     pub id: TyExprId,
     pub location: Location,
     pub kind: TyExprKind<'src>,
 }
+
+pub static DUMMY_TY_EXPR: LazyLock<TyExpr<'_>> = LazyLock::new(Default::default);
 
 impl<'src> AstRecurse<'src> for TyExpr<'src> {
     fn recurse<'ast, V: Visitor<'src, 'ast> + ?Sized>(&'ast self, visitor: &mut V)
@@ -674,12 +702,14 @@ pub struct TyExprName<'src> {
     pub name: Name<'src>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct Expr<'src> {
     pub id: ExprId,
     pub location: Location,
     pub kind: ExprKind<'src>,
 }
+
+pub static DUMMY_EXPR: LazyLock<Expr<'_>> = LazyLock::new(Default::default);
 
 impl<'src> AstRecurse<'src> for Expr<'src> {
     fn recurse<'ast, V: Visitor<'src, 'ast> + ?Sized>(&'ast self, visitor: &mut V)
@@ -1620,12 +1650,14 @@ impl<'src> AstRecurse<'src> for Arm<'src> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct Pat<'src> {
     pub id: PatId,
     pub location: Location,
     pub kind: PatKind<'src>,
 }
+
+pub static DUMMY_PAT: LazyLock<Pat<'_>> = LazyLock::new(Default::default);
 
 impl<'src> AstRecurse<'src> for Pat<'src> {
     fn recurse<'ast, V: Visitor<'src, 'ast> + ?Sized>(&'ast self, visitor: &mut V)
