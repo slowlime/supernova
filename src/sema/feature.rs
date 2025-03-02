@@ -1,5 +1,8 @@
-use derive_more::Display;
 use std::fmt::{self, Display};
+use std::sync::LazyLock;
+
+use derive_more::Display;
+use fxhash::{FxHashMap, FxHashSet};
 
 use crate::ast;
 use crate::location::Location;
@@ -46,12 +49,56 @@ macro_rules! define_ext {
                 }
             }
 
+            pub fn enabled_by_extensions(self) -> Vec<ast::Extension> {
+                let mut result = vec![];
+                let mut discovered = FxHashSet::default();
+                discovered.insert(self);
+                let mut unprocessed = vec![self];
+
+                while let Some(feature) = unprocessed.pop() {
+                    result.extend(feature.extension());
+
+                    for &dep in feature.dependents() {
+                        if discovered.insert(dep) {
+                            unprocessed.push(dep);
+                        }
+                    }
+                }
+
+                result
+            }
+
             pub const fn depends(self) -> &'static [Self] {
                 match self {
                     $(
                         Self::$name => &[$($(Self::$dep),+)?],
                     )+
                 }
+            }
+
+            pub fn dependents(self) -> &'static [Self] {
+                static DEPENDENDS: LazyLock<FxHashMap<FeatureKind, Vec<FeatureKind>>> =
+                    LazyLock::new(|| {
+                        let mut result = FxHashMap::from_iter(
+                            FeatureKind::ALL
+                                .iter()
+                                .map(|&feature| (feature, vec![]))
+                        );
+
+                        $(
+                            $(
+                                $(
+                                    result.get_mut(&FeatureKind::$dep)
+                                        .unwrap()
+                                        .push(FeatureKind::$name);
+                                )+
+                            )?
+                        )+
+
+                        result
+                    });
+
+                &DEPENDENDS[&self]
             }
 
             pub const fn from_extension(extension: ast::Extension) -> Option<Self> {

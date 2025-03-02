@@ -4,6 +4,7 @@ use fxhash::FxHashSet;
 use crate::ast;
 use crate::diag::{DiagCtx, IntoReportBuilder};
 use crate::location::Location;
+use crate::util::format_list;
 
 use super::feature::{EnableReason, Feature, FeatureKind};
 use super::{DeclId, ExprId, Module, PatId, Result, SemaError, TyExprId};
@@ -27,12 +28,26 @@ fn make_feature_disabled_error(
         .into_report_builder()
         .with_note(format!("feature {feature} is disabled"));
 
-    if let Some(extension) = feature.extension() {
-        // TODO: examine the reverse dependency graph for extensions that enable this feature
-        // indirectly.
-        report = report.with_help(format!(
-            "you can enable the feature with the {extension} extension"
-        ));
+    let extensions = feature
+        .extension()
+        .map(|extension| vec![extension])
+        .unwrap_or_else(|| feature.enabled_by_extensions());
+
+    match &extensions[..] {
+        [] => {}
+
+        &[extension] => {
+            report = report.with_help(format!(
+                "you can enable the feature with the {extension} extension"
+            ))
+        }
+
+        _ => {
+            report = report.with_help(format!(
+                "you can enable the feature with any of the following extensions: {}",
+                format_list(&extensions, "or", ""),
+            ));
+        }
     }
 
     report
