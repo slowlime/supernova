@@ -85,7 +85,7 @@ where
                 Some(mut prev) => {
                     write!(f, "{first}, {second}")?;
 
-                    while let Some(v) = iter.next() {
+                    for v in iter {
                         write!(f, ", {prev}")?;
                         prev = v;
                     }

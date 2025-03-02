@@ -28,6 +28,8 @@ fn make_feature_disabled_error(
         .with_note(format!("feature {feature} is disabled"));
 
     if let Some(extension) = feature.extension() {
+        // TODO: examine the reverse dependency graph for extensions that enable this feature
+        // indirectly.
         report = report.with_help(format!(
             "you can enable the feature with the {extension} extension"
         ));
@@ -245,6 +247,866 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         result
     }
 
+    fn check_ty_exprs(&mut self) -> Result {
+        let ty_expr_ids = self.m.ty_exprs.keys().collect::<Vec<_>>();
+        let mut result = Ok(());
+
+        for ty_expr_id in ty_expr_ids {
+            result = result.and(self.check_ty_expr(ty_expr_id));
+        }
+
+        result
+    }
+
+    fn check_ty_expr(&mut self, ty_expr_id: TyExprId) -> Result {
+        let mut result = Ok(());
+        let def = self.m.ty_exprs[ty_expr_id].def;
+
+        match &def.kind {
+            ast::TyExprKind::Dummy => {}
+            ast::TyExprKind::Bool(_) => {}
+            ast::TyExprKind::Nat(_) => {}
+
+            ast::TyExprKind::Ref(_) => {
+                if !self.m.is_feature_enabled(FeatureKind::References) {
+                    result = Err(());
+                    self.diag.emit(make_feature_disabled_error(
+                        SemaError::ReferenceTypeNotAllowed {
+                            location: def.location,
+                        },
+                        FeatureKind::References,
+                    ));
+                }
+            }
+
+            ast::TyExprKind::Sum(ty_expr) => {
+                if !self.m.is_feature_enabled(FeatureKind::SumTypes) {
+                    result = Err(());
+                    self.diag.emit(make_feature_disabled_error(
+                        SemaError::SumTypeNotAllowed {
+                            location: def.location,
+                            plus_location: ty_expr
+                                .plus_token
+                                .as_ref()
+                                .map(|token| token.span)
+                                .into(),
+                        },
+                        FeatureKind::SumTypes,
+                    ));
+                }
+            }
+
+            ast::TyExprKind::Fn(ty_expr) => {
+                result = result.and(self.check_fn_param_count(ty_expr.params.len(), def.location));
+            }
+
+            ast::TyExprKind::ForAll(ty_expr) => {
+                // the `.synthetic` check is to avoid spamming for things like `forall a b c`,
+                // which are split into separate `forall` type expressions.
+                if !ty_expr.synthetic && !self.m.is_feature_enabled(FeatureKind::UniversalTypes) {
+                    result = Err(());
+                    self.diag.emit(make_feature_disabled_error(
+                        SemaError::UniversalTypeNotAllowed {
+                            location: def.location,
+                        },
+                        FeatureKind::UniversalTypes,
+                    ));
+                }
+            }
+
+            ast::TyExprKind::Mu(_) => {
+                if !self.m.is_feature_enabled(FeatureKind::RecursiveTypes) {
+                    result = Err(());
+                    self.diag.emit(make_feature_disabled_error(
+                        SemaError::RecursiveTypeNotAllowed {
+                            location: def.location,
+                        },
+                        FeatureKind::RecursiveTypes,
+                    ));
+                }
+            }
+
+            ast::TyExprKind::Tuple(ty_expr) => {
+                result = result.and(self.check_tuple(ty_expr.elems.len(), def.location));
+            }
+
+            ast::TyExprKind::Record(ty_expr) => {
+                result = result.and(self.check_record(ty_expr.fields.len(), def.location));
+            }
+
+            ast::TyExprKind::Variant(ty_expr) => {
+                if !self.m.is_feature_enabled(FeatureKind::Variants) {
+                    result = Err(());
+                    self.diag.emit(make_feature_disabled_error(
+                        SemaError::VariantNotAllowed {
+                            location: def.location,
+                        },
+                        FeatureKind::Variants,
+                    ));
+                } else {
+                    for field in &ty_expr.fields {
+                        if field.ty_expr.is_none()
+                            && !self.m.is_feature_enabled(FeatureKind::NullaryVariantLabels)
+                        {
+                            result = Err(());
+                            self.diag.emit(make_feature_disabled_error(
+                                SemaError::NullaryVariantLabelNotAllowed {
+                                    location: field.name.location(),
+                                    variant_location: def.location,
+                                },
+                                FeatureKind::NullaryVariantLabels,
+                            ));
+                        }
+                    }
+                }
+            }
+
+            ast::TyExprKind::List(_) => {
+                if !self.m.is_feature_enabled(FeatureKind::Lists) {
+                    result = Err(());
+                    self.diag.emit(make_feature_disabled_error(
+                        SemaError::ListNotAllowed {
+                            location: def.location,
+                        },
+                        FeatureKind::Lists,
+                    ));
+                }
+            }
+
+            ast::TyExprKind::Unit(_) => {
+                if !self.m.is_feature_enabled(FeatureKind::UnitType) {
+                    result = Err(());
+                    self.diag.emit(make_feature_disabled_error(
+                        SemaError::UnitTypeNotAllowed {
+                            location: def.location,
+                        },
+                        FeatureKind::UnitType,
+                    ));
+                }
+            }
+
+            ast::TyExprKind::Top(_) => {
+                if !self.m.is_feature_enabled(FeatureKind::TopType) {
+                    result = Err(());
+                    self.diag.emit(make_feature_disabled_error(
+                        SemaError::TopTypeNotAllowed {
+                            location: def.location,
+                        },
+                        FeatureKind::TopType,
+                    ));
+                }
+            }
+
+            ast::TyExprKind::Bot(_) => {
+                if !self.m.is_feature_enabled(FeatureKind::BottomType) {
+                    result = Err(());
+                    self.diag.emit(make_feature_disabled_error(
+                        SemaError::BotTypeNotAllowed {
+                            location: def.location,
+                        },
+                        FeatureKind::BottomType,
+                    ));
+                }
+            }
+
+            ast::TyExprKind::Auto(_) => {
+                if !self.m.is_feature_enabled(FeatureKind::TypeInference) {
+                    result = Err(());
+                    self.diag.emit(make_feature_disabled_error(
+                        SemaError::TypeInferenceNotAvailable {
+                            location: def.location,
+                        },
+                        FeatureKind::TypeInference,
+                    ));
+                }
+            }
+
+            ast::TyExprKind::Name(_) => {}
+        }
+
+        result
+    }
+
+    fn check_exprs(&mut self) -> Result {
+        let expr_ids = self.m.exprs.keys().collect::<Vec<_>>();
+        let mut result = Ok(());
+
+        for expr_id in expr_ids {
+            result = result.and(self.check_expr(expr_id));
+        }
+
+        result
+    }
+
+    fn check_expr(&mut self, expr_id: ExprId) -> Result {
+        let mut result = Ok(());
+        let def = self.m.exprs[expr_id].def;
+
+        match &def.kind {
+            ast::ExprKind::Dummy => {}
+            ast::ExprKind::Bool(_) => {}
+
+            ast::ExprKind::Unit(_) => {
+                if !self.m.is_feature_enabled(FeatureKind::UnitType) {
+                    result = Err(());
+                    self.diag.emit(make_feature_disabled_error(
+                        SemaError::UnitTypeNotAllowed {
+                            location: def.location,
+                        },
+                        FeatureKind::UnitType,
+                    ));
+                }
+            }
+
+            ast::ExprKind::Int(expr) => {
+                if expr.value != 0u32.into()
+                    && !self.m.is_feature_enabled(FeatureKind::NaturalLiterals)
+                {
+                    result = Err(());
+                    self.diag.emit(make_feature_disabled_error(
+                        SemaError::NaturalLiteralNotAllowed {
+                            location: def.location,
+                        },
+                        FeatureKind::NaturalLiterals,
+                    ));
+                }
+            }
+
+            ast::ExprKind::Address(_) => {
+                if !self.m.is_feature_enabled(FeatureKind::AddressLiterals) {
+                    result = Err(());
+                    self.diag.emit(make_feature_disabled_error(
+                        SemaError::AddressLiteralNotAllowed {
+                            location: def.location,
+                        },
+                        FeatureKind::AddressLiterals,
+                    ));
+                }
+            }
+
+            ast::ExprKind::Name(_) => {}
+
+            ast::ExprKind::Field(expr) => match &expr.field {
+                ast::ExprFieldName::Name(_) if !self.m.is_feature_enabled(FeatureKind::Records) => {
+                    result = Err(());
+                    self.diag.emit(make_feature_disabled_error(
+                        SemaError::FieldExprNotAllowed {
+                            location: def.location,
+                        },
+                        FeatureKind::Records,
+                    ));
+                }
+
+                ast::ExprFieldName::Index(_, idx)
+                    if !self.m.is_feature_enabled(FeatureKind::Tuples)
+                        && !self.m.is_feature_enabled(FeatureKind::Pairs) =>
+                {
+                    result = Err(());
+                    let mut report = make_feature_disabled_error(
+                        SemaError::FieldExprNotAllowed {
+                            location: def.location,
+                        },
+                        FeatureKind::Tuples,
+                    );
+
+                    if (1..=2).contains(idx) {
+                        report = report.with_help(format!(
+                            "alternately, you can enable pairs only with the {} extension",
+                            FeatureKind::Pairs.extension().unwrap(),
+                        ));
+                    }
+
+                    self.diag.emit(report);
+                }
+
+                _ => {}
+            },
+
+            ast::ExprKind::Panic(_) => {
+                if !self.m.is_feature_enabled(FeatureKind::Panic) {
+                    result = Err(());
+                    self.diag.emit(make_feature_disabled_error(
+                        SemaError::PanicExprNotAllowed {
+                            location: def.location,
+                        },
+                        FeatureKind::Panic,
+                    ));
+                }
+            }
+
+            ast::ExprKind::Throw(_) => {
+                if !self.m.is_feature_enabled(FeatureKind::Exceptions) {
+                    result = Err(());
+                    self.diag.emit(make_feature_disabled_error(
+                        SemaError::ThrowExprNotAllowed {
+                            location: def.location,
+                        },
+                        FeatureKind::Exceptions,
+                    ));
+                }
+            }
+
+            ast::ExprKind::TryCatch(_) => {
+                if !self.m.is_feature_enabled(FeatureKind::Exceptions) {
+                    result = Err(());
+                    self.diag.emit(make_feature_disabled_error(
+                        SemaError::TryCatchExprNotAllowed {
+                            location: def.location,
+                        },
+                        FeatureKind::Exceptions,
+                    ));
+                }
+            }
+
+            ast::ExprKind::TryCast(_) | ast::ExprKind::Cast(_) => {
+                if !self.m.is_feature_enabled(FeatureKind::CastExprs) {
+                    result = Err(());
+                    self.diag.emit(make_feature_disabled_error(
+                        SemaError::CastExprNotAllowed {
+                            location: def.location,
+                        },
+                        FeatureKind::CastExprs,
+                    ));
+                }
+            }
+
+            ast::ExprKind::Fix(_) => {
+                if !self.m.is_feature_enabled(FeatureKind::FixpointCombinator) {
+                    result = Err(());
+                    self.diag.emit(make_feature_disabled_error(
+                        SemaError::FixExprNotAllowed {
+                            location: def.location,
+                        },
+                        FeatureKind::FixpointCombinator,
+                    ));
+                }
+            }
+
+            ast::ExprKind::Fold(_) | ast::ExprKind::Unfold(_) => {
+                if !self.m.is_feature_enabled(FeatureKind::IsorecursiveTypes) {
+                    result = Err(());
+                    self.diag.emit(make_feature_disabled_error(
+                        SemaError::FoldExprNotAllowed {
+                            location: def.location,
+                        },
+                        FeatureKind::IsorecursiveTypes,
+                    ));
+                }
+            }
+
+            ast::ExprKind::Apply(expr) => match expr.callee {
+                ast::Callee::Builtin { builtin, .. } => match builtin {
+                    ast::Builtin::Inl | ast::Builtin::Inr => {
+                        if !self.m.is_feature_enabled(FeatureKind::SumTypes) {
+                            result = Err(());
+                            self.diag.emit(make_feature_disabled_error(
+                                SemaError::ApplyExprNotAllowed {
+                                    location: def.location,
+                                },
+                                FeatureKind::SumTypes,
+                            ));
+                        }
+                    }
+
+                    ast::Builtin::Cons
+                    | ast::Builtin::ListHead
+                    | ast::Builtin::ListIsEmpty
+                    | ast::Builtin::ListTail => {
+                        if !self.m.is_feature_enabled(FeatureKind::Lists) {
+                            result = Err(());
+                            self.diag.emit(make_feature_disabled_error(
+                                SemaError::ApplyExprNotAllowed {
+                                    location: def.location,
+                                },
+                                FeatureKind::Lists,
+                            ));
+                        }
+                    }
+
+                    ast::Builtin::Succ => {}
+                    ast::Builtin::Not => {}
+                    ast::Builtin::NatPred => {}
+                    ast::Builtin::NatIsZero => {}
+                    ast::Builtin::NatRec => {}
+                },
+
+                ast::Callee::Expr(_) => {}
+            },
+
+            ast::ExprKind::TyApply(_) => {
+                if !self.m.is_feature_enabled(FeatureKind::TypeParameters) {
+                    result = Err(());
+                    self.diag.emit(make_feature_disabled_error(
+                        SemaError::TyApplyExprNotAllowed {
+                            location: def.location,
+                        },
+                        FeatureKind::TypeParameters,
+                    ));
+                }
+            }
+
+            ast::ExprKind::Ascription(expr) => {
+                if !self.m.is_feature_enabled(FeatureKind::TypeAscriptions) {
+                    result = Err(());
+                    self.diag.emit(make_feature_disabled_error(
+                        SemaError::AscriptionExprNotAllowed {
+                            location: def.location,
+                            as_location: expr.as_kw.as_ref().map(|token| token.span).into(),
+                        },
+                        FeatureKind::TypeAscriptions,
+                    ));
+                }
+            }
+
+            ast::ExprKind::Fn(expr) => {
+                result = result.and(self.check_fn_param_count(expr.params.len(), def.location));
+            }
+
+            ast::ExprKind::Tuple(expr) => {
+                result = result.and(self.check_tuple(expr.elems.len(), def.location));
+            }
+
+            ast::ExprKind::Record(expr) => {
+                result = result.and(self.check_record(expr.elems.len(), def.location));
+            }
+
+            ast::ExprKind::Variant(expr) => {
+                if !self.m.is_feature_enabled(FeatureKind::Variants) {
+                    result = Err(());
+                    self.diag.emit(make_feature_disabled_error(
+                        SemaError::VariantNotAllowed {
+                            location: def.location,
+                        },
+                        FeatureKind::Variants,
+                    ));
+                } else if expr.expr.is_none()
+                    && !self.m.is_feature_enabled(FeatureKind::NullaryVariantLabels)
+                {
+                    result = Err(());
+                    self.diag.emit(make_feature_disabled_error(
+                        SemaError::NullaryVariantLabelNotAllowed {
+                            location: expr.label.location(),
+                            variant_location: def.location,
+                        },
+                        FeatureKind::NullaryVariantLabels,
+                    ));
+                }
+            }
+
+            ast::ExprKind::Match(_) => {
+                if !self.m.is_feature_enabled(FeatureKind::Patterns) {
+                    result = Err(());
+                    self.diag.emit(make_feature_disabled_error(
+                        SemaError::MatchExprNotAllowed {
+                            location: def.location,
+                        },
+                        FeatureKind::Patterns,
+                    ));
+                }
+            }
+
+            ast::ExprKind::List(_) => {
+                if !self.m.is_feature_enabled(FeatureKind::Lists) {
+                    result = Err(());
+                    self.diag.emit(make_feature_disabled_error(
+                        SemaError::ListNotAllowed {
+                            location: def.location,
+                        },
+                        FeatureKind::Lists,
+                    ));
+                }
+            }
+
+            ast::ExprKind::If(_) => {}
+
+            ast::ExprKind::Seq(expr) => {
+                if !self.m.is_feature_enabled(FeatureKind::Sequencing) {
+                    result = Err(());
+                    self.diag.emit(make_feature_disabled_error(
+                        SemaError::SeqExprNotAllowed {
+                            location: def.location,
+                            semicolon_locations: expr
+                                .exprs
+                                .iter()
+                                .map(|(_, token)| token.as_ref().map(|token| token.span).into())
+                                .collect(),
+                        },
+                        FeatureKind::Sequencing,
+                    ));
+                }
+            }
+
+            ast::ExprKind::Let(expr) => {
+                if expr.rec && !self.m.is_feature_enabled(FeatureKind::LetrecBindings) {
+                    result = Err(());
+                    self.diag.emit(make_feature_disabled_error(
+                        SemaError::LetrecExprNotAllowed {
+                            location: def.location,
+                            letrec_location: expr.let_kw.as_ref().map(|token| token.span).into(),
+                        },
+                        FeatureKind::LetrecBindings,
+                    ));
+                } else if !expr.rec && !self.m.is_feature_enabled(FeatureKind::LetBindings) {
+                    result = Err(());
+                    self.diag.emit(make_feature_disabled_error(
+                        SemaError::LetExprNotAllowed {
+                            location: def.location,
+                            let_location: expr.let_kw.as_ref().map(|token| token.span).into(),
+                        },
+                        FeatureKind::LetBindings,
+                    ));
+                }
+
+                for binding in &expr.bindings {
+                    match binding.pat.kind {
+                        ast::PatKind::Dummy => {}
+                        ast::PatKind::Name(_) => {}
+                        ast::PatKind::Ascription(_) => {}
+                        _ if self.m.is_feature_enabled(FeatureKind::LetPatterns) => {}
+
+                        _ => {
+                            result = Err(());
+                            self.diag.emit(make_feature_disabled_error(
+                                SemaError::GeneralPatternNotAllowed {
+                                    location: binding.pat.location,
+                                },
+                                FeatureKind::LetPatterns,
+                            ));
+                        }
+                    }
+                }
+            }
+
+            ast::ExprKind::Generic(_) => {
+                if !self.m.is_feature_enabled(FeatureKind::TypeParameters) {
+                    result = Err(());
+                    self.diag.emit(make_feature_disabled_error(
+                        SemaError::GenericExprNotAllowed {
+                            location: def.location,
+                        },
+                        FeatureKind::TypeParameters,
+                    ));
+                }
+            }
+
+            ast::ExprKind::Unary(expr) => match expr.op {
+                ast::UnOp::New => {
+                    if !self.m.is_feature_enabled(FeatureKind::References) {
+                        result = Err(());
+                        self.diag.emit(make_feature_disabled_error(
+                            SemaError::NewExprNotAllowed {
+                                location: def.location,
+                            },
+                            FeatureKind::References,
+                        ));
+                    }
+                }
+
+                ast::UnOp::Deref => {
+                    if !self.m.is_feature_enabled(FeatureKind::References) {
+                        result = Err(());
+                        self.diag.emit(make_feature_disabled_error(
+                            SemaError::DerefExprNotAllowed {
+                                location: def.location,
+                                star_location: expr.token.as_ref().map(|token| token.span).into(),
+                            },
+                            FeatureKind::References,
+                        ));
+                    }
+                }
+            },
+
+            ast::ExprKind::Binary(expr) => match expr.op {
+                ast::BinOp::Add | ast::BinOp::Sub | ast::BinOp::Mul | ast::BinOp::Div => {
+                    if !self.m.is_feature_enabled(FeatureKind::ArithmeticOperations) {
+                        result = Err(());
+                        self.diag.emit(make_feature_disabled_error(
+                            SemaError::ArithOpNotAllowed {
+                                location: def.location,
+                                op_location: expr.token.as_ref().map(|token| token.span).into(),
+                            },
+                            FeatureKind::ArithmeticOperations,
+                        ));
+                    }
+                }
+
+                ast::BinOp::And | ast::BinOp::Or => {}
+
+                ast::BinOp::Lt | ast::BinOp::Le | ast::BinOp::Gt | ast::BinOp::Ge => {
+                    if !self.m.is_feature_enabled(FeatureKind::ComparisonOperations) {
+                        result = Err(());
+                        self.diag.emit(make_feature_disabled_error(
+                            SemaError::ComparisonOpNotAllowed {
+                                location: def.location,
+                                op_location: expr.token.as_ref().map(|token| token.span).into(),
+                            },
+                            FeatureKind::ComparisonOperations,
+                        ));
+                    }
+                }
+
+                ast::BinOp::Eq => {}
+                ast::BinOp::Ne => {}
+
+                ast::BinOp::Assign => {
+                    if !self.m.is_feature_enabled(FeatureKind::References) {
+                        result = Err(());
+                        self.diag.emit(make_feature_disabled_error(
+                            SemaError::AssignExprNotAllowed {
+                                location: def.location,
+                                colon_eq_location: expr
+                                    .token
+                                    .as_ref()
+                                    .map(|token| token.span)
+                                    .into(),
+                            },
+                            FeatureKind::References,
+                        ));
+                    }
+                }
+            },
+        }
+
+        result
+    }
+
+    fn check_pats(&mut self) -> Result {
+        let pat_ids = self.m.pats.keys().collect::<Vec<_>>();
+        let mut result = Ok(());
+
+        for pat_id in pat_ids {
+            result = result.and(self.check_pat(pat_id));
+        }
+
+        result
+    }
+
+    fn check_pat(&mut self, pat_id: PatId) -> Result {
+        let mut result = Ok(());
+        let def = self.m.pats[pat_id].def;
+
+        match &def.kind {
+            ast::PatKind::Dummy => {}
+
+            ast::PatKind::Variant(pat) => {
+                if !self.m.is_feature_enabled(FeatureKind::Variants) {
+                    result = Err(());
+                    self.diag.emit(make_feature_disabled_error(
+                        SemaError::VariantNotAllowed {
+                            location: def.location,
+                        },
+                        FeatureKind::Variants,
+                    ));
+                } else {
+                    match &pat.pat {
+                        Some(subpat) if !def.nested => {
+                            result = result.and(self.check_nested_pat(subpat));
+                        }
+
+                        None if !self.m.is_feature_enabled(FeatureKind::NullaryVariantLabels) => {
+                            result = Err(());
+                            self.diag.emit(make_feature_disabled_error(
+                                SemaError::NullaryVariantLabelNotAllowed {
+                                    location: pat.label.location(),
+                                    variant_location: def.location,
+                                },
+                                FeatureKind::NullaryVariantLabels,
+                            ));
+                        }
+
+                        _ => {}
+                    }
+                }
+            }
+
+            ast::PatKind::Cons(pat) => {
+                if !self.m.is_feature_enabled(FeatureKind::StructuralPatterns) {
+                    result = Err(());
+                    self.diag.emit(make_feature_disabled_error(
+                        SemaError::StructuralPatternNotAllowed {
+                            location: def.location,
+                        },
+                        FeatureKind::StructuralPatterns,
+                    ));
+                } else {
+                    match pat.cons {
+                        ast::Cons::Inl | ast::Cons::Inr => {
+                            if !self.m.is_feature_enabled(FeatureKind::SumTypes) {
+                                result = Err(());
+                                self.diag.emit(make_feature_disabled_error(
+                                    SemaError::InjectionPatternNotAllowed {
+                                        location: def.location,
+                                    },
+                                    FeatureKind::SumTypes,
+                                ));
+                            }
+                        }
+
+                        ast::Cons::Cons => {
+                            if !self.m.is_feature_enabled(FeatureKind::Lists) {
+                                result = Err(());
+                                self.diag.emit(make_feature_disabled_error(
+                                    SemaError::ListNotAllowed {
+                                        location: def.location,
+                                    },
+                                    FeatureKind::Lists,
+                                ));
+                            }
+                        }
+
+                        ast::Cons::Succ => {}
+                    }
+
+                    if !def.nested {
+                        for arg in &pat.args {
+                            result = result.and(self.check_nested_pat(arg));
+                        }
+                    }
+                }
+            }
+
+            ast::PatKind::Tuple(pat) => {
+                if !self.m.is_feature_enabled(FeatureKind::StructuralPatterns) {
+                    result = Err(());
+                    self.diag.emit(make_feature_disabled_error(
+                        SemaError::StructuralPatternNotAllowed {
+                            location: def.location,
+                        },
+                        FeatureKind::StructuralPatterns,
+                    ));
+                } else {
+                    result = result.and(self.check_tuple(pat.elems.len(), def.location));
+
+                    if !def.nested {
+                        for elem in &pat.elems {
+                            result = result.and(self.check_nested_pat(elem));
+                        }
+                    }
+                }
+            }
+
+            ast::PatKind::Record(pat) => {
+                if !self.m.is_feature_enabled(FeatureKind::StructuralPatterns) {
+                    result = Err(());
+                    self.diag.emit(make_feature_disabled_error(
+                        SemaError::StructuralPatternNotAllowed {
+                            location: def.location,
+                        },
+                        FeatureKind::StructuralPatterns,
+                    ));
+                } else {
+                    result = result.and(self.check_record(pat.fields.len(), def.location));
+
+                    if !def.nested {
+                        for field in &pat.fields {
+                            result = result.and(self.check_nested_pat(&field.pat));
+                        }
+                    }
+                }
+            }
+
+            ast::PatKind::List(pat) => {
+                if !self.m.is_feature_enabled(FeatureKind::StructuralPatterns) {
+                    result = Err(());
+                    self.diag.emit(make_feature_disabled_error(
+                        SemaError::StructuralPatternNotAllowed {
+                            location: def.location,
+                        },
+                        FeatureKind::StructuralPatterns,
+                    ));
+                } else if !self.m.is_feature_enabled(FeatureKind::Lists) {
+                    result = Err(());
+                    self.diag.emit(make_feature_disabled_error(
+                        SemaError::ListNotAllowed {
+                            location: def.location,
+                        },
+                        FeatureKind::Lists,
+                    ));
+                } else if !def.nested {
+                    for elem in &pat.elems {
+                        result = result.and(self.check_nested_pat(elem));
+                    }
+                }
+            }
+
+            ast::PatKind::Bool(_) => {
+                if !self.m.is_feature_enabled(FeatureKind::StructuralPatterns) {
+                    result = Err(());
+                    self.diag.emit(make_feature_disabled_error(
+                        SemaError::StructuralPatternNotAllowed {
+                            location: def.location,
+                        },
+                        FeatureKind::StructuralPatterns,
+                    ));
+                }
+            }
+
+            ast::PatKind::Unit(_) => {
+                if !self.m.is_feature_enabled(FeatureKind::StructuralPatterns) {
+                    result = Err(());
+                    self.diag.emit(make_feature_disabled_error(
+                        SemaError::StructuralPatternNotAllowed {
+                            location: def.location,
+                        },
+                        FeatureKind::StructuralPatterns,
+                    ));
+                } else if !self.m.is_feature_enabled(FeatureKind::UnitType) {
+                    result = Err(());
+                    self.diag.emit(make_feature_disabled_error(
+                        SemaError::UnitTypeNotAllowed {
+                            location: def.location,
+                        },
+                        FeatureKind::UnitType,
+                    ));
+                }
+            }
+
+            ast::PatKind::Int(_) => {
+                if !self.m.is_feature_enabled(FeatureKind::StructuralPatterns) {
+                    result = Err(());
+                    self.diag.emit(make_feature_disabled_error(
+                        SemaError::StructuralPatternNotAllowed {
+                            location: def.location,
+                        },
+                        FeatureKind::StructuralPatterns,
+                    ));
+                }
+            }
+
+            ast::PatKind::Name(_) => {}
+
+            ast::PatKind::Ascription(pat) => {
+                if !self.m.is_feature_enabled(FeatureKind::PatternAscriptions) {
+                    result = Err(());
+                    self.diag.emit(make_feature_disabled_error(
+                        SemaError::AscriptionPatternNotAllowed {
+                            location: def.location,
+                        },
+                        FeatureKind::PatternAscriptions,
+                    ));
+                } else if !def.nested {
+                    result = result.and(self.check_nested_pat(&pat.pat));
+                }
+            }
+
+            ast::PatKind::Cast(pat) => {
+                if !self.m.is_feature_enabled(FeatureKind::CastPatterns) {
+                    result = Err(());
+                    self.diag.emit(make_feature_disabled_error(
+                        SemaError::CastPatternNotAllowed {
+                            location: def.location,
+                        },
+                        FeatureKind::CastPatterns,
+                    ));
+                } else if !def.nested {
+                    result = result.and(self.check_nested_pat(&pat.pat));
+                }
+            }
+        }
+
+        result
+    }
+
     fn check_fn_param_count(&mut self, count: usize, location: Location) -> Result {
         match count {
             0 if !self.m.is_feature_enabled(FeatureKind::NullaryFunctions) => {
@@ -272,27 +1134,97 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         }
     }
 
-    fn check_ty_exprs(&mut self) -> Result {
-        todo!()
+    fn check_tuple(&mut self, count: usize, location: Location) -> Result {
+        match count {
+            _ if self.m.is_feature_enabled(FeatureKind::Tuples) => Ok(()),
+            0 if self.m.is_feature_enabled(FeatureKind::EmptyTuple) => Ok(()),
+            2 if self.m.is_feature_enabled(FeatureKind::Pairs) => Ok(()),
+
+            0 => {
+                self.diag.emit(make_feature_disabled_error(
+                    SemaError::EmptyTupleNotAllowed { location },
+                    FeatureKind::EmptyTuple,
+                ));
+
+                Err(())
+            }
+
+            2 => {
+                self.diag.emit(
+                    make_feature_disabled_error(
+                        SemaError::TupleNotAllowed { location },
+                        FeatureKind::Pairs,
+                    )
+                    .with_help(format!(
+                        "alternately, you can enable tuples of arbitrary sizes with the {} extension",
+                        FeatureKind::Tuples.extension().unwrap(),
+                    )),
+                );
+
+                Err(())
+            }
+
+            _ if self.m.is_feature_enabled(FeatureKind::Pairs) => {
+                self.diag.emit(make_feature_disabled_error(
+                    SemaError::IllegalPairElementCount { location },
+                    FeatureKind::Tuples,
+                ));
+
+                Err(())
+            }
+
+            _ => {
+                self.diag.emit(make_feature_disabled_error(
+                    SemaError::TupleNotAllowed { location },
+                    FeatureKind::Tuples,
+                ));
+
+                Err(())
+            }
+        }
     }
 
-    fn check_ty_expr(&mut self, ty_expr_id: TyExprId) -> Result {
-        todo!()
+    fn check_record(&mut self, count: usize, location: Location) -> Result {
+        match count {
+            _ if self.m.is_feature_enabled(FeatureKind::Records) => Ok(()),
+            0 if self.m.is_feature_enabled(FeatureKind::EmptyTuple) => Ok(()),
+
+            0 => {
+                self.diag.emit(make_feature_disabled_error(
+                    SemaError::EmptyTupleNotAllowed { location },
+                    FeatureKind::EmptyTuple,
+                ));
+
+                Err(())
+            }
+
+            _ => {
+                self.diag.emit(make_feature_disabled_error(
+                    SemaError::RecordNotAllowed { location },
+                    FeatureKind::Records,
+                ));
+
+                Err(())
+            }
+        }
     }
 
-    fn check_exprs(&mut self) -> Result {
-        todo!()
-    }
+    fn check_nested_pat(&mut self, pat: &ast::Pat<'_>) -> Result {
+        match pat.kind {
+            ast::PatKind::Dummy => Ok(()),
+            ast::PatKind::Name(_) => Ok(()),
+            _ if self.m.is_feature_enabled(FeatureKind::StructuralPatterns) => Ok(()),
 
-    fn check_expr(&mut self, expr_id: ExprId) -> Result {
-        todo!()
-    }
+            _ => {
+                self.diag.emit(make_feature_disabled_error(
+                    SemaError::NestedPatternNotAllowed {
+                        location: pat.location,
+                    },
+                    FeatureKind::StructuralPatterns,
+                ));
 
-    fn check_pats(&mut self) -> Result {
-        todo!()
-    }
-
-    fn check_pat(&mut self, pat_id: PatId) -> Result {
-        todo!()
+                Err(())
+            }
+        }
     }
 }

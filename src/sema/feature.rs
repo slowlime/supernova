@@ -59,7 +59,6 @@ macro_rules! define_ext {
                     $(
                         $($($ext)+ => Some(Self::$name),)?
                     )+
-                    _ => None,
                 }
             }
         }
@@ -88,6 +87,8 @@ define_ext! {
     Sequencing "sequence expressions" (ast::Extension::Sequencing);
     PatternAscriptions "ascription patterns" (ast::Extension::PatternAscriptions);
     LetrecBindings "letrec-bindings" (ast::Extension::LetrecBindings);
+    FixpointCombinator "fixpoint combinator" (ast::Extension::FixpointCombinator);
+    LetPatterns "patterns in let expresions" (ast::Extension::LetPatterns);
 
     // Simple types.
     TypeAscriptions "type ascriptions" (ast::Extension::TypeAscriptions);
@@ -105,6 +106,7 @@ define_ext! {
 
     // References.
     References "references";
+    AddressLiterals "memory address literals";
 
     // Exceptions.
     ExceptionTypeDeclaration "exception type declaration";
@@ -116,6 +118,8 @@ define_ext! {
     Subtyping "subtyping";
     TopType "top type" => Subtyping;
     BottomType "bottom type" => Subtyping;
+    CastExprs "cast expressions";
+    CastPatterns "cast patterns";
 
     // Recursive types.
     RecursiveTypes "recursive types";

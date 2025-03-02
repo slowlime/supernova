@@ -43,6 +43,7 @@ pub enum Extension {
     ArithmeticOperations,
     ComparisonOperations,
     Sequencing,
+    LetPatterns,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -499,6 +500,7 @@ impl<'src> AstRecurse<'src> for TyExprFn<'src> {
 #[derive(Debug, Clone)]
 pub struct TyExprForAll<'src> {
     pub forall_location: Location,
+    pub synthetic: bool,
     pub name: Name<'src>,
     pub ty_expr: Box<TyExpr<'src>>,
 }
@@ -1655,7 +1657,17 @@ impl<'src> AstRecurse<'src> for Arm<'src> {
 pub struct Pat<'src> {
     pub id: PatId,
     pub location: Location,
+    pub nested: bool,
     pub kind: PatKind<'src>,
+}
+
+impl Pat<'_> {
+    pub fn with_nested(self, nested: bool) -> Self {
+        Self {
+            nested,
+            ..self
+        }
+    }
 }
 
 pub static DUMMY_PAT: LazyLock<Pat<'_>> = LazyLock::new(Default::default);

@@ -237,6 +237,10 @@ impl ParseResultFamily for PatFamily {
     type R<'src> = ast::Pat<'src>;
 }
 
+#[allow(
+    clippy::type_complexity,
+    reason = "there's no point in factoring out the internal details"
+)]
 struct PrecTable<F: ParseResultFamily> {
     prefix: FxHashMap<
         TokenKind,
@@ -1027,11 +1031,13 @@ impl<'src> Parser<'src> {
 
         Ok(names
             .into_iter()
-            .rfold(ty_expr, |ty_expr, name| ast::TyExpr {
+            .enumerate()
+            .rfold(ty_expr, |ty_expr, (idx, name)| ast::TyExpr {
                 id: Default::default(),
                 location,
                 kind: ast::TyExprForAll {
                     forall_location: forall_kw.span.into(),
+                    synthetic: idx != 0,
                     name,
                     ty_expr: Box::new(ty_expr),
                 }
@@ -2056,7 +2062,7 @@ impl<'src> Parser<'src> {
         let label = self.parse_name("a variant label")?;
 
         let pat = if self.consume(Symbol::Equals)?.is_some() {
-            Some(self.parse_pat_impl(0)?)
+            Some(self.parse_pat_impl(0)?.with_nested(true))
         } else {
             None
         };
@@ -2066,6 +2072,7 @@ impl<'src> Parser<'src> {
         Ok(ast::Pat {
             id: Default::default(),
             location: ltriangle.span.convex_hull(&rtriangle.span).into(),
+            nested: false,
             kind: ast::PatVariant {
                 label,
                 pat: pat.map(Box::new),
@@ -2091,7 +2098,7 @@ impl<'src> Parser<'src> {
             token
         } else {
             loop {
-                args.push(self.parse_pat_impl(0)?);
+                args.push(self.parse_pat_impl(0)?.with_nested(true));
 
                 let token = self.expect([Symbol::Comma, Symbol::RParen])?;
 
@@ -2104,6 +2111,7 @@ impl<'src> Parser<'src> {
         Ok(ast::Pat {
             id: Default::default(),
             location: token.span.convex_hull(&rparen.span).into(),
+            nested: false,
             kind: ast::PatCons { cons, args }.into(),
         })
     }
@@ -2131,7 +2139,7 @@ impl<'src> Parser<'src> {
             token
         } else {
             loop {
-                elems.push(self.parse_pat_impl(0)?);
+                elems.push(self.parse_pat_impl(0)?.with_nested(true));
 
                 let token = self.expect([Symbol::Comma, Symbol::RBrace])?;
 
@@ -2144,6 +2152,7 @@ impl<'src> Parser<'src> {
         Ok(ast::Pat {
             id: Default::default(),
             location: lbrace.span.convex_hull(&rbrace.span).into(),
+            nested: false,
             kind: ast::PatTuple { elems }.into(),
         })
     }
@@ -2160,7 +2169,7 @@ impl<'src> Parser<'src> {
             loop {
                 let name = self.parse_name("a record field name")?;
                 self.expect(Symbol::Equals)?;
-                let pat = self.parse_pat_impl(0)?;
+                let pat = self.parse_pat_impl(0)?.with_nested(true);
                 fields.push(ast::PatRecordField { name, pat });
 
                 let token = self.expect([Symbol::Comma, Symbol::RBrace])?;
@@ -2174,6 +2183,7 @@ impl<'src> Parser<'src> {
         Ok(ast::Pat {
             id: Default::default(),
             location: lbrace.span.convex_hull(&rbrace.span).into(),
+            nested: false,
             kind: ast::PatRecord { fields }.into(),
         })
     }
@@ -2186,7 +2196,7 @@ impl<'src> Parser<'src> {
             token
         } else {
             loop {
-                elems.push(self.parse_pat_impl(0)?);
+                elems.push(self.parse_pat_impl(0)?.with_nested(true));
 
                 let token = self.expect([Symbol::Comma, Symbol::RBracket])?;
 
@@ -2199,6 +2209,7 @@ impl<'src> Parser<'src> {
         Ok(ast::Pat {
             id: Default::default(),
             location: lbracket.span.convex_hull(&rbracket.span).into(),
+            nested: false,
             kind: ast::PatList { elems }.into(),
         })
     }
@@ -2210,6 +2221,7 @@ impl<'src> Parser<'src> {
         Ok(ast::Pat {
             id: Default::default(),
             location: kw.span.into(),
+            nested: false,
             kind: ast::PatBool { value }.into(),
         })
     }
@@ -2220,6 +2232,7 @@ impl<'src> Parser<'src> {
         Ok(ast::Pat {
             id: Default::default(),
             location: kw.span.into(),
+            nested: false,
             kind: ast::PatUnit.into(),
         })
     }
@@ -2232,6 +2245,7 @@ impl<'src> Parser<'src> {
         Ok(ast::Pat {
             id: Default::default(),
             location: span.into(),
+            nested: false,
             kind: ast::PatInt { value }.into(),
         })
     }
@@ -2242,6 +2256,7 @@ impl<'src> Parser<'src> {
         Ok(ast::Pat {
             id: Default::default(),
             location: name.location(),
+            nested: false,
             kind: ast::PatName { name }.into(),
         })
     }
@@ -2257,6 +2272,7 @@ impl<'src> Parser<'src> {
         Ok(ast::Pat {
             id: Default::default(),
             location: pat.location.convex_hull(&ty_expr.location),
+            nested: false,
             kind: ast::PatAscription {
                 pat: Box::new(pat),
                 ty_expr,
@@ -2277,6 +2293,7 @@ impl<'src> Parser<'src> {
         Ok(ast::Pat {
             id: Default::default(),
             location: pat.location.convex_hull(&ty_expr.location),
+            nested: false,
             kind: ast::PatCast {
                 pat: Box::new(pat),
                 ty_expr,
@@ -2290,15 +2307,16 @@ impl<'src> Parser<'src> {
         let pat = self.parse_pat_impl(0)?;
 
         if self.consume(Symbol::Comma)?.is_some() {
-            let rhs = self.parse_pat_impl(0)?;
+            let rhs = self.parse_pat_impl(0)?.with_nested(true);
             let rparen = self.expect(Symbol::RParen)?;
 
             Ok(ast::Pat {
                 id: Default::default(),
                 location: lparen.span.convex_hull(&rparen.span).into(),
+                nested: false,
                 kind: ast::PatCons {
                     cons: ast::Cons::Cons,
-                    args: vec![pat, rhs],
+                    args: vec![pat.with_nested(true), rhs],
                 }
                 .into(),
             })
