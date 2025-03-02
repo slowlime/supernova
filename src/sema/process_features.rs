@@ -157,7 +157,10 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             ast::DeclKind::Dummy => {}
 
             ast::DeclKind::Fn(decl) => {
-                result = result.and(self.check_fn_param_count(decl.params.len(), def.location));
+                result = result.and(self.check_fn_param_count(
+                    decl.params.len(),
+                    decl.fn_kw.as_ref().map(|token| token.span).into(),
+                ));
 
                 if (decl.generic_kw.is_some() || !decl.generics.is_empty())
                     && !self.m.is_feature_enabled(FeatureKind::TypeParameters)
@@ -165,7 +168,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                     result = Err(());
                     self.diag.emit(make_feature_disabled_error(
                         SemaError::FunctionHasTypeParams {
-                            location: def.location,
+                            location: decl.fn_kw.as_ref().map(|token| token.span).into(),
                             generic_kw_location: decl
                                 .generic_kw
                                 .as_ref()
@@ -176,7 +179,15 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                     ));
                 }
 
-                // TODO: check the return type?
+                if decl.ret.is_none() && !self.m.is_feature_enabled(FeatureKind::TypeInference) {
+                    result = Err(());
+                    self.diag.emit(make_feature_disabled_error(
+                        SemaError::TypeInferenceNotAvailable {
+                            location: decl.fn_kw.as_ref().map(|token| token.span).into(),
+                        },
+                        FeatureKind::TypeInference,
+                    ));
+                }
 
                 if (decl.throws_kw.is_some() || !decl.throws.is_empty())
                     && !self.m.is_feature_enabled(FeatureKind::Exceptions)
@@ -184,7 +195,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                     result = Err(());
                     self.diag.emit(make_feature_disabled_error(
                         SemaError::FunctionHasThrows {
-                            location: def.location,
+                            location: decl.fn_kw.as_ref().map(|token| token.span).into(),
                             throws_kw_location: decl
                                 .throws_kw
                                 .as_ref()
