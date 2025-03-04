@@ -11,11 +11,11 @@ macro_rules! try_match {
 
 pub(crate) use try_match;
 
-pub fn format_list<'a, T: Display>(
-    values: &'a [T],
+pub fn format_list<T: Display>(
+    values: &[T],
     conj: &'static str,
     on_empty: &'static str,
-) -> impl Display + use<'a, T> {
+) -> impl Display {
     struct ListFormatter<'a, T>(&'a [T], &'static str, &'static str);
 
     impl<T: Display> Display for ListFormatter<'_, T> {
@@ -47,11 +47,7 @@ pub fn format_list<'a, T: Display>(
     ListFormatter(values, conj, on_empty)
 }
 
-pub fn format_iter<'a, T, I, II>(
-    values: II,
-    conj: &'a str,
-    on_empty: &'a str,
-) -> impl Display + use<'a, T, I, II>
+pub fn format_iter<'a, T, I, II>(values: II, conj: &'a str, on_empty: &'a str) -> impl Display
 where
     T: Display,
     I: Iterator<Item = T> + Clone,

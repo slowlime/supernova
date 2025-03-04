@@ -1,8 +1,8 @@
 use crate::ast;
-use crate::ast::visit::{AstRecurse, DefaultVisitor, DefaultVisitorMut};
+use crate::ast::visit::{AstRecurse, Visitor, VisitorMut};
 
 use super::feature::Feature;
-use super::{DeclInfo, ExprInfo, Module, PatInfo, TyExprInfo};
+use super::{BindingInfo, BindingKind, DeclInfo, ExprInfo, Module, PatInfo, TyExprInfo};
 
 impl<'ast> Module<'ast> {
     pub(super) fn load_ast(&mut self, ast: &'ast mut ast::Program<'ast>) {
@@ -58,10 +58,11 @@ struct IdAssigner<'ast, 'm> {
     m: &'m mut Module<'ast>,
 }
 
-impl<'ast, 'm> DefaultVisitorMut<'ast, 'm> for IdAssigner<'ast, 'm> {
+impl<'ast, 'm> VisitorMut<'ast, 'm> for IdAssigner<'ast, 'm> {
     fn visit_decl(&mut self, decl: &'m mut ast::Decl<'ast>) {
         decl.id = self.m.decls.insert(DeclInfo {
             def: &ast::DUMMY_DECL,
+            parent: None,
         });
 
         decl.recurse_mut(self);
@@ -90,15 +91,38 @@ impl<'ast, 'm> DefaultVisitorMut<'ast, 'm> for IdAssigner<'ast, 'm> {
 
         pat.recurse_mut(self);
     }
+
+    fn visit_binding(&mut self, binding: &'m mut ast::Binding<'ast>) {
+        binding.id = self.m.bindings.insert(BindingInfo {
+            location: binding.location(),
+            name: binding.name.as_str().into(),
+            kind: BindingKind::Dummy,
+        });
+    }
 }
 
 struct DefSetter<'ast, 'm> {
     m: &'m mut Module<'ast>,
 }
 
-impl<'ast> DefaultVisitor<'ast, 'ast> for DefSetter<'ast, '_> {
+impl<'ast> Visitor<'ast, 'ast> for DefSetter<'ast, '_> {
     fn visit_decl(&mut self, decl: &'ast ast::Decl<'ast>) {
         self.m.decls[decl.id].def = decl;
+
+        match &decl.kind {
+            ast::DeclKind::Dummy => {}
+
+            ast::DeclKind::Fn(d) => {
+                for subdecl in &d.decls {
+                    self.m.decls[subdecl.id].parent = Some(decl.id);
+                }
+            }
+
+            ast::DeclKind::TypeAlias(_) => {}
+            ast::DeclKind::ExceptionType(_) => {}
+            ast::DeclKind::ExceptionVariant(_) => {}
+        }
+
         decl.recurse(self);
     }
 
@@ -116,4 +140,6 @@ impl<'ast> DefaultVisitor<'ast, 'ast> for DefSetter<'ast, '_> {
         self.m.pats[pat.id].def = pat;
         pat.recurse(self);
     }
+
+    fn visit_binding(&mut self, _binding: &'ast ast::Binding<'ast>) {}
 }

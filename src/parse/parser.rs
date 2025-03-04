@@ -575,7 +575,7 @@ impl<'src> Parser<'src> {
                     return Err(ParserError::UnexpectedToken {
                         token: self.lexer.peek().unwrap().clone().unwrap(),
                         expected: expected.into_expected(),
-                    })
+                    });
                 }
             },
 
@@ -659,7 +659,7 @@ impl<'src> Parser<'src> {
                         return Err(ParserError::UnknownExtension {
                             span: extension.span,
                             extension: name.to_owned(),
-                        })
+                        });
                     }
                 }
 
@@ -736,7 +736,10 @@ impl<'src> Parser<'src> {
     ) -> Result<ast::Decl<'src>, ParserError<'src>> {
         let generic_kw = self.consume(Symbol::Generic)?;
         let fn_kw = self.expect_with_message(Symbol::Fn, "a function declaration")?;
-        let name = self.parse_name("a function name")?;
+        let binding = ast::Binding {
+            id: Default::default(),
+            name: self.parse_name("a function name")?,
+        };
 
         let mut generics = vec![];
 
@@ -744,7 +747,10 @@ impl<'src> Parser<'src> {
             self.expect_with_message(Symbol::LBracket, "a generic parameter list")?;
 
             loop {
-                generics.push(self.parse_name("a generic parameter")?);
+                generics.push(ast::Binding {
+                    id: Default::default(),
+                    name: self.parse_name("a generic parameter")?,
+                });
 
                 if Symbol::RBracket.matches(&self.expect([Symbol::RBracket, Symbol::Comma])?) {
                     break;
@@ -761,11 +767,14 @@ impl<'src> Parser<'src> {
                     break;
                 }
 
-                let name = self.parse_name("a parameter")?;
+                let binding = ast::Binding {
+                    id: Default::default(),
+                    name: self.parse_name("a parameter")?,
+                };
                 self.expect(Symbol::Colon)?;
                 let ty_expr = self.parse_ty_expr()?;
 
-                params.push(ast::Param { name, ty_expr });
+                params.push(ast::Param { binding, ty_expr });
 
                 if Symbol::RParen.matches(&self.expect([Symbol::RParen, Symbol::Comma])?) {
                     break;
@@ -813,7 +822,7 @@ impl<'src> Parser<'src> {
                 annotations,
                 generic_kw,
                 fn_kw: Some(fn_kw),
-                name,
+                binding,
                 generics,
                 params,
                 ret_token,
@@ -829,7 +838,10 @@ impl<'src> Parser<'src> {
 
     fn parse_decl_type_alias(&mut self) -> Result<ast::Decl<'src>, ParserError<'src>> {
         let type_kw = self.consume(Symbol::Type)?.unwrap();
-        let name = self.parse_name("a type alias name")?;
+        let binding = ast::Binding {
+            id: Default::default(),
+            name: self.parse_name("a type alias name")?,
+        };
         let eq_token = self.expect(Symbol::Equals)?;
         let ty_expr = self.parse_ty_expr()?;
 
@@ -838,7 +850,7 @@ impl<'src> Parser<'src> {
             location: type_kw.span.convex_hull(&ty_expr.location),
             kind: ast::DeclTypeAlias {
                 type_kw: Some(type_kw),
-                name,
+                binding,
                 eq_token: Some(eq_token),
                 ty_expr,
             }
@@ -1015,30 +1027,33 @@ impl<'src> Parser<'src> {
 
     fn parse_ty_expr_forall(&mut self, prec: u8) -> Result<ast::TyExpr<'src>, ParserError<'src>> {
         let forall_kw = self.expect(Symbol::Forall)?;
-        let mut names = vec![];
+        let mut bindings = vec![];
 
         while self.consume(Symbol::Dot)?.is_none() {
-            names.push(self.parse_name(|| {
-                [
-                    Cow::from("a type variable name"),
-                    Cow::from(Symbol::Dot.to_string()),
-                ]
-            })?);
+            bindings.push(ast::Binding {
+                id: Default::default(),
+                name: self.parse_name(|| {
+                    [
+                        Cow::from("a type variable name"),
+                        Cow::from(Symbol::Dot.to_string()),
+                    ]
+                })?,
+            });
         }
 
         let ty_expr = self.parse_ty_expr_impl(prec)?;
         let location = forall_kw.span.convex_hull(&ty_expr.location);
 
-        Ok(names
+        Ok(bindings
             .into_iter()
             .enumerate()
-            .rfold(ty_expr, |ty_expr, (idx, name)| ast::TyExpr {
+            .rfold(ty_expr, |ty_expr, (idx, binding)| ast::TyExpr {
                 id: Default::default(),
                 location,
                 kind: ast::TyExprForAll {
                     forall_location: forall_kw.span.into(),
                     synthetic: idx != 0,
-                    name,
+                    binding,
                     ty_expr: Box::new(ty_expr),
                 }
                 .into(),
@@ -1047,7 +1062,10 @@ impl<'src> Parser<'src> {
 
     fn parse_ty_expr_mu(&mut self, prec: u8) -> Result<ast::TyExpr<'src>, ParserError<'src>> {
         let mu_kw = self.expect(Symbol::Mu)?;
-        let name = self.parse_name("a type variable name")?;
+        let binding = ast::Binding {
+            id: Default::default(),
+            name: self.parse_name("a type variable name")?,
+        };
         self.expect(Symbol::Dot)?;
         let ty_expr = self.parse_ty_expr_impl(prec)?;
 
@@ -1056,7 +1074,7 @@ impl<'src> Parser<'src> {
             location: mu_kw.span.convex_hull(&ty_expr.location),
             kind: ast::TyExprMu {
                 mu_kw: Some(mu_kw),
-                name,
+                binding,
                 ty_expr: Box::new(ty_expr),
             }
             .into(),
@@ -1636,11 +1654,14 @@ impl<'src> Parser<'src> {
 
         if self.consume(Symbol::RParen)?.is_none() {
             loop {
-                let name = self.parse_name("a parameter name")?;
+                let binding = ast::Binding {
+                    id: Default::default(),
+                    name: self.parse_name("a parameter name")?,
+                };
                 self.expect(Symbol::Colon)?;
                 let ty_expr = self.parse_ty_expr()?;
 
-                params.push(ast::Param { name, ty_expr });
+                params.push(ast::Param { binding, ty_expr });
 
                 if Symbol::RParen.matches(&self.expect([Symbol::Comma, Symbol::RParen])?) {
                     break;
@@ -1707,7 +1728,7 @@ impl<'src> Parser<'src> {
         &mut self,
         lbrace: Token<'src>,
     ) -> Result<ast::Expr<'src>, ParserError<'src>> {
-        let mut elems = vec![];
+        let mut fields = vec![];
 
         let rbrace = if let Some(token) = self.consume(Symbol::RBrace)? {
             token
@@ -1716,7 +1737,7 @@ impl<'src> Parser<'src> {
                 let name = self.parse_name("a record field name")?;
                 self.expect(Symbol::Colon)?;
                 let expr = self.parse_expr_impl(0)?;
-                elems.push(ast::ExprRecordField { name, expr });
+                fields.push(ast::ExprRecordField { name, expr });
 
                 let token = self.expect([Symbol::Comma, Symbol::RBrace])?;
 
@@ -1729,7 +1750,7 @@ impl<'src> Parser<'src> {
         Ok(ast::Expr {
             id: Default::default(),
             location: lbrace.span.convex_hull(&rbrace.span).into(),
-            kind: ast::ExprRecord { elems }.into(),
+            kind: ast::ExprRecord { fields }.into(),
         })
     }
 
@@ -1887,7 +1908,7 @@ impl<'src> Parser<'src> {
             let pat = self.parse_pat()?;
             self.expect(Symbol::Equals)?;
             let expr = self.parse_expr_impl(0)?;
-            bindings.push(ast::Binding { pat, expr });
+            bindings.push(ast::LetBinding { pat, expr });
 
             if Symbol::In.matches(&self.expect([Symbol::Comma, Symbol::In])?) {
                 break;
@@ -1916,7 +1937,10 @@ impl<'src> Parser<'src> {
 
         if self.consume(Symbol::RBracket)?.is_none() {
             loop {
-                generics.push(self.parse_name("a type variable name")?);
+                generics.push(ast::Binding {
+                    id: Default::default(),
+                    name: self.parse_name("a type variable name")?,
+                });
 
                 if Symbol::RBracket.matches(&self.expect([Symbol::Comma, Symbol::RBracket])?) {
                     break;
@@ -2251,13 +2275,16 @@ impl<'src> Parser<'src> {
     }
 
     fn parse_pat_name(&mut self, _prec: u8) -> Result<ast::Pat<'src>, ParserError<'src>> {
-        let name = self.parse_name("a variable name")?;
+        let binding = ast::Binding {
+            id: Default::default(),
+            name: self.parse_name("a variable name")?,
+        };
 
         Ok(ast::Pat {
             id: Default::default(),
-            location: name.location(),
+            location: binding.location(),
             nested: false,
-            kind: ast::PatName { name }.into(),
+            kind: ast::PatName { binding }.into(),
         })
     }
 

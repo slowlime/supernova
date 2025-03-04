@@ -2,13 +2,13 @@ pub mod visit;
 
 use std::sync::LazyLock;
 
-use derive_more::From;
+use derive_more::{Display, From};
 use num::BigUint;
 use visit::{AstRecurse, Visitor, VisitorMut};
 
 use crate::location::Location;
 use crate::parse::Token;
-use crate::sema::{DeclId, ExprId, PatId, TyExprId};
+use crate::sema::{BindingId, DeclId, ExprId, PatId, TyExprId};
 
 #[derive(Debug, Clone)]
 pub struct Program<'src> {
@@ -115,8 +115,8 @@ pub struct DeclFn<'src> {
     pub annotations: Vec<Annotation>,
     pub generic_kw: Option<Token<'src>>,
     pub fn_kw: Option<Token<'src>>,
-    pub name: Name<'src>,
-    pub generics: Vec<Name<'src>>,
+    pub binding: Binding<'src>,
+    pub generics: Vec<Binding<'src>>,
     pub params: Vec<Param<'src>>,
     pub ret_token: Option<Token<'src>>,
     pub ret: Option<TyExpr<'src>>,
@@ -131,6 +131,8 @@ impl<'src> AstRecurse<'src> for DeclFn<'src> {
     where
         'src: 'ast,
     {
+        visitor.visit_binding(&self.binding);
+
         for param in &self.params {
             param.recurse(visitor);
         }
@@ -154,6 +156,8 @@ impl<'src> AstRecurse<'src> for DeclFn<'src> {
     where
         'src: 'ast,
     {
+        visitor.visit_binding(&mut self.binding);
+
         for param in &mut self.params {
             param.recurse_mut(visitor);
         }
@@ -177,7 +181,7 @@ impl<'src> AstRecurse<'src> for DeclFn<'src> {
 #[derive(Debug, Clone)]
 pub struct DeclTypeAlias<'src> {
     pub type_kw: Option<Token<'src>>,
-    pub name: Name<'src>,
+    pub binding: Binding<'src>,
     pub eq_token: Option<Token<'src>>,
     pub ty_expr: TyExpr<'src>,
 }
@@ -187,6 +191,7 @@ impl<'src> AstRecurse<'src> for DeclTypeAlias<'src> {
     where
         'src: 'ast,
     {
+        visitor.visit_binding(&self.binding);
         visitor.visit_ty_expr(&self.ty_expr);
     }
 
@@ -194,6 +199,7 @@ impl<'src> AstRecurse<'src> for DeclTypeAlias<'src> {
     where
         'src: 'ast,
     {
+        visitor.visit_binding(&mut self.binding);
         visitor.visit_ty_expr(&mut self.ty_expr);
     }
 }
@@ -254,7 +260,8 @@ pub enum AnnotationKind {
     Inline,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Display, Debug, Clone)]
+#[display("{}", self.as_str())]
 pub enum Name<'src> {
     Token(Token<'src>),
     Synthetic(String),
@@ -267,11 +274,30 @@ impl Name<'_> {
             Self::Synthetic(_) => Location::Builtin,
         }
     }
+
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::Token(token) => token.value.as_ident().unwrap(),
+            Self::Synthetic(name) => name,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Binding<'src> {
+    pub id: BindingId,
+    pub name: Name<'src>,
+}
+
+impl Binding<'_> {
+    pub fn location(&self) -> Location {
+        self.name.location()
+    }
 }
 
 #[derive(Debug, Clone)]
 pub struct Param<'src> {
-    pub name: Name<'src>,
+    pub binding: Binding<'src>,
     pub ty_expr: TyExpr<'src>,
 }
 
@@ -280,6 +306,7 @@ impl<'src> AstRecurse<'src> for Param<'src> {
     where
         'src: 'ast,
     {
+        visitor.visit_binding(&self.binding);
         visitor.visit_ty_expr(&self.ty_expr);
     }
 
@@ -287,6 +314,7 @@ impl<'src> AstRecurse<'src> for Param<'src> {
     where
         'src: 'ast,
     {
+        visitor.visit_binding(&mut self.binding);
         visitor.visit_ty_expr(&mut self.ty_expr);
     }
 }
@@ -501,7 +529,7 @@ impl<'src> AstRecurse<'src> for TyExprFn<'src> {
 pub struct TyExprForAll<'src> {
     pub forall_location: Location,
     pub synthetic: bool,
-    pub name: Name<'src>,
+    pub binding: Binding<'src>,
     pub ty_expr: Box<TyExpr<'src>>,
 }
 
@@ -510,6 +538,7 @@ impl<'src> AstRecurse<'src> for TyExprForAll<'src> {
     where
         'src: 'ast,
     {
+        visitor.visit_binding(&self.binding);
         visitor.visit_ty_expr(&self.ty_expr);
     }
 
@@ -517,6 +546,7 @@ impl<'src> AstRecurse<'src> for TyExprForAll<'src> {
     where
         'src: 'ast,
     {
+        visitor.visit_binding(&mut self.binding);
         visitor.visit_ty_expr(&mut self.ty_expr);
     }
 }
@@ -524,7 +554,7 @@ impl<'src> AstRecurse<'src> for TyExprForAll<'src> {
 #[derive(Debug, Clone)]
 pub struct TyExprMu<'src> {
     pub mu_kw: Option<Token<'src>>,
-    pub name: Name<'src>,
+    pub binding: Binding<'src>,
     pub ty_expr: Box<TyExpr<'src>>,
 }
 
@@ -533,6 +563,7 @@ impl<'src> AstRecurse<'src> for TyExprMu<'src> {
     where
         'src: 'ast,
     {
+        visitor.visit_binding(&self.binding);
         visitor.visit_ty_expr(&self.ty_expr);
     }
 
@@ -540,6 +571,7 @@ impl<'src> AstRecurse<'src> for TyExprMu<'src> {
     where
         'src: 'ast,
     {
+        visitor.visit_binding(&mut self.binding);
         visitor.visit_ty_expr(&mut self.ty_expr);
     }
 }
@@ -1301,7 +1333,7 @@ impl<'src> AstRecurse<'src> for ExprTuple<'src> {
 
 #[derive(Debug, Clone)]
 pub struct ExprRecord<'src> {
-    pub elems: Vec<ExprRecordField<'src>>,
+    pub fields: Vec<ExprRecordField<'src>>,
 }
 
 impl<'src> AstRecurse<'src> for ExprRecord<'src> {
@@ -1309,8 +1341,8 @@ impl<'src> AstRecurse<'src> for ExprRecord<'src> {
     where
         'src: 'ast,
     {
-        for elem in &self.elems {
-            elem.recurse(visitor);
+        for field in &self.fields {
+            field.recurse(visitor);
         }
     }
 
@@ -1318,8 +1350,8 @@ impl<'src> AstRecurse<'src> for ExprRecord<'src> {
     where
         'src: 'ast,
     {
-        for elem in &mut self.elems {
-            elem.recurse_mut(visitor);
+        for field in &mut self.fields {
+            field.recurse_mut(visitor);
         }
     }
 }
@@ -1483,7 +1515,7 @@ impl<'src> AstRecurse<'src> for ExprSeq<'src> {
 pub struct ExprLet<'src> {
     pub let_kw: Option<Token<'src>>,
     pub rec: bool,
-    pub bindings: Vec<Binding<'src>>,
+    pub bindings: Vec<LetBinding<'src>>,
     pub body: Box<Expr<'src>>,
 }
 
@@ -1512,12 +1544,12 @@ impl<'src> AstRecurse<'src> for ExprLet<'src> {
 }
 
 #[derive(Debug, Clone)]
-pub struct Binding<'src> {
+pub struct LetBinding<'src> {
     pub pat: Pat<'src>,
     pub expr: Expr<'src>,
 }
 
-impl<'src> AstRecurse<'src> for Binding<'src> {
+impl<'src> AstRecurse<'src> for LetBinding<'src> {
     fn recurse<'ast, V: Visitor<'src, 'ast> + ?Sized>(&'ast self, visitor: &mut V)
     where
         'src: 'ast,
@@ -1537,7 +1569,7 @@ impl<'src> AstRecurse<'src> for Binding<'src> {
 
 #[derive(Debug, Clone)]
 pub struct ExprGeneric<'src> {
-    pub generics: Vec<Name<'src>>,
+    pub generics: Vec<Binding<'src>>,
     pub expr: Box<Expr<'src>>,
 }
 
@@ -1663,10 +1695,7 @@ pub struct Pat<'src> {
 
 impl Pat<'_> {
     pub fn with_nested(self, nested: bool) -> Self {
-        Self {
-            nested,
-            ..self
-        }
+        Self { nested, ..self }
     }
 }
 
@@ -1721,7 +1750,7 @@ impl<'src> AstRecurse<'src> for PatKind<'src> {
             Self::Bool(_) => {}
             Self::Unit(_) => {}
             Self::Int(_) => {}
-            Self::Name(_) => {}
+            Self::Name(pat) => pat.recurse(visitor),
             Self::Ascription(pat) => pat.recurse(visitor),
             Self::Cast(pat) => pat.recurse(visitor),
         }
@@ -1741,7 +1770,7 @@ impl<'src> AstRecurse<'src> for PatKind<'src> {
             Self::Bool(_) => {}
             Self::Unit(_) => {}
             Self::Int(_) => {}
-            Self::Name(_) => {}
+            Self::Name(pat) => pat.recurse_mut(visitor),
             Self::Ascription(pat) => pat.recurse_mut(visitor),
             Self::Cast(pat) => pat.recurse_mut(visitor),
         }
@@ -1920,7 +1949,23 @@ pub struct PatInt {
 
 #[derive(Debug, Clone)]
 pub struct PatName<'src> {
-    pub name: Name<'src>,
+    pub binding: Binding<'src>,
+}
+
+impl<'src> AstRecurse<'src> for PatName<'src> {
+    fn recurse<'ast, V: Visitor<'src, 'ast> + ?Sized>(&'ast self, visitor: &mut V)
+    where
+        'src: 'ast,
+    {
+        visitor.visit_binding(&self.binding);
+    }
+
+    fn recurse_mut<'ast, V: VisitorMut<'src, 'ast> + ?Sized>(&'ast mut self, visitor: &mut V)
+    where
+        'src: 'ast,
+    {
+        visitor.visit_binding(&mut self.binding);
+    }
 }
 
 #[derive(Debug, Clone)]

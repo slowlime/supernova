@@ -216,7 +216,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                             result = Err(());
                             self.diag.emit(SemaError::IllegalNestedDecl {
                                 location: subdecl.location,
-                                func_name_location: decl.name.location(),
+                                func_name_location: decl.binding.location(),
                             });
                         }
 
@@ -229,7 +229,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                                 self.diag.emit(make_feature_disabled_error(
                                     SemaError::IllegalNestedDecl {
                                         location: subdecl.location,
-                                        func_name_location: decl.name.location(),
+                                        func_name_location: decl.binding.location(),
                                     },
                                     FeatureKind::NestedFunctionDeclarations,
                                 ));
@@ -693,7 +693,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             }
 
             ast::ExprKind::Record(expr) => {
-                result = result.and(self.check_record(expr.elems.len(), def.location));
+                result = result.and(self.check_record(expr.fields.len(), def.location));
             }
 
             ast::ExprKind::Variant(expr) => {

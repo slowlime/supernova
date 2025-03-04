@@ -132,4 +132,8 @@ define_visitor! {
         visit_expr(expr: super::Expr<'src>);
         visit_pat(pat: super::Pat<'src>);
     }
+
+    leaf {
+        visit_binding(binding: super::Binding<'src>);
+    }
 }

@@ -213,6 +213,54 @@ pub enum SemaError {
 
     #[error("cast patterns are not allowed")]
     CastPatternNotAllowed { location: Location },
+
+    #[error("the field `{name}` is declared multiple times in the same record type")]
+    DuplicateRecordTypeFields {
+        name: String,
+        location: Location,
+        prev_location: Location,
+    },
+
+    #[error("the label `{name}` is declared multiple times in the same variant type")]
+    DuplicateVariantTypeFields {
+        name: String,
+        location: Location,
+        prev_location: Location,
+    },
+
+    #[error("the field `{name}` is initialized multiple times in the same record")]
+    DuplicateRecordFields {
+        name: String,
+        location: Location,
+        prev_location: Location,
+    },
+
+    #[error("the field `{name}` is matched multiple times in the same record pattern")]
+    DuplicateRecordPatternFields {
+        name: String,
+        location: Location,
+        prev_location: Location,
+    },
+
+    #[error("the type `{name}` is undefined")]
+    UndefinedTy { name: String, location: Location },
+
+    #[error("the variable `{name}` is undefined")]
+    UndefinedVariable { name: String, location: Location },
+
+    #[error("the variable `{name}` is defined multiple times")]
+    DuplicateVariableDef {
+        name: String,
+        location: Location,
+        prev_location: Location,
+    },
+
+    #[error("the type `{name}` is defined multiple times")]
+    DuplicateTyDef {
+        name: String,
+        location: Location,
+        prev_location: Location,
+    },
 }
 
 impl IntoReportBuilder for SemaError {
@@ -627,6 +675,130 @@ impl IntoReportBuilder for SemaError {
             Self::CastPatternNotAllowed { location } => Report::build(ReportKind::Error, *location)
                 .with_code("sema::cast_pattern_not_allowed")
                 .with_message(&self),
+
+            Self::DuplicateRecordTypeFields {
+                name: _,
+                location,
+                prev_location,
+            } => {
+                let mut report = Report::build(ReportKind::Error, *location)
+                    .with_code("sema::duplicate_record_type_fields")
+                    .with_message(&self);
+
+                if prev_location.has_span() {
+                    report.add_label(
+                        Label::new(*prev_location)
+                            .with_message("the field was previously declared here"),
+                    );
+                }
+
+                report
+            }
+
+            Self::DuplicateVariantTypeFields {
+                name: _,
+                location,
+                prev_location,
+            } => {
+                let mut report = Report::build(ReportKind::Error, *location)
+                    .with_code("sema::duplicate_variant_type_fields")
+                    .with_message(&self);
+
+                if prev_location.has_span() {
+                    report.add_label(
+                        Label::new(*prev_location)
+                            .with_message("the field was previously declared here"),
+                    );
+                }
+
+                report
+            }
+
+            Self::DuplicateRecordFields {
+                name: _,
+                location,
+                prev_location,
+            } => {
+                let mut report = Report::build(ReportKind::Error, *location)
+                    .with_code("sema::duplicate_record_fields")
+                    .with_message(&self);
+
+                if prev_location.has_span() {
+                    report.add_label(
+                        Label::new(*prev_location)
+                            .with_message("the field was previously declared here"),
+                    );
+                }
+
+                report
+            }
+
+            Self::DuplicateRecordPatternFields {
+                name: _,
+                location,
+                prev_location,
+            } => {
+                let mut report = Report::build(ReportKind::Error, *location)
+                    .with_code("sema::duplicate_record_pattern_fields")
+                    .with_message(&self);
+
+                if prev_location.has_span() {
+                    report.add_label(
+                        Label::new(*prev_location)
+                            .with_message("the field was previously matched here"),
+                    );
+                }
+
+                report
+            }
+
+            Self::UndefinedTy { name: _, location } => Report::build(ReportKind::Error, *location)
+                .with_code("sema::undefined_type")
+                .with_message(&self),
+
+            Self::UndefinedVariable { name: _, location } => {
+                Report::build(ReportKind::Error, *location)
+                    .with_code("sema::undefined_variable")
+                    .with_message(&self)
+            }
+
+            Self::DuplicateVariableDef {
+                name: _,
+                location,
+                prev_location,
+            } => {
+                let mut report = Report::build(ReportKind::Error, *location)
+                    .with_code("sema::duplicate_variable_def")
+                    .with_message(&self);
+
+                if prev_location.has_span() {
+                    report.add_label(
+                        Label::new(*prev_location)
+                            .with_message("the variable was previously defined here"),
+                    );
+                }
+
+                report
+            }
+
+            Self::DuplicateTyDef {
+                name: _,
+                location,
+                prev_location,
+            } => {
+                let mut report = Report::build(ReportKind::Error, *location)
+                    .with_code("sema::duplicate_ty_def")
+                    .with_message(&self);
+
+                if prev_location.has_span() {
+                    report.add_label(
+                        Label::new(*prev_location)
+                            .with_message("the type was previously defined here"),
+                    );
+                }
+
+                report
+            }
         }
     }
 }

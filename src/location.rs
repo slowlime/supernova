@@ -226,7 +226,7 @@ impl ConvexHull for Location {
 
     fn convex_hull(&self, other: &Location) -> Location {
         match (self, other) {
-            (Location::UserCode(lhs), Location::UserCode(ref rhs)) => {
+            (Location::UserCode(lhs), Location::UserCode(rhs)) => {
                 Location::UserCode(lhs.convex_hull(rhs))
             }
 
