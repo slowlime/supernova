@@ -17,7 +17,6 @@ pub struct WellKnownTys {
 
 #[derive(Debug, Clone)]
 pub struct Ty {
-    pub location: Location,
     pub kind: TyKind,
 }
 
@@ -29,7 +28,6 @@ pub enum TyKind {
     Unit,
     Bool,
     Nat,
-    Ref(TyId),
     Sum(TyId, TyId),
     Fn(TyFn),
     Tuple(TyTuple),
@@ -81,12 +79,12 @@ impl Hash for TyRecord {
 
 #[derive(Debug, Clone, Eq)]
 pub struct TyVariant {
-    pub elems: Vec<(String, TyId)>,
+    pub elems: Vec<(String, Option<TyId>)>,
     pub labels: FxHashMap<String, usize>,
 }
 
 impl TyVariant {
-    pub fn new(elems: Vec<(String, TyId)>) -> Self {
+    pub fn new(elems: Vec<(String, Option<TyId>)>) -> Self {
         let labels = elems
             .iter()
             .enumerate()

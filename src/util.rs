@@ -98,3 +98,22 @@ where
         on_empty,
     }
 }
+
+pub trait SliceExt {
+    type Item;
+
+    fn zip_all<F>(&self, other: &Self, f: F) -> bool
+    where
+        F: FnMut(&Self::Item, &Self::Item) -> bool;
+}
+
+impl<T> SliceExt for [T] {
+    type Item = T;
+
+    fn zip_all<F>(&self, other: &Self, mut f: F) -> bool
+    where
+        F: FnMut(&Self::Item, &Self::Item) -> bool,
+    {
+        self.len() == other.len() && self.iter().zip(other).all(|(lhs, rhs)| f(lhs, rhs))
+    }
+}

@@ -4,6 +4,7 @@ mod load_ast;
 mod process_features;
 mod resolve;
 pub mod ty;
+mod typeck;
 
 use fxhash::FxHashMap;
 use slotmap::{SlotMap, SparseSecondaryMap, new_key_type};
@@ -50,11 +51,13 @@ impl DeclInfo<'_> {
 #[derive(Debug, Clone)]
 pub struct ExprInfo<'ast> {
     pub def: &'ast ast::Expr<'ast>,
+    pub ty_id: TyId,
 }
 
 #[derive(Debug, Clone)]
 pub struct TyExprInfo<'ast> {
     pub def: &'ast ast::TyExpr<'ast>,
+    pub ty_id: TyId,
 }
 
 #[derive(Debug, Clone)]
@@ -66,6 +69,7 @@ pub struct PatInfo<'ast> {
 pub struct BindingInfo {
     pub location: Location,
     pub name: String,
+    pub ty_id: TyId,
     pub kind: BindingKind,
 }
 
@@ -131,9 +135,9 @@ pub struct Module<'ast> {
     pub prelude_scope_id: ScopeId,                 // initialized by resolve
     pub ty_name_exprs: SparseSecondaryMap<TyExprId, BindingId>, // initialized by resolve
     pub name_exprs: SparseSecondaryMap<ExprId, BindingId>, // initialized by resolve
-    pub tys: SlotMap<TyId, Ty>,
-    ty_dedup: FxHashMap<TyKind, TyId>,
-    pub well_known_tys: WellKnownTys,
+    pub tys: SlotMap<TyId, Ty>,                    // initialized by typeck
+    ty_dedup: FxHashMap<TyKind, TyId>,             // initialized by typeck
+    pub well_known_tys: WellKnownTys,              // initialized by typeck
 }
 
 impl Module<'_> {
@@ -180,6 +184,7 @@ pub fn process<'ast>(
     let result = (|| -> Result {
         module.process_features(diag)?;
         module.resolve(diag)?;
+        module.typeck(diag)?;
 
         Ok(())
     })();
