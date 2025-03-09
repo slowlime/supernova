@@ -320,7 +320,14 @@ pub enum SemaError {
     },
 
     #[error("the expression has a wrong number of arguments: expected {expected}, got {actual}")]
-    IncorrectNumberOfArguments {
+    IncorrectNumberOfArgumentsInExpr {
+        location: Location,
+        expected: usize,
+        actual: usize,
+    },
+
+    #[error("the pattern has a wrong number of arguments: expected {expected}, got {actual}")]
+    IncorrectNumberOfArgumentsInPat {
         location: Location,
         expected: usize,
         actual: usize,
@@ -333,7 +340,10 @@ pub enum SemaError {
     },
 
     #[error("could not determine the type of a sum type injection expression")]
-    AmbiguousSumType { location: Location },
+    AmbiguousSumTypeInExpr { location: Location },
+
+    #[error("could not determine the type of a sum type injection pattern")]
+    AmbiguousSumTypeInPat { location: Location },
 
     #[error("the expression has a wrong type: expected `{expected_ty}`, got a list type")]
     UnexpectedList {
@@ -389,7 +399,16 @@ pub enum SemaError {
     #[error(
         "the number of elements in the tuple expression ({actual}) does not match the expected count ({expected})"
     )]
-    UnexpectedTupleLength {
+    UnexpectedTupleLengthInExpr {
+        location: Location,
+        actual: usize,
+        expected: usize,
+    },
+
+    #[error(
+        "the number of elements in the tuple pattern ({actual}) does not match the expected count ({expected})"
+    )]
+    UnexpectedTupleLengthInPat {
         location: Location,
         actual: usize,
         expected: usize,
@@ -402,22 +421,40 @@ pub enum SemaError {
     },
 
     #[error("the field `{name}` is not present in the expected type `{expected_ty}`")]
-    UnexpectedRecordField {
+    UnexpectedRecordFieldInExpr {
         location: Location,
         name: String,
         expected_ty: String,
         expr_location: Location,
     },
 
+    #[error("the field `{name}` is not present in the expected type `{expected_ty}`")]
+    UnexpectedRecordFieldInPat {
+        location: Location,
+        name: String,
+        expected_ty: String,
+        pat_location: Location,
+    },
+
     #[error("the field `{name}` is missing to match the expected type `{expected_ty}`")]
-    MissingRecordField {
+    MissingRecordFieldInExpr {
         location: Location,
         name: String,
         expected_ty: String,
     },
 
-    #[error("could not determine the type of a variant expresion")]
-    AmbiguousVariantType { location: Location },
+    #[error("the field `{name}` is missing to match the expected type `{expected_ty}`")]
+    MissingRecordFieldInPat {
+        location: Location,
+        name: String,
+        expected_ty: String,
+    },
+
+    #[error("could not determine the type of a variant expression")]
+    AmbiguousVariantExprType { location: Location },
+
+    #[error("could not determine the type of a variant pattern")]
+    AmbiguousVariantPatType { location: Location },
 
     #[error("the expression has a wrong type: expected `{expected_ty}`, got a variant type")]
     UnexpectedVariant {
@@ -426,11 +463,19 @@ pub enum SemaError {
     },
 
     #[error("the label `{name}` is not present in the expected type `{expected_ty}`")]
-    UnexpectedVariantLabel {
+    UnexpectedVariantLabelInExpr {
         location: Location,
         name: String,
         expected_ty: String,
         expr_location: Location,
+    },
+
+    #[error("the label `{name}` is not present in the expected type `{expected_ty}`")]
+    UnexpectedVariantLabelInPat {
+        location: Location,
+        name: String,
+        expected_ty: String,
+        pat_location: Location,
     },
 
     #[error(
@@ -443,6 +488,16 @@ pub enum SemaError {
         expr_location: Location,
     },
 
+    #[error(
+        "the label `{name}` does not have associated data in the expected type `{expected_ty}`"
+    )]
+    UnexpectedNonNullaryVariantPattern {
+        location: Location,
+        name: String,
+        expected_ty: String,
+        pat_location: Location,
+    },
+
     #[error("the label `{name}` must have associated data")]
     MissingDataForLabel {
         location: Location,
@@ -451,11 +506,31 @@ pub enum SemaError {
         expr_location: Location,
     },
 
+    #[error("the label `{name}` must have associated data")]
+    UnexpectedNullaryVariantPattern {
+        location: Location,
+        name: String,
+        expected_ty: String,
+        pat_location: Location,
+    },
+
     #[error("this match expression must have at least a single match arm")]
     IllegalEmptyMatching { location: Location },
 
     #[error("could not determine the type of an empty list expression")]
-    AmbiguousEmptyListTy { location: Location },
+    AmbiguousEmptyListExprTy { location: Location },
+
+    #[error("could not determine the type of an empty list pattern")]
+    AmbiguousEmptyListPatTy { location: Location },
+
+    #[error("this pattern cannot be used with values of the type `{expected_ty}`")]
+    UnexpectedPatternForType {
+        location: Location,
+        expected_ty: String,
+    },
+
+    #[error("could not determine the type of a binding pattern")]
+    AmbiguousBindingPatType { location: Location },
 }
 
 impl IntoReportBuilder for SemaError {
@@ -1151,7 +1226,15 @@ impl IntoReportBuilder for SemaError {
                 report
             }
 
-            Self::IncorrectNumberOfArguments {
+            Self::IncorrectNumberOfArgumentsInExpr {
+                location,
+                expected: _,
+                actual: _,
+            } => Report::build(ReportKind::Error, *location)
+                .with_code("sema::incorrect_number_of_arguments")
+                .with_message(&self),
+
+            Self::IncorrectNumberOfArgumentsInPat {
                 location,
                 expected: _,
                 actual: _,
@@ -1166,10 +1249,17 @@ impl IntoReportBuilder for SemaError {
                 .with_code("sema::unexpected_injection")
                 .with_message(&self),
 
-            Self::AmbiguousSumType { location } => Report::build(ReportKind::Error, *location)
+            Self::AmbiguousSumTypeInExpr { location } => {
+                Report::build(ReportKind::Error, *location)
+                    .with_code("sema::ambiguous_sum_type")
+                    .with_message(&self)
+                    .with_help("ascribe a sum type to the expression with the `as` operator")
+            }
+
+            Self::AmbiguousSumTypeInPat { location } => Report::build(ReportKind::Error, *location)
                 .with_code("sema::ambiguous_sum_type")
                 .with_message(&self)
-                .with_help("ascribe a sum type to the expression with the `as` operator"),
+                .with_help("ascribe a sum type to the pattern with the `as` operator"),
 
             Self::UnexpectedList {
                 location,
@@ -1253,7 +1343,15 @@ impl IntoReportBuilder for SemaError {
                 .with_code("sema::unexpected_tuple")
                 .with_message(&self),
 
-            Self::UnexpectedTupleLength {
+            Self::UnexpectedTupleLengthInExpr {
+                location,
+                actual: _,
+                expected: _,
+            } => Report::build(ReportKind::Error, *location)
+                .with_code("sema::unexpected_tuple_length")
+                .with_message(&self),
+
+            Self::UnexpectedTupleLengthInPat {
                 location,
                 actual: _,
                 expected: _,
@@ -1268,7 +1366,7 @@ impl IntoReportBuilder for SemaError {
                 .with_code("sema::unexpected_record")
                 .with_message(&self),
 
-            Self::UnexpectedRecordField {
+            Self::UnexpectedRecordFieldInExpr {
                 location,
                 name: _,
                 expected_ty: _,
@@ -1287,7 +1385,26 @@ impl IntoReportBuilder for SemaError {
                 report
             }
 
-            Self::MissingRecordField {
+            Self::UnexpectedRecordFieldInPat {
+                location,
+                name: _,
+                expected_ty: _,
+                pat_location,
+            } => {
+                let mut report = Report::build(ReportKind::Error, *location)
+                    .with_code("sema::unexpected_record_fields")
+                    .with_message(&self);
+
+                if pat_location.has_span() {
+                    report.add_label(
+                        Label::new(*pat_location).with_message("in this record pattern"),
+                    );
+                }
+
+                report
+            }
+
+            Self::MissingRecordFieldInExpr {
                 location,
                 name: _,
                 expected_ty: _,
@@ -1295,10 +1412,27 @@ impl IntoReportBuilder for SemaError {
                 .with_code("sema::missing_record_fields")
                 .with_message(&self),
 
-            Self::AmbiguousVariantType { location } => Report::build(ReportKind::Error, *location)
-                .with_code("sema::ambiguous_variant_type")
-                .with_message(&self)
-                .with_help("ascribe a variant type to the expression with the `as` operator"),
+            Self::MissingRecordFieldInPat {
+                location,
+                name: _,
+                expected_ty: _,
+            } => Report::build(ReportKind::Error, *location)
+                .with_code("sema::missing_record_fields")
+                .with_message(&self),
+
+            Self::AmbiguousVariantExprType { location } => {
+                Report::build(ReportKind::Error, *location)
+                    .with_code("sema::ambiguous_variant_type")
+                    .with_message(&self)
+                    .with_help("ascribe a variant type to the expression with the `as` operator")
+            }
+
+            Self::AmbiguousVariantPatType { location } => {
+                Report::build(ReportKind::Error, *location)
+                    .with_code("sema::ambiguous_variant_type")
+                    .with_message(&self)
+                    .with_help("ascribe a variant type to the pattern with the `as` operator")
+            }
 
             Self::UnexpectedVariant {
                 location,
@@ -1307,7 +1441,7 @@ impl IntoReportBuilder for SemaError {
                 .with_code("sema::unexpected_variant")
                 .with_message(&self),
 
-            Self::UnexpectedVariantLabel {
+            Self::UnexpectedVariantLabelInExpr {
                 location,
                 name: _,
                 expected_ty: _,
@@ -1320,6 +1454,25 @@ impl IntoReportBuilder for SemaError {
                 if expr_location.has_span() {
                     report.add_label(
                         Label::new(*expr_location).with_message("in this variant expression"),
+                    );
+                }
+
+                report
+            }
+
+            Self::UnexpectedVariantLabelInPat {
+                location,
+                name: _,
+                expected_ty: _,
+                pat_location,
+            } => {
+                let mut report = Report::build(ReportKind::Error, *location)
+                    .with_code("sema::unexpected_variant_label")
+                    .with_message(&self);
+
+                if pat_location.has_span() {
+                    report.add_label(
+                        Label::new(*pat_location).with_message("in this variant pattern"),
                     );
                 }
 
@@ -1345,6 +1498,25 @@ impl IntoReportBuilder for SemaError {
                 report
             }
 
+            Self::UnexpectedNonNullaryVariantPattern {
+                location,
+                name: _,
+                expected_ty: _,
+                pat_location,
+            } => {
+                let mut report = Report::build(ReportKind::Error, *location)
+                    .with_code("sema::unexpected_non_nullary_variant_pattern")
+                    .with_message(&self);
+
+                if pat_location.has_span() {
+                    report.add_label(
+                        Label::new(*pat_location).with_message("in this variant pattern"),
+                    );
+                }
+
+                report
+            }
+
             Self::MissingDataForLabel {
                 location,
                 name: _,
@@ -1364,14 +1536,55 @@ impl IntoReportBuilder for SemaError {
                 report
             }
 
+            Self::UnexpectedNullaryVariantPattern {
+                location,
+                name: _,
+                expected_ty,
+                pat_location,
+            } => {
+                let mut report = Report::build(ReportKind::Error, *location)
+                    .with_code("sema::unexpected_nullary_variant_pattern")
+                    .with_message(&self);
+
+                if pat_location.has_span() {
+                    report.add_label(Label::new(*pat_location).with_message(format!(
+                        "this variant pattern has the type `{expected_ty}`"
+                    )));
+                }
+
+                report
+            }
+
             Self::IllegalEmptyMatching { location } => Report::build(ReportKind::Error, *location)
                 .with_code("sema::illegal_empty_matching")
                 .with_message(&self),
 
-            Self::AmbiguousEmptyListTy { location } => Report::build(ReportKind::Error, *location)
-                .with_code("sema::ambiguous_list_type")
-                .with_message(&self)
-                .with_help("ascribe a list type to the expression with the `as` operator"),
+            Self::AmbiguousEmptyListExprTy { location } => {
+                Report::build(ReportKind::Error, *location)
+                    .with_code("sema::ambiguous_list_type")
+                    .with_message(&self)
+                    .with_help("ascribe a list type to the expression with the `as` operator")
+            }
+
+            Self::AmbiguousEmptyListPatTy { location } => {
+                Report::build(ReportKind::Error, *location)
+                    .with_code("sema::ambiguous_list_type")
+                    .with_message(&self)
+                    .with_help("ascribe a list type to the pattern with the `as` operator")
+            }
+
+            Self::UnexpectedPatternForType {
+                location,
+                expected_ty: _,
+            } => Report::build(ReportKind::Error, *location)
+                .with_code("sema::unexpected_pattern_for_type")
+                .with_message(&self),
+
+            Self::AmbiguousBindingPatType { location } => {
+                Report::build(ReportKind::Error, *location)
+                    .with_code("sema::ambiguous_binding_type")
+                    .with_message(&self)
+            }
         }
     }
 }

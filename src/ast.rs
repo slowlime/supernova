@@ -1850,11 +1850,18 @@ impl<'src> AstRecurse<'src> for PatCons<'src> {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Display, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Cons {
+    #[display("inl")]
     Inl,
+
+    #[display("inr")]
     Inr,
+
+    #[display("cons")]
     Cons,
+
+    #[display("succ")]
     Succ,
 }
 

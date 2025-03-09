@@ -23,15 +23,32 @@ pub enum ExpectationSource {
         sum_ty_id: TyId,
     },
 
+    InjectionPat {
+        pat_id: PatId,
+        is_left: bool,
+        sum_ty_id: TyId,
+    },
+
     ConsArg {
         expr_id: ExprId,
         arg_expr_id: ExprId,
         elem_ty_id: TyId,
     },
 
+    ConsPat {
+        pat_id: PatId,
+        arg_pat_id: PatId,
+        elem_ty_id: TyId,
+    },
+
     BuiltinArg {
         expr_id: ExprId,
         builtin: ast::Builtin,
+    },
+
+    BuiltinConsPat {
+        pat_id: PatId,
+        cons: ast::Cons,
     },
 
     FnArg {
@@ -41,25 +58,45 @@ pub enum ExpectationSource {
         callee_ty_id: TyId,
     },
 
-    Ascription {
+    AscriptionExpr {
         expr_id: ExprId,
+        ty_expr_id: TyExprId,
+    },
+
+    AscriptionPat {
+        pat_id: PatId,
         ty_expr_id: TyExprId,
     },
 
     FnExprRet(ExprId),
 
-    TupleElem {
+    TupleExprElem {
         expr_id: ExprId,
         ty_id: TyId,
     },
 
-    RecordField {
+    TuplePatElem {
+        pat_id: PatId,
+        ty_id: TyId,
+    },
+
+    RecordExprField {
         expr_id: ExprId,
         ty_id: TyId,
     },
 
-    VariantData {
+    RecordPatField {
+        pat_id: PatId,
+        ty_id: TyId,
+    },
+
+    VariantExprData {
         expr_id: ExprId,
+        ty_id: TyId,
+    },
+
+    VariantPatData {
+        pat_id: PatId,
         ty_id: TyId,
     },
 
@@ -75,10 +112,16 @@ pub enum ExpectationSource {
         match_expr_id: ExprId,
     },
 
-    ListElem {
+    ListExprElem {
         first_elem_expr_id: ExprId,
         ty_id: TyId,
         list_expr_id: ExprId,
+    },
+
+    ListPatElem {
+        first_elem_pat_id: PatId,
+        ty_id: TyId,
+        list_pat_id: PatId,
     },
 
     IfCond {
@@ -282,7 +325,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             }
 
             ExpectationSource::FixArg(expr_id) => {
-                let expr = &self.m.exprs[expr_id].def;
+                let expr = self.m.exprs[expr_id].def;
 
                 if expr.location.has_span() {
                     report.add_label(
@@ -297,10 +340,26 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 is_left,
                 sum_ty_id,
             } => {
-                let expr = &self.m.exprs[expr_id].def;
+                let expr = self.m.exprs[expr_id].def;
 
                 if expr.location.has_span() {
                     report.add_label(Label::new(expr.location).with_message(format!(
+                        "expected by the {} injection into the sum type `{}`",
+                        if is_left { "left" } else { "right" },
+                        self.m.display_ty(sum_ty_id),
+                    )));
+                }
+            }
+
+            ExpectationSource::InjectionPat {
+                pat_id,
+                is_left,
+                sum_ty_id,
+            } => {
+                let pat = self.m.pats[pat_id].def;
+
+                if pat.location.has_span() {
+                    report.add_label(Label::new(pat.location).with_message(format!(
                         "expected by the {} injection into the sum type `{}`",
                         if is_left { "left" } else { "right" },
                         self.m.display_ty(sum_ty_id),
@@ -313,8 +372,8 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 arg_expr_id,
                 elem_ty_id,
             } => {
-                let expr = &self.m.exprs[expr_id].def;
-                let arg_expr = &self.m.exprs[arg_expr_id].def;
+                let expr = self.m.exprs[expr_id].def;
+                let arg_expr = self.m.exprs[arg_expr_id].def;
 
                 if arg_expr.location.has_span() {
                     report.add_label(Label::new(arg_expr.location).with_message(format!(
@@ -330,12 +389,43 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 }
             }
 
+            ExpectationSource::ConsPat {
+                pat_id,
+                arg_pat_id,
+                elem_ty_id,
+            } => {
+                let pat = self.m.pats[pat_id].def;
+                let arg_pat = self.m.pats[arg_pat_id].def;
+
+                if arg_pat.location.has_span() {
+                    report.add_label(Label::new(arg_pat.location).with_message(format!(
+                        "expected because this pattern has the type `{}`",
+                        self.m.display_ty(elem_ty_id),
+                    )));
+                }
+
+                if pat.location.has_span() {
+                    report
+                        .add_label(Label::new(pat.location).with_message("in this `cons` pattern"));
+                }
+            }
+
             ExpectationSource::BuiltinArg { expr_id, builtin } => {
-                let expr = &self.m.exprs[expr_id].def;
+                let expr = self.m.exprs[expr_id].def;
 
                 if expr.location.has_span() {
                     report.add_label(Label::new(expr.location).with_message(format!(
                         "expected as an argument to this `{builtin}` expression"
+                    )));
+                }
+            }
+
+            ExpectationSource::BuiltinConsPat { pat_id, cons } => {
+                let pat = self.m.pats[pat_id].def;
+
+                if pat.location.has_span() {
+                    report.add_label(Label::new(pat.location).with_message(format!(
+                        "expected as an argument to this `{cons}` constructor pattern"
                     )));
                 }
             }
@@ -346,8 +436,8 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 callee_expr_id,
                 callee_ty_id,
             } => {
-                let expr = &self.m.exprs[expr_id].def;
-                let callee_expr = &self.m.exprs[callee_expr_id].def;
+                let expr = self.m.exprs[expr_id].def;
+                let callee_expr = self.m.exprs[callee_expr_id].def;
 
                 if callee_expr.location.has_span() {
                     report.add_label(Label::new(callee_expr.location).with_message(format!(
@@ -369,11 +459,11 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 }
             }
 
-            ExpectationSource::Ascription {
+            ExpectationSource::AscriptionExpr {
                 expr_id,
                 ty_expr_id,
             } => {
-                let expr = &self.m.exprs[expr_id].def;
+                let expr = self.m.exprs[expr_id].def;
                 let ty_expr = &self.m.ty_exprs[ty_expr_id].def;
 
                 if ty_expr.location.has_span() {
@@ -391,8 +481,26 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 }
             }
 
+            ExpectationSource::AscriptionPat { pat_id, ty_expr_id } => {
+                let pat = self.m.pats[pat_id].def;
+                let ty_expr = &self.m.ty_exprs[ty_expr_id].def;
+
+                if ty_expr.location.has_span() {
+                    report.add_label(
+                        Label::new(ty_expr.location)
+                            .with_message("expected due to this type ascription"),
+                    );
+                }
+
+                if pat.location.has_span() {
+                    report.add_label(
+                        Label::new(pat.location).with_message("in this type ascription pattern"),
+                    );
+                }
+            }
+
             ExpectationSource::FnExprRet(expr_id) => {
-                let expr = &self.m.exprs[expr_id].def;
+                let expr = self.m.exprs[expr_id].def;
 
                 if expr.location.has_span() {
                     report.add_label(
@@ -402,8 +510,8 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 }
             }
 
-            ExpectationSource::TupleElem { expr_id, ty_id } => {
-                let expr = &self.m.exprs[expr_id].def;
+            ExpectationSource::TupleExprElem { expr_id, ty_id } => {
+                let expr = self.m.exprs[expr_id].def;
 
                 if expr.location.has_span() {
                     report.add_label(Label::new(expr.location).with_message(format!(
@@ -413,8 +521,19 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 }
             }
 
-            ExpectationSource::RecordField { expr_id, ty_id } => {
-                let expr = &self.m.exprs[expr_id].def;
+            ExpectationSource::TuplePatElem { pat_id, ty_id } => {
+                let pat = self.m.pats[pat_id].def;
+
+                if pat.location.has_span() {
+                    report.add_label(Label::new(pat.location).with_message(format!(
+                        "expected for this tuple pattern to have the type `{}`",
+                        self.m.display_ty(ty_id)
+                    )));
+                }
+            }
+
+            ExpectationSource::RecordExprField { expr_id, ty_id } => {
+                let expr = self.m.exprs[expr_id].def;
 
                 if expr.location.has_span() {
                     report.add_label(Label::new(expr.location).with_message(format!(
@@ -424,12 +543,34 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 }
             }
 
-            ExpectationSource::VariantData { expr_id, ty_id } => {
-                let expr = &self.m.exprs[expr_id].def;
+            ExpectationSource::RecordPatField { pat_id, ty_id } => {
+                let pat = self.m.pats[pat_id].def;
+
+                if pat.location.has_span() {
+                    report.add_label(Label::new(pat.location).with_message(format!(
+                        "expected for this record pattern to have the type `{}`",
+                        self.m.display_ty(ty_id),
+                    )));
+                }
+            }
+
+            ExpectationSource::VariantExprData { expr_id, ty_id } => {
+                let expr = self.m.exprs[expr_id].def;
 
                 if expr.location.has_span() {
                     report.add_label(Label::new(expr.location).with_message(format!(
                         "expected for this variant expression to have the type `{}`",
+                        self.m.display_ty(ty_id),
+                    )));
+                }
+            }
+
+            ExpectationSource::VariantPatData { pat_id, ty_id } => {
+                let pat = self.m.pats[pat_id].def;
+
+                if pat.location.has_span() {
+                    report.add_label(Label::new(pat.location).with_message(format!(
+                        "expected for this variant pattern to have the type `{}`",
                         self.m.display_ty(ty_id),
                     )));
                 }
@@ -481,7 +622,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 }
             }
 
-            ExpectationSource::ListElem {
+            ExpectationSource::ListExprElem {
                 first_elem_expr_id,
                 ty_id,
                 list_expr_id,
@@ -498,6 +639,28 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                     if list_expr.location.has_span() {
                         report.add_label(
                             Label::new(list_expr.location).with_message("in this list expression"),
+                        );
+                    }
+                }
+            }
+
+            ExpectationSource::ListPatElem {
+                first_elem_pat_id,
+                ty_id,
+                list_pat_id,
+            } => {
+                let first_elem = self.m.pats[first_elem_pat_id].def;
+                let list_pat = self.m.pats[list_pat_id].def;
+
+                if first_elem.location.has_span() {
+                    report.add_label(Label::new(first_elem.location).with_message(format!(
+                        "this element has the type `{}`",
+                        self.m.display_ty(ty_id),
+                    )));
+
+                    if list_pat.location.has_span() {
+                        report.add_label(
+                            Label::new(list_pat.location).with_message("in this list pattern"),
                         );
                     }
                 }
@@ -960,10 +1123,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         _expr: &ast::ExprName<'ast>,
         expected_ty: Option<ExpectedTy>,
     ) -> Result {
-        let Some(&binding_id) = self.m.name_exprs.get(expr_id) else {
-            return Ok(());
-        };
-
+        let binding_id = self.m.name_exprs[expr_id];
         let ty_id = self.m.bindings[binding_id].ty_id;
 
         if let Some((expected_ty_id, source)) = expected_ty {
@@ -1166,7 +1326,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             ast::Callee::Builtin { kw: _, builtin } => match builtin {
                 ast::Builtin::Inl | ast::Builtin::Inr => {
                     let Some((expected_ty_id, source)) = expected_ty else {
-                        self.diag.emit(SemaError::AmbiguousSumType {
+                        self.diag.emit(SemaError::AmbiguousSumTypeInExpr {
                             location: self.m.exprs[expr_id].def.location,
                         });
 
@@ -1233,7 +1393,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                             expr_id,
                             vec![
                                 Some((elem_ty_id, source.clone())),
-                                Some((elem_ty_id, source.clone())),
+                                Some((expected_ty_id, source.clone())),
                             ],
                             expected_ty_id,
                             &expr.args,
@@ -1241,23 +1401,25 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                         )
                     } else {
                         self.check_application_arg_count(expr_id, expr.args.len(), 2)?;
-                        self.typeck_expr(&expr.args[0], None)?;
+                        let mut result = self.typeck_expr(&expr.args[0], None);
                         let elem_ty_id = self.m.exprs[expr.args[0].id].ty_id;
-                        let result = self.typeck_expr(
+                        let ty_id = self.m.add_ty(Ty {
+                            kind: TyKind::List(elem_ty_id),
+                        });
+
+                        result = result.and(self.typeck_expr(
                             &expr.args[1],
                             Some((
-                                elem_ty_id,
+                                ty_id,
                                 ExpectationSource::ConsArg {
                                     expr_id,
                                     arg_expr_id: expr.args[0].id,
                                     elem_ty_id,
                                 },
                             )),
-                        );
+                        ));
 
-                        self.m.exprs[expr_id].ty_id = self.m.add_ty(Ty {
-                            kind: TyKind::List(elem_ty_id),
-                        });
+                        self.m.exprs[expr_id].ty_id = ty_id;
 
                         result
                     }
@@ -1506,7 +1668,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             },
 
             ast::Callee::Expr(callee) => {
-                self.typeck_expr(&callee, None)?;
+                self.typeck_expr(callee, None)?;
                 let callee_ty_id = self.m.exprs[callee.id].ty_id;
 
                 if callee_ty_id == self.m.well_known_tys.error {
@@ -1585,7 +1747,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         expected: usize,
     ) -> Result {
         if arg_count != expected {
-            self.diag.emit(SemaError::IncorrectNumberOfArguments {
+            self.diag.emit(SemaError::IncorrectNumberOfArgumentsInExpr {
                 location: self.m.exprs[expr_id].def.location,
                 expected,
                 actual: arg_count,
@@ -1619,7 +1781,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             &expr.expr,
             Some((
                 ty_id,
-                ExpectationSource::Ascription {
+                ExpectationSource::AscriptionExpr {
                     expr_id,
                     ty_expr_id: expr.ty_expr.id,
                 },
@@ -1754,7 +1916,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
 
             if expr.elems.len() != ty.elems.len() {
                 self.diag.emit(self.augment_error_with_expectation(
-                    SemaError::UnexpectedTupleLength {
+                    SemaError::UnexpectedTupleLengthInExpr {
                         location: self.m.exprs[expr_id].def.location,
                         actual: expr.elems.len(),
                         expected: ty.elems.len(),
@@ -1773,7 +1935,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                     elem,
                     Some((
                         expected_elem_ty_id,
-                        ExpectationSource::TupleElem {
+                        ExpectationSource::TupleExprElem {
                             expr_id,
                             ty_id: expected_ty_id,
                         },
@@ -1850,7 +2012,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             for name in required_fields.difference(&provided_fields).copied() {
                 result = Err(());
                 self.diag.emit(self.augment_error_with_expectation(
-                    SemaError::MissingRecordField {
+                    SemaError::MissingRecordFieldInExpr {
                         location: self.m.exprs[expr_id].def.location,
                         name: name.into(),
                         expected_ty: self.m.display_ty(expected_ty_id).to_string(),
@@ -1862,7 +2024,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             for name in provided_fields.difference(&required_fields).copied() {
                 result = Err(());
                 self.diag.emit(self.augment_error_with_expectation(
-                    SemaError::UnexpectedRecordField {
+                    SemaError::UnexpectedRecordFieldInExpr {
                         location: provided_fields_by_name[name].name.location(),
                         name: name.into(),
                         expected_ty: self.m.display_ty(expected_ty_id).to_string(),
@@ -1871,6 +2033,8 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                     source.clone(),
                 ));
             }
+
+            result?;
 
             let expected_field_ty_ids = ty
                 .fields
@@ -1889,7 +2053,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                     &provided_fields_by_name[name].expr,
                     Some((
                         expected_field_ty_id,
-                        ExpectationSource::RecordField {
+                        ExpectationSource::RecordExprField {
                             expr_id,
                             ty_id: expected_ty_id,
                         },
@@ -1931,7 +2095,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         expected_ty: Option<ExpectedTy>,
     ) -> Result {
         let Some((expected_ty_id, source)) = expected_ty else {
-            self.diag.emit(SemaError::AmbiguousVariantType {
+            self.diag.emit(SemaError::AmbiguousVariantExprType {
                 location: self.m.exprs[expr_id].def.location,
             });
 
@@ -1956,7 +2120,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
 
         let Some(&idx) = ty.labels.get(expr.label.as_str()) else {
             self.diag.emit(self.augment_error_with_expectation(
-                SemaError::UnexpectedVariantLabel {
+                SemaError::UnexpectedVariantLabelInExpr {
                     location: expr.label.location(),
                     name: expr.label.as_str().into(),
                     expected_ty: self.m.display_ty(expected_ty_id).to_string(),
@@ -1977,7 +2141,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                     inner,
                     Some((
                         label_ty_id,
-                        ExpectationSource::VariantData {
+                        ExpectationSource::VariantExprData {
                             expr_id,
                             ty_id: expected_ty_id,
                         },
@@ -2117,7 +2281,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
 
             result
         } else if expr.elems.is_empty() {
-            self.diag.emit(SemaError::AmbiguousEmptyListTy {
+            self.diag.emit(SemaError::AmbiguousEmptyListExprTy {
                 location: self.m.exprs[expr_id].def.location,
             });
 
@@ -2132,7 +2296,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                     elem,
                     Some((
                         elem_ty_id,
-                        ExpectationSource::ListElem {
+                        ExpectationSource::ListExprElem {
                             first_elem_expr_id: expr.elems[0].id,
                             ty_id: elem_ty_id,
                             list_expr_id: expr_id,
@@ -2417,6 +2581,678 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
     }
 
     fn typeck_pat(&mut self, pat: &ast::Pat<'ast>, expected_ty: Option<ExpectedTy>) -> Result {
-        todo!()
+        self.m.pats[pat.id].ty_id = self.m.well_known_tys.error;
+
+        match &pat.kind {
+            ast::PatKind::Dummy => Ok(()),
+            ast::PatKind::Variant(p) => self.typeck_pat_variant(pat.id, p, expected_ty),
+            ast::PatKind::Cons(p) => self.typeck_pat_cons(pat.id, p, expected_ty),
+            ast::PatKind::Tuple(p) => self.typeck_pat_tuple(pat.id, p, expected_ty),
+            ast::PatKind::Record(p) => self.typeck_pat_record(pat.id, p, expected_ty),
+            ast::PatKind::List(p) => self.typeck_pat_list(pat.id, p, expected_ty),
+            ast::PatKind::Bool(p) => self.typeck_pat_bool(pat.id, p, expected_ty),
+            ast::PatKind::Unit(p) => self.typeck_pat_unit(pat.id, p, expected_ty),
+            ast::PatKind::Int(p) => self.typeck_pat_int(pat.id, p, expected_ty),
+            ast::PatKind::Name(p) => self.typeck_pat_name(pat.id, p, expected_ty),
+            ast::PatKind::Ascription(p) => self.typeck_pat_ascription(pat.id, p, expected_ty),
+            ast::PatKind::Cast(_) => unimplemented!(),
+        }
+    }
+
+    fn typeck_pat_variant(
+        &mut self,
+        pat_id: PatId,
+        pat: &ast::PatVariant<'ast>,
+        expected_ty: Option<ExpectedTy>,
+    ) -> Result {
+        let Some((expected_ty_id, source)) = expected_ty else {
+            self.diag.emit(SemaError::AmbiguousVariantPatType {
+                location: self.m.pats[pat_id].def.location,
+            });
+
+            return Err(());
+        };
+
+        if expected_ty_id == self.m.well_known_tys.error {
+            return Ok(());
+        }
+
+        let TyKind::Variant(ty) = &self.m.tys[expected_ty_id].kind else {
+            self.diag.emit(self.augment_error_with_expectation(
+                SemaError::UnexpectedPatternForType {
+                    location: self.m.pats[pat_id].def.location,
+                    expected_ty: self.m.display_ty(expected_ty_id).to_string(),
+                },
+                source,
+            ));
+
+            return Err(());
+        };
+
+        let Some(&idx) = ty.labels.get(pat.label.as_str()) else {
+            self.diag.emit(self.augment_error_with_expectation(
+                SemaError::UnexpectedVariantLabelInPat {
+                    location: pat.label.location(),
+                    name: pat.label.as_str().into(),
+                    expected_ty: self.m.display_ty(expected_ty_id).to_string(),
+                    pat_location: self.m.pats[pat_id].def.location,
+                },
+                source,
+            ));
+
+            return Err(());
+        };
+
+        let label_ty_id = ty.elems[idx].1;
+
+        match (&pat.pat, label_ty_id) {
+            (Some(inner), Some(label_ty_id)) => {
+                self.typeck_pat(
+                    inner,
+                    Some((
+                        label_ty_id,
+                        ExpectationSource::VariantPatData {
+                            pat_id,
+                            ty_id: expected_ty_id,
+                        },
+                    )),
+                )?;
+            }
+
+            (None, None) => {}
+
+            (Some(_), None) => {
+                self.diag.emit(self.augment_error_with_expectation(
+                    SemaError::UnexpectedNonNullaryVariantPattern {
+                        location: pat.label.location(),
+                        name: pat.label.as_str().into(),
+                        expected_ty: self.m.display_ty(expected_ty_id).to_string(),
+                        pat_location: self.m.pats[pat_id].def.location,
+                    },
+                    source,
+                ));
+
+                return Err(());
+            }
+
+            (None, Some(_)) => {
+                self.diag.emit(self.augment_error_with_expectation(
+                    SemaError::UnexpectedNullaryVariantPattern {
+                        location: pat.label.location(),
+                        name: pat.label.as_str().into(),
+                        expected_ty: self.m.display_ty(expected_ty_id).to_string(),
+                        pat_location: self.m.pats[pat_id].def.location,
+                    },
+                    source,
+                ));
+
+                return Err(());
+            }
+        }
+
+        self.m.pats[pat_id].ty_id = expected_ty_id;
+
+        Ok(())
+    }
+
+    fn typeck_pat_cons(
+        &mut self,
+        pat_id: PatId,
+        pat: &ast::PatCons<'ast>,
+        expected_ty: Option<ExpectedTy>,
+    ) -> Result {
+        match pat.cons {
+            ast::Cons::Inl | ast::Cons::Inr => {
+                let Some((expected_ty_id, source)) = expected_ty else {
+                    self.diag.emit(SemaError::AmbiguousSumTypeInPat {
+                        location: self.m.pats[pat_id].def.location,
+                    });
+
+                    return Err(());
+                };
+
+                if expected_ty_id == self.m.well_known_tys.error {
+                    return Ok(());
+                }
+
+                let TyKind::Sum(lhs_ty_id, rhs_ty_id) = self.m.tys[expected_ty_id].kind else {
+                    self.diag.emit(self.augment_error_with_expectation(
+                        SemaError::UnexpectedPatternForType {
+                            location: self.m.pats[pat_id].def.location,
+                            expected_ty: self.m.display_ty(expected_ty_id).to_string(),
+                        },
+                        source,
+                    ));
+
+                    return Err(());
+                };
+
+                let (is_left, inner_ty_id) = if pat.cons == ast::Cons::Inl {
+                    (true, lhs_ty_id)
+                } else {
+                    (false, rhs_ty_id)
+                };
+
+                self.check_pat_cons_arg_count(pat_id, pat.args.len(), 1)?;
+
+                let result = self.typeck_pat(
+                    &pat.args[0],
+                    Some((
+                        inner_ty_id,
+                        ExpectationSource::InjectionPat {
+                            pat_id,
+                            is_left,
+                            sum_ty_id: expected_ty_id,
+                        },
+                    )),
+                );
+
+                self.m.pats[pat_id].ty_id = expected_ty_id;
+
+                result
+            }
+
+            ast::Cons::Cons => {
+                if let Some((expected_ty_id, source)) = expected_ty {
+                    if expected_ty_id == self.m.well_known_tys.error {
+                        return Ok(());
+                    }
+
+                    let TyKind::List(elem_ty_id) = self.m.tys[expected_ty_id].kind else {
+                        self.diag.emit(self.augment_error_with_expectation(
+                            SemaError::UnexpectedPatternForType {
+                                location: self.m.pats[pat_id].def.location,
+                                expected_ty: self.m.display_ty(expected_ty_id).to_string(),
+                            },
+                            source,
+                        ));
+
+                        return Err(());
+                    };
+
+                    self.check_pat_cons_arg_count(pat_id, pat.args.len(), 2)?;
+
+                    let mut result =
+                        self.typeck_pat(&pat.args[0], Some((elem_ty_id, source.clone())));
+                    result = result
+                        .and(self.typeck_pat(&pat.args[1], Some((expected_ty_id, source.clone()))));
+
+                    self.m.pats[pat_id].ty_id = expected_ty_id;
+
+                    result
+                } else {
+                    self.check_pat_cons_arg_count(pat_id, pat.args.len(), 2)?;
+                    let mut result = self.typeck_pat(&pat.args[0], None);
+                    let elem_ty_id = self.m.pats[pat.args[0].id].ty_id;
+                    let ty_id = self.m.add_ty(Ty {
+                        kind: TyKind::List(elem_ty_id),
+                    });
+
+                    result = result.and(self.typeck_pat(
+                        &pat.args[1],
+                        Some((
+                            ty_id,
+                            ExpectationSource::ConsPat {
+                                pat_id,
+                                arg_pat_id: pat.args[0].id,
+                                elem_ty_id,
+                            },
+                        )),
+                    ));
+
+                    self.m.pats[pat_id].ty_id = ty_id;
+
+                    result
+                }
+            }
+
+            ast::Cons::Succ => {
+                self.check_pat_cons_arg_count(pat_id, pat.args.len(), 1)?;
+                let mut result = Ok(());
+
+                if let Some((expected_ty_id, source)) = expected_ty {
+                    if !self.ty_conforms_to(self.m.well_known_tys.nat, expected_ty_id) {
+                        self.diag.emit(self.augment_error_with_expectation(
+                            SemaError::UnexpectedPatternForType {
+                                location: self.m.pats[pat_id].def.location,
+                                expected_ty: self.m.display_ty(expected_ty_id).to_string(),
+                            },
+                            source,
+                        ));
+
+                        result = Err(());
+                    }
+                }
+
+                result = result.and(self.typeck_pat(
+                    &pat.args[0],
+                    Some((
+                        self.m.well_known_tys.nat,
+                        ExpectationSource::BuiltinConsPat {
+                            pat_id,
+                            cons: pat.cons,
+                        },
+                    )),
+                ));
+
+                self.m.pats[pat_id].ty_id = self.m.well_known_tys.nat;
+
+                result
+            }
+        }
+    }
+
+    fn check_pat_cons_arg_count(
+        &mut self,
+        pat_id: PatId,
+        arg_count: usize,
+        expected: usize,
+    ) -> Result {
+        if arg_count != expected {
+            self.diag.emit(SemaError::IncorrectNumberOfArgumentsInPat {
+                location: self.m.pats[pat_id].def.location,
+                expected,
+                actual: arg_count,
+            });
+
+            Err(())
+        } else {
+            Ok(())
+        }
+    }
+
+    fn typeck_pat_tuple(
+        &mut self,
+        pat_id: PatId,
+        pat: &ast::PatTuple<'ast>,
+        expected_ty: Option<ExpectedTy>,
+    ) -> Result {
+        if let Some((expected_ty_id, source)) = expected_ty {
+            if expected_ty_id == self.m.well_known_tys.error {
+                return Ok(());
+            }
+
+            let TyKind::Tuple(ty) = &self.m.tys[expected_ty_id].kind else {
+                self.diag.emit(self.augment_error_with_expectation(
+                    SemaError::UnexpectedPatternForType {
+                        location: self.m.pats[pat_id].def.location,
+                        expected_ty: self.m.display_ty(expected_ty_id).to_string(),
+                    },
+                    source,
+                ));
+
+                return Err(());
+            };
+
+            if pat.elems.len() != ty.elems.len() {
+                self.diag.emit(self.augment_error_with_expectation(
+                    SemaError::UnexpectedTupleLengthInPat {
+                        location: self.m.pats[pat_id].def.location,
+                        actual: pat.elems.len(),
+                        expected: ty.elems.len(),
+                    },
+                    source,
+                ));
+
+                return Err(());
+            }
+
+            let mut result = Ok(());
+
+            for (elem, expected_elem_ty_id) in pat.elems.iter().zip(ty.elems.clone()) {
+                result = result.and(self.typeck_pat(
+                    elem,
+                    Some((
+                        expected_elem_ty_id,
+                        ExpectationSource::TuplePatElem {
+                            pat_id,
+                            ty_id: expected_ty_id,
+                        },
+                    )),
+                ));
+            }
+
+            self.m.pats[pat_id].ty_id = expected_ty_id;
+
+            result
+        } else {
+            let mut result = Ok(());
+            let mut elem_ty_ids = Vec::with_capacity(pat.elems.len());
+
+            for elem in &pat.elems {
+                result = result.and(self.typeck_pat(elem, None));
+                elem_ty_ids.push(self.m.pats[elem.id].ty_id);
+            }
+
+            self.m.pats[pat_id].ty_id = self.m.add_ty(Ty {
+                kind: TyKind::Tuple(TyTuple { elems: elem_ty_ids }),
+            });
+
+            result
+        }
+    }
+
+    fn typeck_pat_record(
+        &mut self,
+        pat_id: PatId,
+        pat: &ast::PatRecord<'ast>,
+        expected_ty: Option<ExpectedTy>,
+    ) -> Result {
+        if let Some((expected_ty_id, source)) = expected_ty {
+            if expected_ty_id == self.m.well_known_tys.error {
+                return Ok(());
+            }
+
+            let ty = match &self.m.tys[expected_ty_id].kind {
+                TyKind::Tuple(ty) if ty.elems.is_empty() => &TyRecord::new(vec![]),
+                TyKind::Record(ty) => ty,
+
+                _ => {
+                    self.diag.emit(self.augment_error_with_expectation(
+                        SemaError::UnexpectedPatternForType {
+                            location: self.m.pats[pat_id].def.location,
+                            expected_ty: self.m.display_ty(expected_ty_id).to_string(),
+                        },
+                        source,
+                    ));
+
+                    return Err(());
+                }
+            };
+
+            let mut result = Ok(());
+            let required_fields = ty
+                .fields
+                .keys()
+                .map(|s| s.as_str())
+                .collect::<FxHashSet<_>>();
+            let provided_fields = pat
+                .fields
+                .iter()
+                .map(|field| field.name.as_str())
+                .collect::<FxHashSet<_>>();
+            let provided_fields_by_name = pat
+                .fields
+                .iter()
+                .map(|field| (field.name.as_str(), field))
+                .collect::<FxHashMap<_, _>>();
+
+            for name in required_fields.difference(&provided_fields).copied() {
+                result = Err(());
+                self.diag.emit(self.augment_error_with_expectation(
+                    SemaError::MissingRecordFieldInPat {
+                        location: self.m.pats[pat_id].def.location,
+                        name: name.into(),
+                        expected_ty: self.m.display_ty(expected_ty_id).to_string(),
+                    },
+                    source.clone(),
+                ));
+            }
+
+            for name in provided_fields.difference(&required_fields).copied() {
+                result = Err(());
+                self.diag.emit(self.augment_error_with_expectation(
+                    SemaError::UnexpectedRecordFieldInPat {
+                        location: provided_fields_by_name[name].name.location(),
+                        name: name.into(),
+                        expected_ty: self.m.display_ty(expected_ty_id).to_string(),
+                        pat_location: self.m.pats[pat_id].def.location,
+                    },
+                    source.clone(),
+                ));
+            }
+
+            result?;
+
+            let expected_field_ty_ids = ty
+                .fields
+                .iter()
+                .map(|(name, &idx)| {
+                    (
+                        provided_fields_by_name[name.as_str()].name.as_str(),
+                        ty.elems[idx].1,
+                    )
+                })
+                .collect::<FxHashMap<_, _>>();
+
+            for (name, expected_field_ty_id) in expected_field_ty_ids {
+                result = result.and(self.typeck_pat(
+                    &provided_fields_by_name[name].pat,
+                    Some((
+                        expected_field_ty_id,
+                        ExpectationSource::RecordPatField {
+                            pat_id,
+                            ty_id: expected_ty_id,
+                        },
+                    )),
+                ));
+            }
+
+            self.m.pats[pat_id].ty_id = expected_ty_id;
+
+            result
+        } else {
+            let mut result = Ok(());
+            let mut elems = Vec::with_capacity(pat.fields.len());
+
+            for field in &pat.fields {
+                result = result.and(self.typeck_pat(&field.pat, None));
+                elems.push((
+                    field.name.as_str().to_owned(),
+                    self.m.pats[field.pat.id].ty_id,
+                ));
+            }
+
+            self.m.pats[pat_id].ty_id = if elems.is_empty() {
+                self.m.well_known_tys.empty_tuple
+            } else {
+                self.m.add_ty(Ty {
+                    kind: TyKind::Record(TyRecord::new(elems)),
+                })
+            };
+
+            result
+        }
+    }
+
+    fn typeck_pat_list(
+        &mut self,
+        pat_id: PatId,
+        pat: &ast::PatList<'ast>,
+        expected_ty: Option<ExpectedTy>,
+    ) -> Result {
+        if let Some((expected_ty_id, source)) = expected_ty {
+            let elem_ty_id = if expected_ty_id == self.m.well_known_tys.error {
+                self.m.well_known_tys.error
+            } else {
+                let TyKind::List(ty_id) = self.m.tys[expected_ty_id].kind else {
+                    self.diag.emit(self.augment_error_with_expectation(
+                        SemaError::UnexpectedPatternForType {
+                            location: self.m.pats[pat_id].def.location,
+                            expected_ty: self.m.display_ty(expected_ty_id).to_string(),
+                        },
+                        source,
+                    ));
+
+                    return Err(());
+                };
+
+                ty_id
+            };
+
+            let mut result = Ok(());
+
+            for elem in &pat.elems {
+                result = result.and(self.typeck_pat(elem, Some((elem_ty_id, source.clone()))));
+            }
+
+            self.m.pats[pat_id].ty_id = expected_ty_id;
+
+            result
+        } else if pat.elems.is_empty() {
+            self.diag.emit(SemaError::AmbiguousEmptyListPatTy {
+                location: self.m.pats[pat_id].def.location,
+            });
+
+            Err(())
+        } else {
+            let mut result = Ok(());
+            result = result.and(self.typeck_pat(&pat.elems[0], None));
+            let elem_ty_id = self.m.pats[pat.elems[0].id].ty_id;
+
+            for elem in pat.elems.iter().skip(1) {
+                result = result.and(self.typeck_pat(
+                    elem,
+                    Some((
+                        elem_ty_id,
+                        ExpectationSource::ListPatElem {
+                            first_elem_pat_id: pat.elems[0].id,
+                            ty_id: elem_ty_id,
+                            list_pat_id: pat_id,
+                        },
+                    )),
+                ));
+            }
+
+            self.m.pats[pat_id].ty_id = self.m.add_ty(Ty {
+                kind: TyKind::List(elem_ty_id),
+            });
+
+            result
+        }
+    }
+
+    fn typeck_pat_bool(
+        &mut self,
+        pat_id: PatId,
+        _pat: &ast::PatBool,
+        expected_ty: Option<ExpectedTy>,
+    ) -> Result {
+        if let Some((expected_ty_id, source)) = expected_ty {
+            if !self.ty_conforms_to(self.m.well_known_tys.bool, expected_ty_id) {
+                self.diag.emit(self.augment_error_with_expectation(
+                    SemaError::UnexpectedPatternForType {
+                        location: self.m.pats[pat_id].def.location,
+                        expected_ty: self.m.display_ty(expected_ty_id).to_string(),
+                    },
+                    source,
+                ));
+
+                return Err(());
+            }
+        }
+
+        self.m.pats[pat_id].ty_id = self.m.well_known_tys.bool;
+
+        Ok(())
+    }
+
+    fn typeck_pat_unit(
+        &mut self,
+        pat_id: PatId,
+        _pat: &ast::PatUnit,
+        expected_ty: Option<ExpectedTy>,
+    ) -> Result {
+        if let Some((expected_ty_id, source)) = expected_ty {
+            if !self.ty_conforms_to(self.m.well_known_tys.unit, expected_ty_id) {
+                self.diag.emit(self.augment_error_with_expectation(
+                    SemaError::UnexpectedPatternForType {
+                        location: self.m.pats[pat_id].def.location,
+                        expected_ty: self.m.display_ty(expected_ty_id).to_string(),
+                    },
+                    source,
+                ));
+
+                return Err(());
+            }
+        }
+
+        self.m.pats[pat_id].ty_id = self.m.well_known_tys.unit;
+
+        Ok(())
+    }
+
+    fn typeck_pat_int(
+        &mut self,
+        pat_id: PatId,
+        _pat: &ast::PatInt,
+        expected_ty: Option<ExpectedTy>,
+    ) -> Result {
+        if let Some((expected_ty_id, source)) = expected_ty {
+            if !self.ty_conforms_to(self.m.well_known_tys.nat, expected_ty_id) {
+                self.diag.emit(self.augment_error_with_expectation(
+                    SemaError::UnexpectedPatternForType {
+                        location: self.m.pats[pat_id].def.location,
+                        expected_ty: self.m.display_ty(expected_ty_id).to_string(),
+                    },
+                    source,
+                ));
+
+                return Err(());
+            }
+        }
+
+        self.m.pats[pat_id].ty_id = self.m.well_known_tys.nat;
+
+        Ok(())
+    }
+
+    fn typeck_pat_name(
+        &mut self,
+        pat_id: PatId,
+        pat: &ast::PatName<'ast>,
+        expected_ty: Option<ExpectedTy>,
+    ) -> Result {
+        let Some((expected_ty_id, _source)) = expected_ty else {
+            self.diag.emit(SemaError::AmbiguousBindingPatType {
+                location: self.m.pats[pat_id].def.location,
+            });
+
+            return Err(());
+        };
+
+        self.m.bindings[pat.binding.id].ty_id = expected_ty_id;
+        self.m.pats[pat_id].ty_id = expected_ty_id;
+
+        Ok(())
+    }
+
+    fn typeck_pat_ascription(
+        &mut self,
+        pat_id: PatId,
+        pat: &ast::PatAscription<'ast>,
+        expected_ty: Option<ExpectedTy>,
+    ) -> Result {
+        let mut result = self.typeck_ty_expr(&pat.ty_expr);
+        let ty_id = self.m.ty_exprs[pat.ty_expr.id].ty_id;
+
+        if let Some((expected_ty_id, source)) = expected_ty {
+            if !self.ty_conforms_to(ty_id, expected_ty_id) {
+                self.diag.emit(self.augment_error_with_expectation(
+                    SemaError::UnexpectedPatternForType {
+                        location: self.m.pats[pat_id].def.location,
+                        expected_ty: self.m.display_ty(expected_ty_id).to_string(),
+                    },
+                    source,
+                ));
+
+                return Err(());
+            }
+        }
+
+        result = result.and(self.typeck_pat(
+            &pat.pat,
+            Some((
+                ty_id,
+                ExpectationSource::AscriptionPat {
+                    pat_id,
+                    ty_expr_id: pat.ty_expr.id,
+                },
+            )),
+        ));
+
+        self.m.pats[pat_id].ty_id = ty_id;
+
+        result
     }
 }
