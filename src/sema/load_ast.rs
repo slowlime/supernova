@@ -71,6 +71,7 @@ impl<'ast, 'm> VisitorMut<'ast, 'm> for IdAssigner<'ast, 'm> {
     fn visit_ty_expr(&mut self, ty_expr: &'m mut ast::TyExpr<'ast>) {
         ty_expr.id = self.m.ty_exprs.insert(TyExprInfo {
             def: &ast::DUMMY_TY_EXPR,
+            ty_id: Default::default(),
         });
 
         ty_expr.recurse_mut(self);
@@ -79,6 +80,7 @@ impl<'ast, 'm> VisitorMut<'ast, 'm> for IdAssigner<'ast, 'm> {
     fn visit_expr(&mut self, expr: &'m mut ast::Expr<'ast>) {
         expr.id = self.m.exprs.insert(ExprInfo {
             def: &ast::DUMMY_EXPR,
+            ty_id: Default::default(),
         });
 
         expr.recurse_mut(self);
@@ -87,6 +89,7 @@ impl<'ast, 'm> VisitorMut<'ast, 'm> for IdAssigner<'ast, 'm> {
     fn visit_pat(&mut self, pat: &'m mut ast::Pat<'ast>) {
         pat.id = self.m.pats.insert(PatInfo {
             def: &ast::DUMMY_PAT,
+            ty_id: Default::default(),
         });
 
         pat.recurse_mut(self);
@@ -97,6 +100,7 @@ impl<'ast, 'm> VisitorMut<'ast, 'm> for IdAssigner<'ast, 'm> {
             location: binding.location(),
             name: binding.name.as_str().into(),
             kind: BindingKind::Dummy,
+            ty_id: Default::default(),
         });
     }
 }

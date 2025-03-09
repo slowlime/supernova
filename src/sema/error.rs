@@ -261,6 +261,201 @@ pub enum SemaError {
         location: Location,
         prev_location: Location,
     },
+
+    #[error("the expression has a wrong type: expected `{expected_ty}`, got `{actual_ty}`")]
+    UnexpectedTypeForExpression {
+        location: Location,
+        expected_ty: String,
+        actual_ty: String,
+    },
+
+    #[error("the record has no field `{field}`")]
+    UnexpectedFieldAccess {
+        location: Location,
+        field: String,
+        record_ty: String,
+        base_location: Location,
+        field_location: Location,
+    },
+
+    #[error("cannot get the field `{field}` of a non-record type `{actual_ty}`")]
+    ExtractingFieldOfNonRecordTy {
+        location: Location,
+        field: String,
+        actual_ty: String,
+        base_location: Location,
+        field_location: Location,
+    },
+
+    #[error("cannot index a non-tuple type `{actual_ty}`")]
+    IndexingNonTupleTy {
+        location: Location,
+        actual_ty: String,
+        base_location: Location,
+        field_location: Location,
+    },
+
+    #[error("the tuple has no element `{idx}`")]
+    TupleIndexOutOfBounds {
+        location: Location,
+        idx: usize,
+        tuple_len: usize,
+        actual_ty: String,
+        base_location: Location,
+        field_location: Location,
+    },
+
+    #[error("the fixpoint combinator can only be applied to functions")]
+    FixNotFunction {
+        location: Location,
+        actual_ty: String,
+        inner_location: Location,
+    },
+
+    #[error("the fixpoint combinator requires a function of a single argument")]
+    FixWrongFunctionParamCount {
+        location: Location,
+        actual_ty: String,
+        inner_location: Location,
+    },
+
+    #[error("the expression has a wrong number of arguments: expected {expected}, got {actual}")]
+    IncorrectNumberOfArguments {
+        location: Location,
+        expected: usize,
+        actual: usize,
+    },
+
+    #[error("the expression has a wrong type: expected `{expected_ty}`, got a sum type")]
+    UnexpectedInjection {
+        location: Location,
+        expected_ty: String,
+    },
+
+    #[error("could not determine the type of a sum type injection expression")]
+    AmbiguousSumType { location: Location },
+
+    #[error("the expression has a wrong type: expected `{expected_ty}`, got a list type")]
+    UnexpectedList {
+        location: Location,
+        expected_ty: String,
+    },
+
+    #[error("this expression has a wrong type: expected a list, got `{actual_ty}`")]
+    ExprTyNotList {
+        location: Location,
+        actual_ty: String,
+    },
+
+    #[error("cannot apply arguments to an expression of a non-function type `{actual_ty}`")]
+    ApplyNotFunction {
+        location: Location,
+        actual_ty: String,
+        callee_location: Location,
+    },
+
+    #[error("the expression has a wrong type: expected `{expected_ty}`, got a function type")]
+    UnexpectedLambda {
+        location: Location,
+        expected_ty: String,
+    },
+
+    #[error(
+        "the parameter count in this anonymous function ({actual}) does not match the expected count ({expected})"
+    )]
+    UnexpectedNumberOfParametersInLambda {
+        location: Location,
+        actual: usize,
+        expected: usize,
+    },
+
+    #[error(
+        "the parameter `{name}` has an unexpected type: expected `{expected_ty}`, got `{actual_ty}`"
+    )]
+    UnexpectedTypeForParameter {
+        location: Location,
+        name: String,
+        expected_ty: String,
+        actual_ty: String,
+        expr_location: Location,
+    },
+
+    #[error("the expression has a wrong type: expected `{expected_ty}`, got a tuple type")]
+    UnexpectedTuple {
+        location: Location,
+        expected_ty: String,
+    },
+
+    #[error(
+        "the number of elements in the tuple expression ({actual}) does not match the expected count ({expected})"
+    )]
+    UnexpectedTupleLength {
+        location: Location,
+        actual: usize,
+        expected: usize,
+    },
+
+    #[error("the expression has a wrong type: expected `{expected_ty}`, got a record type")]
+    UnexpectedRecord {
+        location: Location,
+        expected_ty: String,
+    },
+
+    #[error("the field `{name}` is not present in the expected type `{expected_ty}`")]
+    UnexpectedRecordField {
+        location: Location,
+        name: String,
+        expected_ty: String,
+        expr_location: Location,
+    },
+
+    #[error("the field `{name}` is missing to match the expected type `{expected_ty}`")]
+    MissingRecordField {
+        location: Location,
+        name: String,
+        expected_ty: String,
+    },
+
+    #[error("could not determine the type of a variant expresion")]
+    AmbiguousVariantType { location: Location },
+
+    #[error("the expression has a wrong type: expected `{expected_ty}`, got a variant type")]
+    UnexpectedVariant {
+        location: Location,
+        expected_ty: String,
+    },
+
+    #[error("the label `{name}` is not present in the expected type `{expected_ty}`")]
+    UnexpectedVariantLabel {
+        location: Location,
+        name: String,
+        expected_ty: String,
+        expr_location: Location,
+    },
+
+    #[error(
+        "the label `{name}` does not have associated data in the expected type `{expected_ty}`"
+    )]
+    UnexpectedDataForNullaryLabel {
+        location: Location,
+        name: String,
+        expected_ty: String,
+        expr_location: Location,
+    },
+
+    #[error("the label `{name}` must have associated data")]
+    MissingDataForLabel {
+        location: Location,
+        name: String,
+        expected_ty: String,
+        expr_location: Location,
+    },
+
+    #[error("this match expression must have at least a single match arm")]
+    IllegalEmptyMatching { location: Location },
+
+    #[error("could not determine the type of an empty list expression")]
+    AmbiguousEmptyListTy { location: Location },
 }
 
 impl IntoReportBuilder for SemaError {
@@ -799,6 +994,384 @@ impl IntoReportBuilder for SemaError {
 
                 report
             }
+
+            Self::UnexpectedTypeForExpression {
+                location,
+                expected_ty: _,
+                actual_ty,
+            } => Report::build(ReportKind::Error, *location)
+                .with_code("sema::unexpected_type_for_expression")
+                .with_message(&self)
+                .with_label(
+                    Label::new(*location)
+                        .with_message(format!("this expression has the type `{actual_ty}`"))
+                        .with_color(Color::Red),
+                ),
+
+            Self::UnexpectedFieldAccess {
+                location,
+                field: _,
+                record_ty,
+                base_location,
+                field_location,
+            } => {
+                let mut report = Report::build(ReportKind::Error, *location)
+                    .with_code("sema::unexpected_field_access")
+                    .with_message(&self);
+
+                if base_location.has_span() {
+                    report.add_label(
+                        Label::new(*base_location)
+                            .with_message(format!("the record has the type `{record_ty}`")),
+                    );
+                }
+
+                if field_location.has_span() {
+                    report.add_label(Label::new(*field_location).with_color(Color::Red));
+                }
+
+                report
+            }
+
+            Self::ExtractingFieldOfNonRecordTy {
+                location,
+                field: _,
+                actual_ty,
+                base_location,
+                field_location,
+            } => {
+                let mut report = Report::build(ReportKind::Error, *location)
+                    .with_code("sema::not_a_record")
+                    .with_message(&self);
+
+                if base_location.has_span() {
+                    report.add_label(
+                        Label::new(*base_location)
+                            .with_message(format!("this expression has the type `{actual_ty}`")),
+                    );
+                }
+
+                if field_location.has_span() {
+                    report.add_label(Label::new(*field_location).with_color(Color::Red));
+                }
+
+                report
+            }
+
+            Self::IndexingNonTupleTy {
+                location,
+                actual_ty,
+                base_location,
+                field_location,
+            } => {
+                let mut report = Report::build(ReportKind::Error, *location)
+                    .with_code("sema::not_a_tuple")
+                    .with_message(&self);
+
+                if base_location.has_span() {
+                    report.add_label(
+                        Label::new(*base_location)
+                            .with_message(format!("this expression has the type `{actual_ty}`")),
+                    );
+                }
+
+                if field_location.has_span() {
+                    report.add_label(Label::new(*field_location).with_color(Color::Red));
+                }
+
+                report
+            }
+
+            Self::TupleIndexOutOfBounds {
+                location,
+                idx,
+                tuple_len,
+                actual_ty,
+                base_location,
+                field_location,
+            } => {
+                let mut report = Report::build(ReportKind::Error, *location)
+                    .with_code("sema::tuple_index_out_of_bounds")
+                    .with_message(&self)
+                    .with_note(format!("the tuple's length is {tuple_len}"));
+
+                if base_location.has_span() {
+                    report.add_label(
+                        Label::new(*base_location)
+                            .with_message(format!("this tuple has the type `{actual_ty}`")),
+                    );
+                }
+
+                if field_location.has_span() {
+                    report.add_label(Label::new(*field_location).with_color(Color::Red));
+                }
+
+                if *idx == 0 {
+                    report.set_help("perhaps you meant to access the first element: tuple elements are indexed starting from 1");
+                }
+
+                report
+            }
+
+            Self::FixNotFunction {
+                location,
+                actual_ty,
+                inner_location,
+            } => {
+                let mut report = Report::build(ReportKind::Error, *location)
+                    .with_code("sema::not_a_function")
+                    .with_message(&self);
+
+                if inner_location.has_span() {
+                    report.add_label(
+                        Label::new(*inner_location)
+                            .with_message(format!("this expression has the type `{actual_ty}`")),
+                    );
+                }
+
+                report
+            }
+
+            Self::FixWrongFunctionParamCount {
+                location,
+                actual_ty,
+                inner_location,
+            } => {
+                let mut report = Report::build(ReportKind::Error, *location)
+                    .with_code("sema::fix_wrong_function_param_count")
+                    .with_message(&self);
+
+                if inner_location.has_span() {
+                    report.add_label(
+                        Label::new(*inner_location)
+                            .with_message(format!("this expression has the type `{actual_ty}`",)),
+                    );
+                }
+
+                report
+            }
+
+            Self::IncorrectNumberOfArguments {
+                location,
+                expected: _,
+                actual: _,
+            } => Report::build(ReportKind::Error, *location)
+                .with_code("sema::incorrect_number_of_arguments")
+                .with_message(&self),
+
+            Self::UnexpectedInjection {
+                location,
+                expected_ty: _,
+            } => Report::build(ReportKind::Error, *location)
+                .with_code("sema::unexpected_injection")
+                .with_message(&self),
+
+            Self::AmbiguousSumType { location } => Report::build(ReportKind::Error, *location)
+                .with_code("sema::ambiguous_sum_type")
+                .with_message(&self)
+                .with_help("ascribe a sum type to the expression with the `as` operator"),
+
+            Self::UnexpectedList {
+                location,
+                expected_ty: _,
+            } => Report::build(ReportKind::Error, *location)
+                .with_code("sema::unexpected_list")
+                .with_message(&self),
+
+            Self::ExprTyNotList {
+                location,
+                actual_ty: _,
+            } => Report::build(ReportKind::Error, *location)
+                .with_code("sema::not_a_list")
+                .with_message(&self),
+
+            Self::ApplyNotFunction {
+                location,
+                actual_ty,
+                callee_location,
+            } => {
+                let mut report = Report::build(ReportKind::Error, *location)
+                    .with_code("sema::not_a_function")
+                    .with_message(&self);
+
+                if callee_location.has_span() {
+                    report.add_label(
+                        Label::new(*callee_location)
+                            .with_message(format!("this expression has the type `{actual_ty}`"))
+                            .with_color(Color::Red),
+                    );
+                }
+
+                report
+            }
+
+            Self::UnexpectedLambda {
+                location,
+                expected_ty: _,
+            } => Report::build(ReportKind::Error, *location)
+                .with_code("sema::unexpected_lambda")
+                .with_message(&self),
+
+            Self::UnexpectedNumberOfParametersInLambda {
+                location,
+                actual: _,
+                expected: _,
+            } => Report::build(ReportKind::Error, *location)
+                .with_code("sema::unexpected_number_of_parameters_in_lambda")
+                .with_message(&self),
+
+            Self::UnexpectedTypeForParameter {
+                location,
+                name: _,
+                expected_ty: _,
+                actual_ty,
+                expr_location,
+            } => {
+                let mut report = Report::build(ReportKind::Error, *location)
+                    .with_code("sema::unexpected_type_for_parameter")
+                    .with_message(&self)
+                    .with_label(
+                        Label::new(*location)
+                            .with_message(format!("this parameter has the type `{actual_ty}`"))
+                            .with_color(Color::Red),
+                    );
+
+                if expr_location.has_span() {
+                    report.add_label(
+                        Label::new(*expr_location)
+                            .with_message("in this anonymous function expression"),
+                    );
+                }
+
+                report
+            }
+
+            Self::UnexpectedTuple {
+                location,
+                expected_ty: _,
+            } => Report::build(ReportKind::Error, *location)
+                .with_code("sema::unexpected_tuple")
+                .with_message(&self),
+
+            Self::UnexpectedTupleLength {
+                location,
+                actual: _,
+                expected: _,
+            } => Report::build(ReportKind::Error, *location)
+                .with_code("sema::unexpected_tuple_length")
+                .with_message(&self),
+
+            Self::UnexpectedRecord {
+                location,
+                expected_ty: _,
+            } => Report::build(ReportKind::Error, *location)
+                .with_code("sema::unexpected_record")
+                .with_message(&self),
+
+            Self::UnexpectedRecordField {
+                location,
+                name: _,
+                expected_ty: _,
+                expr_location,
+            } => {
+                let mut report = Report::build(ReportKind::Error, *location)
+                    .with_code("sema::unexpected_record_fields")
+                    .with_message(&self);
+
+                if expr_location.has_span() {
+                    report.add_label(
+                        Label::new(*expr_location).with_message("in this record expression"),
+                    );
+                }
+
+                report
+            }
+
+            Self::MissingRecordField {
+                location,
+                name: _,
+                expected_ty: _,
+            } => Report::build(ReportKind::Error, *location)
+                .with_code("sema::missing_record_fields")
+                .with_message(&self),
+
+            Self::AmbiguousVariantType { location } => Report::build(ReportKind::Error, *location)
+                .with_code("sema::ambiguous_variant_type")
+                .with_message(&self)
+                .with_help("ascribe a variant type to the expression with the `as` operator"),
+
+            Self::UnexpectedVariant {
+                location,
+                expected_ty: _,
+            } => Report::build(ReportKind::Error, *location)
+                .with_code("sema::unexpected_variant")
+                .with_message(&self),
+
+            Self::UnexpectedVariantLabel {
+                location,
+                name: _,
+                expected_ty: _,
+                expr_location,
+            } => {
+                let mut report = Report::build(ReportKind::Error, *location)
+                    .with_code("sema::unexpected_variant_label")
+                    .with_message(&self);
+
+                if expr_location.has_span() {
+                    report.add_label(
+                        Label::new(*expr_location).with_message("in this variant expression"),
+                    );
+                }
+
+                report
+            }
+
+            Self::UnexpectedDataForNullaryLabel {
+                location,
+                name: _,
+                expected_ty: _,
+                expr_location,
+            } => {
+                let mut report = Report::build(ReportKind::Error, *location)
+                    .with_code("sema::unexpected_data_for_nullary_label")
+                    .with_message(&self);
+
+                if expr_location.has_span() {
+                    report.add_label(
+                        Label::new(*expr_location).with_message("in this variant expression"),
+                    );
+                }
+
+                report
+            }
+
+            Self::MissingDataForLabel {
+                location,
+                name: _,
+                expected_ty,
+                expr_location,
+            } => {
+                let mut report = Report::build(ReportKind::Error, *location)
+                    .with_code("sema::missing_data_for_label")
+                    .with_message(&self);
+
+                if expr_location.has_span() {
+                    report.add_label(Label::new(*expr_location).with_message(format!(
+                        "this variant expression has the type `{expected_ty}`"
+                    )));
+                }
+
+                report
+            }
+
+            Self::IllegalEmptyMatching { location } => Report::build(ReportKind::Error, *location)
+                .with_code("sema::illegal_empty_matching")
+                .with_message(&self),
+
+            Self::AmbiguousEmptyListTy { location } => Report::build(ReportKind::Error, *location)
+                .with_code("sema::ambiguous_list_type")
+                .with_message(&self)
+                .with_help("ascribe a list type to the expression with the `as` operator"),
         }
     }
 }

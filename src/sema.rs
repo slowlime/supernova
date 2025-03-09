@@ -63,6 +63,7 @@ pub struct TyExprInfo<'ast> {
 #[derive(Debug, Clone)]
 pub struct PatInfo<'ast> {
     pub def: &'ast ast::Pat<'ast>,
+    pub ty_id: TyId,
 }
 
 #[derive(Debug, Clone)]

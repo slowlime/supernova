@@ -858,7 +858,12 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
 
                 ast::BinOp::And | ast::BinOp::Or => {}
 
-                ast::BinOp::Lt | ast::BinOp::Le | ast::BinOp::Gt | ast::BinOp::Ge => {
+                ast::BinOp::Lt
+                | ast::BinOp::Le
+                | ast::BinOp::Gt
+                | ast::BinOp::Ge
+                | ast::BinOp::Eq
+                | ast::BinOp::Ne => {
                     if !self.m.is_feature_enabled(FeatureKind::ComparisonOperations) {
                         result = Err(());
                         self.diag.emit(make_feature_disabled_error(
@@ -870,9 +875,6 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                         ));
                     }
                 }
-
-                ast::BinOp::Eq => {}
-                ast::BinOp::Ne => {}
 
                 ast::BinOp::Assign => {
                     if !self.m.is_feature_enabled(FeatureKind::References) {

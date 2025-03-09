@@ -1181,18 +1181,39 @@ impl<'src> AstRecurse<'src> for Callee<'src> {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Display, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Builtin {
+    #[display("inl")]
     Inl,
+
+    #[display("inr")]
     Inr,
+
+    #[display("cons")]
     Cons,
+
+    #[display("List::head")]
     ListHead,
+
+    #[display("List::isempty")]
     ListIsEmpty,
+
+    #[display("List::tail")]
     ListTail,
+
+    #[display("succ")]
     Succ,
+
+    #[display("not")]
     Not,
+
+    #[display("Nat::pred")]
     NatPred,
+
+    #[display("Nat::iszero")]
     NatIsZero,
+
+    #[display("Nat::rec")]
     NatRec,
 }
 
