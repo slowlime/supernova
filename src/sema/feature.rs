@@ -187,8 +187,14 @@ pub struct Feature {
 
 impl Feature {
     pub const MUTUALLY_EXCLUSIVE_FEATURES: &[&[FeatureKind]] = &[
-        &[FeatureKind::EquirecursiveTypes, FeatureKind::IsorecursiveTypes],
-        &[FeatureKind::ExceptionTypeDeclaration, FeatureKind::OpenVariantExceptions],
+        &[
+            FeatureKind::EquirecursiveTypes,
+            FeatureKind::IsorecursiveTypes,
+        ],
+        &[
+            FeatureKind::ExceptionTypeDeclaration,
+            FeatureKind::OpenVariantExceptions,
+        ],
     ];
 
     pub fn from_extension(extension: ast::Extension, location: Location) -> Option<Self> {
