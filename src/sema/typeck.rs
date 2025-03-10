@@ -182,6 +182,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
     fn run(mut self) -> Result {
         self.add_well_known_tys();
         self.typeck_decls()?;
+        self.check_main()?;
 
         Ok(())
     }
@@ -196,6 +197,23 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         self.m.well_known_tys.empty_tuple = self.m.add_ty(Ty {
             kind: TyKind::Tuple(TyTuple { elems: vec![] }),
         });
+    }
+
+    fn check_main(&mut self) -> Result {
+        let ast::DeclKind::Fn(decl) = &self.m.decls[self.m.main_decl_id].def.kind else {
+            unreachable!()
+        };
+
+        if decl.params.len() == 1 {
+            Ok(())
+        } else {
+            self.diag.emit(SemaError::IncorrectArityOfMain {
+                location: decl.binding.location(),
+                actual: decl.params.len(),
+            });
+
+            Err(())
+        }
     }
 
     fn is_error_ty(&self, ty_id: TyId) -> bool {

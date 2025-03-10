@@ -544,6 +544,9 @@ pub enum SemaError {
 
     #[error("the pattern is not irrefutable")]
     NonIrrefutableLetPattern { location: Location, witness: String },
+
+    #[error("expected the `main` function to have one parameter, got {actual}")]
+    IncorrectArityOfMain { location: Location, actual: usize },
 }
 
 impl IntoReportBuilder for SemaError {
@@ -1630,6 +1633,13 @@ impl IntoReportBuilder for SemaError {
                     .with_note(format!("no pattern matches `{witness}`"))
                     .with_note("a let pattern must be applicable to all values of this type")
             }
+
+            Self::IncorrectArityOfMain {
+                location,
+                actual: _,
+            } => Report::build(ReportKind::Error, *location)
+                .with_code("sema::incorrect_arity_of_main")
+                .with_message(&self),
         }
     }
 }
