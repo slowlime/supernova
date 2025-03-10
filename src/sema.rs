@@ -1,3 +1,4 @@
+mod check_exhaustiveness;
 mod error;
 pub mod feature;
 mod load_ast;
@@ -188,6 +189,7 @@ pub fn process<'ast>(
         module.process_features(diag)?;
         module.resolve(diag)?;
         module.typeck(diag)?;
+        module.check_exhaustiveness(diag)?;
 
         Ok(())
     })();

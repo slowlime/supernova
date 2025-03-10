@@ -534,6 +534,16 @@ pub enum SemaError {
 
     #[error("could not determine the type of a binding pattern")]
     AmbiguousBindingPatType { location: Location },
+
+    #[error("the match arms are non-exhaustive")]
+    NonExhaustiveMatchPatterns {
+        location: Location,
+        scrutinee_location: Location,
+        witness: String,
+    },
+
+    #[error("the pattern is not irrefutable")]
+    NonIrrefutableLetPattern { location: Location, witness: String },
 }
 
 impl IntoReportBuilder for SemaError {
@@ -1591,6 +1601,34 @@ impl IntoReportBuilder for SemaError {
                 Report::build(ReportKind::Error, *location)
                     .with_code("sema::ambiguous_binding_type")
                     .with_message(&self)
+            }
+
+            Self::NonExhaustiveMatchPatterns {
+                location,
+                scrutinee_location,
+                witness,
+            } => {
+                let mut report = Report::build(ReportKind::Error, *location)
+                    .with_code("sema::non_exhaustive_match_patterns")
+                    .with_message(&self);
+
+                if scrutinee_location.has_span() {
+                    report.add_label(
+                        Label::new(*scrutinee_location)
+                            .with_message(format!("no pattern matches `{witness}`",))
+                            .with_color(Color::Red),
+                    );
+                }
+
+                report
+            }
+
+            Self::NonIrrefutableLetPattern { location, witness } => {
+                Report::build(ReportKind::Error, *location)
+                    .with_code("sema::non_exhaustive_match_patterns")
+                    .with_message(&self)
+                    .with_note(format!("no pattern matches `{witness}`"))
+                    .with_note("a let pattern must be applicable to all values of this type")
             }
         }
     }
