@@ -136,6 +136,7 @@ pub struct Module<'ast> {
     pub prelude_scope_id: ScopeId,                 // initialized by resolve
     pub ty_name_exprs: SparseSecondaryMap<TyExprId, BindingId>, // initialized by resolve
     pub name_exprs: SparseSecondaryMap<ExprId, BindingId>, // initialized by resolve
+    pub main_decl_id: DeclId,                      // initialized by resolve
     pub tys: SlotMap<TyId, Ty>,                    // initialized by typeck
     ty_dedup: FxHashMap<TyKind, TyId>,             // initialized by typeck
     pub well_known_tys: WellKnownTys,              // initialized by typeck
@@ -157,6 +158,7 @@ impl Module<'_> {
             prelude_scope_id: Default::default(),
             ty_name_exprs: Default::default(),
             name_exprs: Default::default(),
+            main_decl_id: Default::default(),
             tys: Default::default(),
             ty_dedup: Default::default(),
             well_known_tys: Default::default(),

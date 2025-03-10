@@ -49,6 +49,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         self.init_root_scopes();
         self.resolve_decls()?;
         self.resolve_defs()?;
+        self.find_main_decl()?;
 
         Ok(())
     }
@@ -136,6 +137,31 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         }
 
         result
+    }
+
+    fn find_main_decl(&mut self) -> Result {
+        let Some(&binding_id) = self.m.scopes[self.m.root_scope_id].values.get("main") else {
+            self.diag.emit(SemaError::MissingMain {
+                location: self.m.location,
+            });
+
+            return Err(());
+        };
+
+        match self.m.bindings[binding_id].kind {
+            BindingKind::Dummy => panic!("the binding for `main` is a dummy"),
+
+            BindingKind::FnDecl(decl_id) => {
+                self.m.main_decl_id = decl_id;
+
+                Ok(())
+            }
+
+            BindingKind::DeclFnParam(..) => unreachable!(),
+            BindingKind::ExprFnParam(..) => unreachable!(),
+            BindingKind::Pat(_) => unreachable!(),
+            BindingKind::Ty(_) => unreachable!(),
+        }
     }
 
     fn add_binding(

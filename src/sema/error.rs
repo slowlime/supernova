@@ -262,6 +262,9 @@ pub enum SemaError {
         prev_location: Location,
     },
 
+    #[error("the program is missing a `main` function")]
+    MissingMain { location: Location },
+
     #[error("the expression has a wrong type: expected `{expected_ty}`, got `{actual_ty}`")]
     UnexpectedTypeForExpression {
         location: Location,
@@ -1069,6 +1072,10 @@ impl IntoReportBuilder for SemaError {
 
                 report
             }
+
+            Self::MissingMain { location } => Report::build(ReportKind::Error, *location)
+                .with_code("sema::missing_main")
+                .with_message(&self),
 
             Self::UnexpectedTypeForExpression {
                 location,
