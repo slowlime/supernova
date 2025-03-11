@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 use std::fmt::{self, Display};
 
-use ariadne::{Report, ReportBuilder, ReportKind};
+use ariadne::{Color, Label, Report, ReportBuilder, ReportKind};
 use num::{BigUint, Num};
 use thiserror::Error;
 
@@ -39,7 +39,8 @@ pub struct LexerError {
 
 impl IntoReportBuilder for LexerError {
     fn into_report_builder(self) -> ReportBuilder<'static, Location> {
-        let report = Report::build(ReportKind::Error, self.span.into());
+        let report = Report::build(ReportKind::Error, self.span.into())
+            .with_label(Label::new(self.span.into()).with_color(Color::Red));
 
         self.kind.update_report(report)
     }
@@ -317,7 +318,7 @@ impl<'a> Lexer<'a> {
     }
 
     pub fn peek_nth(&mut self, n: usize) -> Option<&Result<Token<'a>, LexerError>> {
-        while self.buf.len() < n {
+        while n >= self.buf.len() {
             let pos = self.cursor.pos();
 
             if let Some(r) = self.scan_next() {
@@ -327,7 +328,7 @@ impl<'a> Lexer<'a> {
             }
         }
 
-        Some(&self.buf[n].0)
+        self.buf.get(n).map(|entry| &entry.0)
     }
 
     pub fn source_id(&self) -> SourceId {

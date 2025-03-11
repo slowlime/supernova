@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use ariadne::{Label, Report, ReportBuilder, ReportKind};
+use ariadne::{Color, Label, Report, ReportBuilder, ReportKind};
 use fxhash::FxHashMap;
 use strum::VariantArray;
 use thiserror::Error;
@@ -50,6 +50,7 @@ impl IntoReportBuilder for ParserError<'_> {
             } => Report::build(ReportKind::Error, token.span.into())
                 .with_message(format!("unexpected token {}", token.value))
                 .with_code("parser::unexpected_token")
+                .with_label(Label::new(token.span.into()).with_color(Color::Red))
                 .with_help(format!(
                     "expected {}",
                     format_list(expected, "or", "nothing")
@@ -59,6 +60,7 @@ impl IntoReportBuilder for ParserError<'_> {
                 Report::build(ReportKind::Error, span.into())
                     .with_message(&self)
                     .with_code("parser::unknown_language")
+                    .with_label(Label::new(span.into()).with_color(Color::Red))
                     .with_help("the only supported language is `core`")
             }
 
@@ -66,6 +68,7 @@ impl IntoReportBuilder for ParserError<'_> {
                 Report::build(ReportKind::Error, span.into())
                     .with_message(&self)
                     .with_code("parser::unknown_extension")
+                    .with_label(Label::new(span.into()).with_color(Color::Red))
                     .with_help(format!(
                         "supported extensions are {}",
                         format_iter(
@@ -80,6 +83,7 @@ impl IntoReportBuilder for ParserError<'_> {
                 Report::build(ReportKind::Error, span.into())
                     .with_message(&self)
                     .with_code("parser::duplicate_annotation")
+                    .with_label(Label::new(span.into()).with_color(Color::Red))
                     .with_label(
                         Label::new(prev_span.into())
                             .with_message("the previous such annotation was provided here"),
@@ -88,7 +92,8 @@ impl IntoReportBuilder for ParserError<'_> {
 
             Self::TupleIndexTooLarge { span } => Report::build(ReportKind::Error, span.into())
                 .with_message(&self)
-                .with_code("parser::tuple_index_too_large"),
+                .with_code("parser::tuple_index_too_large")
+                .with_label(Label::new(span.into()).with_color(Color::Red)),
 
             Self::LexerError(e) => e.into_report_builder(),
         }

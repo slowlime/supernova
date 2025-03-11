@@ -555,7 +555,8 @@ impl IntoReportBuilder for SemaError {
             Self::ConflictingFeatures { location, features } => {
                 let mut builder = Report::build(ReportKind::Error, *location)
                     .with_code("sema::conflicting_features")
-                    .with_message(&self);
+                    .with_message(&self)
+                    .with_label(Label::new(*location).with_color(Color::Red));
 
                 for (feature, reason) in features {
                     match reason {
@@ -578,12 +579,14 @@ impl IntoReportBuilder for SemaError {
 
             Self::NoFunctionParams { location } => Report::build(ReportKind::Error, *location)
                 .with_code("sema::no_function_params")
-                .with_message(&self),
+                .with_message(&self)
+                .with_label(Label::new(*location).with_color(Color::Red)),
 
             Self::MultipleFunctionParams { location } => {
                 Report::build(ReportKind::Error, *location)
                     .with_code("sema::multiple_function_params")
                     .with_message(&self)
+                    .with_label(Label::new(*location).with_color(Color::Red))
             }
 
             Self::FunctionHasTypeParams {
@@ -622,7 +625,8 @@ impl IntoReportBuilder for SemaError {
             } => {
                 let mut report = Report::build(ReportKind::Error, *location)
                     .with_code("sema::illegal_nested_decl")
-                    .with_message(&self);
+                    .with_message(&self)
+                    .with_label(Label::new(*location).with_color(Color::Red));
 
                 if func_name_location.has_span() {
                     report.add_label(
@@ -636,24 +640,28 @@ impl IntoReportBuilder for SemaError {
 
             Self::TypeAliasNotAllowed { location } => Report::build(ReportKind::Error, *location)
                 .with_code("sema::type_alias_not_allowed")
-                .with_message(&self),
+                .with_message(&self)
+                .with_label(Label::new(*location).with_color(Color::Red)),
 
             Self::ExceptionTypeDeclNotAllowed { location } => {
                 Report::build(ReportKind::Error, *location)
                     .with_code("sema::exception_type_decl_not_allowed")
                     .with_message(&self)
+                    .with_label(Label::new(*location).with_color(Color::Red))
             }
 
             Self::ExceptionVariantDeclNotAllowed { location } => {
                 Report::build(ReportKind::Error, *location)
                     .with_code("sema::exception_variant_decl_not_allowed")
                     .with_message(&self)
+                    .with_label(Label::new(*location).with_color(Color::Red))
             }
 
             Self::ReferenceTypeNotAllowed { location } => {
                 Report::build(ReportKind::Error, *location)
                     .with_code("sema::reference_type_not_allowed")
                     .with_message(&self)
+                    .with_label(Label::new(*location).with_color(Color::Red))
             }
 
             Self::SumTypeNotAllowed {
@@ -675,17 +683,20 @@ impl IntoReportBuilder for SemaError {
                 Report::build(ReportKind::Error, *location)
                     .with_code("sema::universal_type_not_allowed")
                     .with_message(&self)
+                    .with_label(Label::new(*location).with_color(Color::Red))
             }
 
             Self::RecursiveTypeNotAllowed { location } => {
                 Report::build(ReportKind::Error, *location)
                     .with_code("sema::recursive_type_not_allowed")
                     .with_message(&self)
+                    .with_label(Label::new(*location).with_color(Color::Red))
             }
 
             Self::EmptyTupleNotAllowed { location } => Report::build(ReportKind::Error, *location)
                 .with_code("sema::empty_tuple_not_allowed")
-                .with_message(&self),
+                .with_message(&self)
+                .with_label(Label::new(*location).with_color(Color::Red)),
 
             Self::TupleNotAllowed { location } => Report::build(ReportKind::Error, *location)
                 .with_code("sema::tuple_not_allowed")
@@ -695,15 +706,18 @@ impl IntoReportBuilder for SemaError {
                 Report::build(ReportKind::Error, *location)
                     .with_code("sema::illegal_pair_element_count")
                     .with_message(&self)
+                    .with_label(Label::new(*location).with_color(Color::Red))
             }
 
             Self::RecordNotAllowed { location } => Report::build(ReportKind::Error, *location)
                 .with_code("sema::record_not_allowed")
-                .with_message(&self),
+                .with_message(&self)
+                .with_label(Label::new(*location).with_color(Color::Red)),
 
             Self::VariantNotAllowed { location } => Report::build(ReportKind::Error, *location)
                 .with_code("sema::variant_not_allowed")
-                .with_message(&self),
+                .with_message(&self)
+                .with_label(Label::new(*location).with_color(Color::Red)),
 
             Self::NullaryVariantLabelNotAllowed {
                 location,
@@ -711,7 +725,8 @@ impl IntoReportBuilder for SemaError {
             } => {
                 let mut report = Report::build(ReportKind::Error, *location)
                     .with_code("sema::nullary_variant_label_not_allowed")
-                    .with_message(&self);
+                    .with_message(&self)
+                    .with_label(Label::new(*location).with_color(Color::Red));
 
                 if variant_location.has_span() {
                     report.add_label(
@@ -724,75 +739,91 @@ impl IntoReportBuilder for SemaError {
 
             Self::ListNotAllowed { location } => Report::build(ReportKind::Error, *location)
                 .with_code("sema::list_not_allowed")
-                .with_message(&self),
+                .with_message(&self)
+                .with_label(Label::new(*location).with_color(Color::Red)),
 
             Self::UnitTypeNotAllowed { location } => Report::build(ReportKind::Error, *location)
                 .with_code("sema::unit_type_not_allowed")
-                .with_message(&self),
+                .with_message(&self)
+                .with_label(Label::new(*location).with_color(Color::Red)),
 
             Self::TopTypeNotAllowed { location } => Report::build(ReportKind::Error, *location)
                 .with_code("sema::top_type_not_allowed")
-                .with_message(&self),
+                .with_message(&self)
+                .with_label(Label::new(*location).with_color(Color::Red)),
 
             Self::BotTypeNotAllowed { location } => Report::build(ReportKind::Error, *location)
                 .with_code("sema::bot_type_not_allowed")
-                .with_message(&self),
+                .with_message(&self)
+                .with_label(Label::new(*location).with_color(Color::Red)),
 
             Self::TypeInferenceNotAvailable { location } => {
                 Report::build(ReportKind::Error, *location)
                     .with_code("sema::type_inference_not_available")
                     .with_message(&self)
+                    .with_label(Label::new(*location).with_color(Color::Red))
             }
 
             Self::NaturalLiteralNotAllowed { location } => {
                 Report::build(ReportKind::Error, *location)
                     .with_code("sema::natural_literal_not_allowed")
                     .with_message(&self)
+                    .with_label(Label::new(*location).with_color(Color::Red))
             }
 
             Self::AddressLiteralNotAllowed { location } => {
                 Report::build(ReportKind::Error, *location)
                     .with_code("sema::address_literal_not_allowed")
                     .with_message(&self)
+                    .with_label(Label::new(*location).with_color(Color::Red))
             }
 
             Self::FieldExprNotAllowed { location } => Report::build(ReportKind::Error, *location)
                 .with_code("sema::field_expr_not_allowed")
-                .with_message(&self),
+                .with_message(&self)
+                .with_label(Label::new(*location).with_color(Color::Red)),
 
             Self::PanicExprNotAllowed { location } => Report::build(ReportKind::Error, *location)
                 .with_code("sema::panic_expr_not_allowed")
-                .with_message(&self),
+                .with_message(&self)
+                .with_label(Label::new(*location).with_color(Color::Red)),
 
             Self::ThrowExprNotAllowed { location } => Report::build(ReportKind::Error, *location)
                 .with_code("sema::throw_expr_not_allowed")
-                .with_message(&self),
+                .with_message(&self)
+                .with_label(Label::new(*location).with_color(Color::Red)),
 
             Self::TryCatchExprNotAllowed { location } => {
                 Report::build(ReportKind::Error, *location)
                     .with_code("sema::try_catch_expr_not_allowed")
                     .with_message(&self)
+                    .with_label(Label::new(*location).with_color(Color::Red))
             }
 
             Self::CastExprNotAllowed { location } => Report::build(ReportKind::Error, *location)
                 .with_code("sema::cast_expr_not_allowed")
-                .with_message(&self),
+                .with_message(&self)
+                .with_label(Label::new(*location).with_color(Color::Red)),
 
             Self::FixExprNotAllowed { location } => Report::build(ReportKind::Error, *location)
                 .with_code("sema::fix_expr_not_allowed")
-                .with_message(&self),
+                .with_message(&self)
+                .with_label(Label::new(*location).with_color(Color::Red)),
 
             Self::FoldExprNotAllowed { location } => Report::build(ReportKind::Error, *location)
                 .with_code("sema::fold_expr_not_allowed")
-                .with_message(&self),
+                .with_message(&self)
+                .with_label(Label::new(*location).with_color(Color::Red)),
 
             Self::ApplyExprNotAllowed { location } => Report::build(ReportKind::Error, *location)
                 .with_code("sema::apply_expr_not_allowed")
-                .with_message(&self),
+                .with_message(&self)
+                .with_label(Label::new(*location).with_color(Color::Red)),
 
             Self::TyApplyExprNotAllowed { location } => Report::build(ReportKind::Error, *location)
                 .with_code("sema::ty_apply_expr_not_allowed")
-                .with_message(&self),
+                .with_message(&self)
+                .with_label(Label::new(*location).with_color(Color::Red)),
 
             Self::AscriptionExprNotAllowed {
                 location,
@@ -811,7 +842,8 @@ impl IntoReportBuilder for SemaError {
 
             Self::MatchExprNotAllowed { location } => Report::build(ReportKind::Error, *location)
                 .with_code("sema::match_expr_not_allowed")
-                .with_message(&self),
+                .with_message(&self)
+                .with_label(Label::new(*location).with_color(Color::Red)),
 
             Self::SeqExprNotAllowed {
                 location,
@@ -862,11 +894,13 @@ impl IntoReportBuilder for SemaError {
 
             Self::GenericExprNotAllowed { location } => Report::build(ReportKind::Error, *location)
                 .with_code("sema::generic_expr_not_allowed")
-                .with_message(&self),
+                .with_message(&self)
+                .with_label(Label::new(*location).with_color(Color::Red)),
 
             Self::NewExprNotAllowed { location } => Report::build(ReportKind::Error, *location)
                 .with_code("sema::new_expr_not_allowed")
-                .with_message(&self),
+                .with_message(&self)
+                .with_label(Label::new(*location).with_color(Color::Red)),
 
             Self::DerefExprNotAllowed {
                 location,
@@ -932,35 +966,41 @@ impl IntoReportBuilder for SemaError {
                 Report::build(ReportKind::Error, *location)
                     .with_code("sema::nested_pattern_not_allowed")
                     .with_message(&self)
+                    .with_label(Label::new(*location).with_color(Color::Red))
             }
 
             Self::GeneralPatternNotAllowed { location } => {
                 Report::build(ReportKind::Error, *location)
                     .with_code("sema::general_pattern_not_allowed")
                     .with_message(&self)
+                    .with_label(Label::new(*location).with_color(Color::Red))
             }
 
             Self::StructuralPatternNotAllowed { location } => {
                 Report::build(ReportKind::Error, *location)
                     .with_code("sema::structural_pattern_not_allowed")
                     .with_message(&self)
+                    .with_label(Label::new(*location).with_color(Color::Red))
             }
 
             Self::InjectionPatternNotAllowed { location } => {
                 Report::build(ReportKind::Error, *location)
                     .with_code("sema::injection_pattern_not_allowed")
                     .with_message(&self)
+                    .with_label(Label::new(*location).with_color(Color::Red))
             }
 
             Self::AscriptionPatternNotAllowed { location } => {
                 Report::build(ReportKind::Error, *location)
                     .with_code("sema::ascription_pattern_not_allowed")
                     .with_message(&self)
+                    .with_label(Label::new(*location).with_color(Color::Red))
             }
 
             Self::CastPatternNotAllowed { location } => Report::build(ReportKind::Error, *location)
                 .with_code("sema::cast_pattern_not_allowed")
-                .with_message(&self),
+                .with_message(&self)
+                .with_label(Label::new(*location).with_color(Color::Red)),
 
             Self::DuplicateRecordTypeFields {
                 name: _,
@@ -969,7 +1009,8 @@ impl IntoReportBuilder for SemaError {
             } => {
                 let mut report = Report::build(ReportKind::Error, *location)
                     .with_code("sema::duplicate_record_type_fields")
-                    .with_message(&self);
+                    .with_message(&self)
+                    .with_label(Label::new(*location).with_color(Color::Red));
 
                 if prev_location.has_span() {
                     report.add_label(
@@ -988,7 +1029,8 @@ impl IntoReportBuilder for SemaError {
             } => {
                 let mut report = Report::build(ReportKind::Error, *location)
                     .with_code("sema::duplicate_variant_type_fields")
-                    .with_message(&self);
+                    .with_message(&self)
+                    .with_label(Label::new(*location).with_color(Color::Red));
 
                 if prev_location.has_span() {
                     report.add_label(
@@ -1007,7 +1049,8 @@ impl IntoReportBuilder for SemaError {
             } => {
                 let mut report = Report::build(ReportKind::Error, *location)
                     .with_code("sema::duplicate_record_fields")
-                    .with_message(&self);
+                    .with_message(&self)
+                    .with_label(Label::new(*location).with_color(Color::Red));
 
                 if prev_location.has_span() {
                     report.add_label(
@@ -1026,7 +1069,8 @@ impl IntoReportBuilder for SemaError {
             } => {
                 let mut report = Report::build(ReportKind::Error, *location)
                     .with_code("sema::duplicate_record_pattern_fields")
-                    .with_message(&self);
+                    .with_message(&self)
+                    .with_label(Label::new(*location).with_color(Color::Red));
 
                 if prev_location.has_span() {
                     report.add_label(
@@ -1040,12 +1084,14 @@ impl IntoReportBuilder for SemaError {
 
             Self::UndefinedTy { name: _, location } => Report::build(ReportKind::Error, *location)
                 .with_code("sema::undefined_type")
-                .with_message(&self),
+                .with_message(&self)
+                .with_label(Label::new(*location).with_color(Color::Red)),
 
             Self::UndefinedVariable { name: _, location } => {
                 Report::build(ReportKind::Error, *location)
                     .with_code("sema::undefined_variable")
                     .with_message(&self)
+                    .with_label(Label::new(*location).with_color(Color::Red))
             }
 
             Self::DuplicateVariableDef {
@@ -1055,7 +1101,8 @@ impl IntoReportBuilder for SemaError {
             } => {
                 let mut report = Report::build(ReportKind::Error, *location)
                     .with_code("sema::duplicate_variable_def")
-                    .with_message(&self);
+                    .with_message(&self)
+                    .with_label(Label::new(*location).with_color(Color::Red));
 
                 if prev_location.has_span() {
                     report.add_label(
@@ -1074,7 +1121,8 @@ impl IntoReportBuilder for SemaError {
             } => {
                 let mut report = Report::build(ReportKind::Error, *location)
                     .with_code("sema::duplicate_ty_def")
-                    .with_message(&self);
+                    .with_message(&self)
+                    .with_label(Label::new(*location).with_color(Color::Red));
 
                 if prev_location.has_span() {
                     report.add_label(
@@ -1215,7 +1263,8 @@ impl IntoReportBuilder for SemaError {
             } => {
                 let mut report = Report::build(ReportKind::Error, *location)
                     .with_code("sema::not_a_function")
-                    .with_message(&self);
+                    .with_message(&self)
+                    .with_label(Label::new(*location).with_color(Color::Red));
 
                 if inner_location.has_span() {
                     report.add_label(
@@ -1234,7 +1283,8 @@ impl IntoReportBuilder for SemaError {
             } => {
                 let mut report = Report::build(ReportKind::Error, *location)
                     .with_code("sema::fix_wrong_function_param_count")
-                    .with_message(&self);
+                    .with_message(&self)
+                    .with_label(Label::new(*location).with_color(Color::Red));
 
                 if inner_location.has_span() {
                     report.add_label(
@@ -1252,7 +1302,8 @@ impl IntoReportBuilder for SemaError {
                 actual: _,
             } => Report::build(ReportKind::Error, *location)
                 .with_code("sema::incorrect_number_of_arguments")
-                .with_message(&self),
+                .with_message(&self)
+                .with_label(Label::new(*location).with_color(Color::Red)),
 
             Self::IncorrectNumberOfArgumentsInPat {
                 location,
@@ -1260,25 +1311,29 @@ impl IntoReportBuilder for SemaError {
                 actual: _,
             } => Report::build(ReportKind::Error, *location)
                 .with_code("sema::incorrect_number_of_arguments")
-                .with_message(&self),
+                .with_message(&self)
+                .with_label(Label::new(*location).with_color(Color::Red)),
 
             Self::UnexpectedInjection {
                 location,
                 expected_ty: _,
             } => Report::build(ReportKind::Error, *location)
                 .with_code("sema::unexpected_injection")
-                .with_message(&self),
+                .with_message(&self)
+                .with_label(Label::new(*location).with_color(Color::Red)),
 
             Self::AmbiguousSumTypeInExpr { location } => {
                 Report::build(ReportKind::Error, *location)
                     .with_code("sema::ambiguous_sum_type")
                     .with_message(&self)
+                    .with_label(Label::new(*location).with_color(Color::Red))
                     .with_help("ascribe a sum type to the expression with the `as` operator")
             }
 
             Self::AmbiguousSumTypeInPat { location } => Report::build(ReportKind::Error, *location)
                 .with_code("sema::ambiguous_sum_type")
                 .with_message(&self)
+                .with_label(Label::new(*location).with_color(Color::Red))
                 .with_help("ascribe a sum type to the pattern with the `as` operator"),
 
             Self::UnexpectedList {
@@ -1286,14 +1341,16 @@ impl IntoReportBuilder for SemaError {
                 expected_ty: _,
             } => Report::build(ReportKind::Error, *location)
                 .with_code("sema::unexpected_list")
-                .with_message(&self),
+                .with_message(&self)
+                .with_label(Label::new(*location).with_color(Color::Red)),
 
             Self::ExprTyNotList {
                 location,
                 actual_ty: _,
             } => Report::build(ReportKind::Error, *location)
                 .with_code("sema::not_a_list")
-                .with_message(&self),
+                .with_message(&self)
+                .with_label(Label::new(*location).with_color(Color::Red)),
 
             Self::ApplyNotFunction {
                 location,
@@ -1320,7 +1377,8 @@ impl IntoReportBuilder for SemaError {
                 expected_ty: _,
             } => Report::build(ReportKind::Error, *location)
                 .with_code("sema::unexpected_lambda")
-                .with_message(&self),
+                .with_message(&self)
+                .with_label(Label::new(*location).with_color(Color::Red)),
 
             Self::UnexpectedNumberOfParametersInLambda {
                 location,
@@ -1328,7 +1386,8 @@ impl IntoReportBuilder for SemaError {
                 expected: _,
             } => Report::build(ReportKind::Error, *location)
                 .with_code("sema::unexpected_number_of_parameters_in_lambda")
-                .with_message(&self),
+                .with_message(&self)
+                .with_label(Label::new(*location).with_color(Color::Red)),
 
             Self::UnexpectedTypeForParameter {
                 location,
@@ -1361,7 +1420,8 @@ impl IntoReportBuilder for SemaError {
                 expected_ty: _,
             } => Report::build(ReportKind::Error, *location)
                 .with_code("sema::unexpected_tuple")
-                .with_message(&self),
+                .with_message(&self)
+                .with_label(Label::new(*location).with_color(Color::Red)),
 
             Self::UnexpectedTupleLengthInExpr {
                 location,
@@ -1369,7 +1429,8 @@ impl IntoReportBuilder for SemaError {
                 expected: _,
             } => Report::build(ReportKind::Error, *location)
                 .with_code("sema::unexpected_tuple_length")
-                .with_message(&self),
+                .with_message(&self)
+                .with_label(Label::new(*location).with_color(Color::Red)),
 
             Self::UnexpectedTupleLengthInPat {
                 location,
@@ -1377,14 +1438,16 @@ impl IntoReportBuilder for SemaError {
                 expected: _,
             } => Report::build(ReportKind::Error, *location)
                 .with_code("sema::unexpected_tuple_length")
-                .with_message(&self),
+                .with_message(&self)
+                .with_label(Label::new(*location).with_color(Color::Red)),
 
             Self::UnexpectedRecord {
                 location,
                 expected_ty: _,
             } => Report::build(ReportKind::Error, *location)
                 .with_code("sema::unexpected_record")
-                .with_message(&self),
+                .with_message(&self)
+                .with_label(Label::new(*location).with_color(Color::Red)),
 
             Self::UnexpectedRecordFieldInExpr {
                 location,
@@ -1394,7 +1457,8 @@ impl IntoReportBuilder for SemaError {
             } => {
                 let mut report = Report::build(ReportKind::Error, *location)
                     .with_code("sema::unexpected_record_fields")
-                    .with_message(&self);
+                    .with_message(&self)
+                    .with_label(Label::new(*location).with_color(Color::Red));
 
                 if expr_location.has_span() {
                     report.add_label(
@@ -1413,7 +1477,8 @@ impl IntoReportBuilder for SemaError {
             } => {
                 let mut report = Report::build(ReportKind::Error, *location)
                     .with_code("sema::unexpected_record_fields")
-                    .with_message(&self);
+                    .with_message(&self)
+                    .with_label(Label::new(*location).with_color(Color::Red));
 
                 if pat_location.has_span() {
                     report.add_label(
@@ -1430,7 +1495,8 @@ impl IntoReportBuilder for SemaError {
                 expected_ty: _,
             } => Report::build(ReportKind::Error, *location)
                 .with_code("sema::missing_record_fields")
-                .with_message(&self),
+                .with_message(&self)
+                .with_label(Label::new(*location).with_color(Color::Red)),
 
             Self::MissingRecordFieldInPat {
                 location,
@@ -1438,12 +1504,14 @@ impl IntoReportBuilder for SemaError {
                 expected_ty: _,
             } => Report::build(ReportKind::Error, *location)
                 .with_code("sema::missing_record_fields")
-                .with_message(&self),
+                .with_message(&self)
+                .with_label(Label::new(*location).with_color(Color::Red)),
 
             Self::AmbiguousVariantExprType { location } => {
                 Report::build(ReportKind::Error, *location)
                     .with_code("sema::ambiguous_variant_type")
                     .with_message(&self)
+                    .with_label(Label::new(*location).with_color(Color::Red))
                     .with_help("ascribe a variant type to the expression with the `as` operator")
             }
 
@@ -1451,6 +1519,7 @@ impl IntoReportBuilder for SemaError {
                 Report::build(ReportKind::Error, *location)
                     .with_code("sema::ambiguous_variant_type")
                     .with_message(&self)
+                    .with_label(Label::new(*location).with_color(Color::Red))
                     .with_help("ascribe a variant type to the pattern with the `as` operator")
             }
 
@@ -1459,7 +1528,8 @@ impl IntoReportBuilder for SemaError {
                 expected_ty: _,
             } => Report::build(ReportKind::Error, *location)
                 .with_code("sema::unexpected_variant")
-                .with_message(&self),
+                .with_message(&self)
+                .with_label(Label::new(*location).with_color(Color::Red)),
 
             Self::UnexpectedVariantLabelInExpr {
                 location,
@@ -1469,7 +1539,8 @@ impl IntoReportBuilder for SemaError {
             } => {
                 let mut report = Report::build(ReportKind::Error, *location)
                     .with_code("sema::unexpected_variant_label")
-                    .with_message(&self);
+                    .with_message(&self)
+                    .with_label(Label::new(*location).with_color(Color::Red));
 
                 if expr_location.has_span() {
                     report.add_label(
@@ -1488,7 +1559,8 @@ impl IntoReportBuilder for SemaError {
             } => {
                 let mut report = Report::build(ReportKind::Error, *location)
                     .with_code("sema::unexpected_variant_label")
-                    .with_message(&self);
+                    .with_message(&self)
+                    .with_label(Label::new(*location).with_color(Color::Red));
 
                 if pat_location.has_span() {
                     report.add_label(
@@ -1507,7 +1579,8 @@ impl IntoReportBuilder for SemaError {
             } => {
                 let mut report = Report::build(ReportKind::Error, *location)
                     .with_code("sema::unexpected_data_for_nullary_label")
-                    .with_message(&self);
+                    .with_message(&self)
+                    .with_label(Label::new(*location).with_color(Color::Red));
 
                 if expr_location.has_span() {
                     report.add_label(
@@ -1526,7 +1599,8 @@ impl IntoReportBuilder for SemaError {
             } => {
                 let mut report = Report::build(ReportKind::Error, *location)
                     .with_code("sema::unexpected_non_nullary_variant_pattern")
-                    .with_message(&self);
+                    .with_message(&self)
+                    .with_label(Label::new(*location).with_color(Color::Red));
 
                 if pat_location.has_span() {
                     report.add_label(
@@ -1545,7 +1619,8 @@ impl IntoReportBuilder for SemaError {
             } => {
                 let mut report = Report::build(ReportKind::Error, *location)
                     .with_code("sema::missing_data_for_label")
-                    .with_message(&self);
+                    .with_message(&self)
+                    .with_label(Label::new(*location).with_color(Color::Red));
 
                 if expr_location.has_span() {
                     report.add_label(Label::new(*expr_location).with_message(format!(
@@ -1564,7 +1639,8 @@ impl IntoReportBuilder for SemaError {
             } => {
                 let mut report = Report::build(ReportKind::Error, *location)
                     .with_code("sema::unexpected_nullary_variant_pattern")
-                    .with_message(&self);
+                    .with_message(&self)
+                    .with_label(Label::new(*location).with_color(Color::Red));
 
                 if pat_location.has_span() {
                     report.add_label(Label::new(*pat_location).with_message(format!(
@@ -1577,12 +1653,14 @@ impl IntoReportBuilder for SemaError {
 
             Self::IllegalEmptyMatching { location } => Report::build(ReportKind::Error, *location)
                 .with_code("sema::illegal_empty_matching")
-                .with_message(&self),
+                .with_message(&self)
+                .with_label(Label::new(*location).with_color(Color::Red)),
 
             Self::AmbiguousEmptyListExprTy { location } => {
                 Report::build(ReportKind::Error, *location)
                     .with_code("sema::ambiguous_list_type")
                     .with_message(&self)
+                    .with_label(Label::new(*location).with_color(Color::Red))
                     .with_help("ascribe a list type to the expression with the `as` operator")
             }
 
@@ -1590,6 +1668,7 @@ impl IntoReportBuilder for SemaError {
                 Report::build(ReportKind::Error, *location)
                     .with_code("sema::ambiguous_list_type")
                     .with_message(&self)
+                    .with_label(Label::new(*location).with_color(Color::Red))
                     .with_help("ascribe a list type to the pattern with the `as` operator")
             }
 
@@ -1598,12 +1677,14 @@ impl IntoReportBuilder for SemaError {
                 expected_ty: _,
             } => Report::build(ReportKind::Error, *location)
                 .with_code("sema::unexpected_pattern_for_type")
-                .with_message(&self),
+                .with_message(&self)
+                .with_label(Label::new(*location).with_color(Color::Red)),
 
             Self::AmbiguousBindingPatType { location } => {
                 Report::build(ReportKind::Error, *location)
                     .with_code("sema::ambiguous_binding_type")
                     .with_message(&self)
+                    .with_label(Label::new(*location).with_color(Color::Red))
             }
 
             Self::NonExhaustiveMatchPatterns {
@@ -1630,6 +1711,7 @@ impl IntoReportBuilder for SemaError {
                 Report::build(ReportKind::Error, *location)
                     .with_code("sema::non_exhaustive_match_patterns")
                     .with_message(&self)
+                    .with_label(Label::new(*location).with_color(Color::Red))
                     .with_note(format!("no pattern matches `{witness}`"))
                     .with_note("a let pattern must be applicable to all values of this type")
             }
@@ -1639,7 +1721,8 @@ impl IntoReportBuilder for SemaError {
                 actual: _,
             } => Report::build(ReportKind::Error, *location)
                 .with_code("sema::incorrect_arity_of_main")
-                .with_message(&self),
+                .with_message(&self)
+                .with_label(Label::new(*location).with_color(Color::Red)),
         }
     }
 }
