@@ -695,6 +695,10 @@ impl<'src> Parser<'src> {
             return Ok(Some(self.parse_decl_fn(annotations)?));
         }
 
+        if self.at(Symbol::Generic) || self.at(Symbol::Fn) {
+            return Ok(Some(self.parse_decl_fn(vec![])?));
+        }
+
         if self.at(Symbol::Type) {
             return Ok(Some(self.parse_decl_type_alias()?));
         }
@@ -1535,7 +1539,8 @@ impl<'src> Parser<'src> {
                     Symbol::ListTail => ast::Builtin::ListTail,
                     Symbol::Succ => ast::Builtin::Succ,
                     Symbol::Not => ast::Builtin::Not,
-                    Symbol::NatPred => ast::Builtin::NatIsZero,
+                    Symbol::NatPred => ast::Builtin::NatPred,
+                    Symbol::NatIsZero => ast::Builtin::NatIsZero,
                     Symbol::NatRec => ast::Builtin::NatRec,
                     _ => unreachable!(),
                 };
