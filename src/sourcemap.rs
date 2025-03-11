@@ -79,6 +79,10 @@ impl SourceMap {
             .map(|&idx| &self.files[idx])
     }
 
+    pub fn get_by_id(&self, source_id: SourceId) -> &SourceFile {
+        &self.files[source_id.0 as usize]
+    }
+
     pub fn to_cache(&self) -> SourceMapCache<'_> {
         SourceMapCache { source_map: self }
     }

@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 ariadne = { version = "0.5.0", features = ["auto-color"] }
+clap = { version = "4.5.32", features = ["derive"] }
 derive_more = { version = "2.0.1", features = ["display", "from"] }
 fxhash = "0.2.1"
 num = "0.4.3"
