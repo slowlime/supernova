@@ -7,8 +7,8 @@ pub mod sema;
 pub mod sourcemap;
 pub mod util;
 
-use std::fs;
 use std::process::ExitCode;
+use std::{fs, io};
 
 use self::cli::Args;
 use self::diag::{DiagCtx, StderrDiagCtx};
@@ -18,20 +18,23 @@ use self::sourcemap::SourceMap;
 fn main() -> ExitCode {
     let args = Args::parse();
 
-    let contents = match fs::read_to_string(&args.input) {
-        Ok(input) => input,
+    let (path, contents) = match &args.input {
+        Some(path) if path != "-" => (path.as_str(), fs::read_to_string(path)),
+        _ => ("<stdin>", io::read_to_string(io::stdin())),
+    };
+
+    let contents = match contents {
+        Ok(contents) => contents,
 
         Err(e) => {
-            eprintln!(
-                "Could not read the input file `{}`: {e}",
-                args.input.display()
-            );
+            eprintln!("Could not read the input file `{path}`: {e}");
+
             return ExitCode::from(2);
         }
     };
 
     let mut sourcemap = SourceMap::new();
-    let file_id = sourcemap.add_source(args.input.display().to_string(), contents).id();
+    let file_id = sourcemap.add_source(path.into(), contents).id();
     let f = sourcemap.get_by_id(file_id);
     let cursor = Cursor::new(f);
     let lexer = Lexer::new(cursor);
