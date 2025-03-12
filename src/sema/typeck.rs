@@ -1137,7 +1137,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             if !self.ty_conforms_to(self.m.well_known_tys.nat, expected_ty_id) {
                 self.diag.emit(self.make_expr_ty_error(
                     expr_id,
-                    self.m.well_known_tys.unit,
+                    self.m.well_known_tys.nat,
                     expected_ty_id,
                     source,
                 ));
@@ -1556,6 +1556,8 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                             location: expr.args[0].location,
                             actual_ty: self.m.display_ty(arg_ty_id).to_string(),
                         });
+
+                        return Err(());
                     };
 
                     if let Some((expected_ty_id, source)) = expected_ty {
