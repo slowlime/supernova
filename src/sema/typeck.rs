@@ -181,6 +181,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
 
     fn run(mut self) -> Result {
         self.add_well_known_tys();
+        self.set_all_tys_to_error();
         self.typeck_decls()?;
         self.check_main()?;
 
@@ -197,6 +198,26 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         self.m.well_known_tys.empty_tuple = self.m.add_ty(Ty {
             kind: TyKind::Tuple(TyTuple { elems: vec![] }),
         });
+    }
+
+    fn set_all_tys_to_error(&mut self) {
+        let error_ty_id = self.m.well_known_tys.error;
+
+        for expr in self.m.exprs.values_mut() {
+            expr.ty_id = error_ty_id;
+        }
+
+        for ty_expr in self.m.ty_exprs.values_mut() {
+            ty_expr.ty_id = error_ty_id;
+        }
+
+        for pat in self.m.pats.values_mut() {
+            pat.ty_id = error_ty_id;
+        }
+
+        for binding in self.m.bindings.values_mut() {
+            binding.ty_id = error_ty_id;
+        }
     }
 
     fn check_main(&mut self) -> Result {
@@ -822,8 +843,6 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             ast::DeclKind::Dummy => {}
 
             ast::DeclKind::Fn(d) => {
-                self.m.bindings[d.binding.id].ty_id = self.m.well_known_tys.error;
-
                 assert!(d.generics.is_empty());
 
                 let mut param_ty_ids = Vec::with_capacity(d.params.len());
@@ -899,7 +918,6 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
 
     fn typeck_ty_expr(&mut self, ty_expr: &ast::TyExpr<'ast>) -> Result {
         let mut result = Ok(());
-        self.m.ty_exprs[ty_expr.id].ty_id = self.m.well_known_tys.error;
 
         match &ty_expr.kind {
             ast::TyExprKind::Dummy => {}
@@ -1027,8 +1045,6 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
     }
 
     fn typeck_expr(&mut self, expr: &ast::Expr<'ast>, expected_ty: Option<ExpectedTy>) -> Result {
-        self.m.exprs[expr.id].ty_id = self.m.well_known_tys.error;
-
         match &expr.kind {
             ast::ExprKind::Dummy => Ok(()),
             ast::ExprKind::Bool(e) => self.typeck_expr_bool(expr.id, e, expected_ty),
@@ -1462,7 +1478,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                                     builtin: *builtin,
                                 },
                             ))],
-                            list_ty_id,
+                            expected_ty_id,
                             &expr.args,
                             Some((expected_ty_id, source)),
                         )
@@ -2371,7 +2387,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         expr: &ast::ExprSeq<'ast>,
         expected_ty: Option<ExpectedTy>,
     ) -> Result {
-        let ((last_expr, last_semi), unit_exprs) = expr.exprs.split_last().unwrap();
+        let ((last_expr, _), unit_exprs) = expr.exprs.split_last().unwrap();
         let mut result = Ok(());
 
         for (unit_expr, semi) in unit_exprs {
@@ -2387,6 +2403,8 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             ));
         }
 
+        /*
+        // this is how it works in rust. I guess it's not how it works in Stella. weird.
         if last_semi.is_some() {
             if let Some((expected_ty_id, source)) = expected_ty {
                 if !self.ty_conforms_to(self.m.well_known_tys.unit, expected_ty_id) {
@@ -2415,12 +2433,14 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             self.m.exprs[expr_id].ty_id = self.m.well_known_tys.unit;
 
             result
-        } else {
-            result = result.and(self.typeck_expr(last_expr, expected_ty));
-            self.m.exprs[expr_id].ty_id = self.m.exprs[last_expr.id].ty_id;
+        } else {*/
 
-            result
-        }
+        result = result.and(self.typeck_expr(last_expr, expected_ty));
+        self.m.exprs[expr_id].ty_id = self.m.exprs[last_expr.id].ty_id;
+
+        result
+
+        /*}*/
     }
 
     fn typeck_expr_let(
@@ -2599,8 +2619,6 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
     }
 
     fn typeck_pat(&mut self, pat: &ast::Pat<'ast>, expected_ty: Option<ExpectedTy>) -> Result {
-        self.m.pats[pat.id].ty_id = self.m.well_known_tys.error;
-
         match &pat.kind {
             ast::PatKind::Dummy => Ok(()),
             ast::PatKind::Variant(p) => self.typeck_pat_variant(pat.id, p, expected_ty),

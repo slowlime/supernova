@@ -145,9 +145,6 @@ pub enum SemaError {
         as_location: Location,
     },
 
-    #[error("match expressions are not allowed")]
-    MatchExprNotAllowed { location: Location },
-
     #[error("sequence expressions are not allowed")]
     SeqExprNotAllowed {
         location: Location,
@@ -839,11 +836,6 @@ impl IntoReportBuilder for SemaError {
 
                 report
             }
-
-            Self::MatchExprNotAllowed { location } => Report::build(ReportKind::Error, *location)
-                .with_code("sema::match_expr_not_allowed")
-                .with_message(&self)
-                .with_label(Label::new(*location).with_color(Color::Red)),
 
             Self::SeqExprNotAllowed {
                 location,

@@ -719,17 +719,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 }
             }
 
-            ast::ExprKind::Match(_) => {
-                if !self.m.is_feature_enabled(FeatureKind::Patterns) {
-                    result = Err(());
-                    self.diag.emit(make_feature_disabled_error(
-                        SemaError::MatchExprNotAllowed {
-                            location: def.location,
-                        },
-                        FeatureKind::Patterns,
-                    ));
-                }
-            }
+            ast::ExprKind::Match(_) => {}
 
             ast::ExprKind::List(_) => {
                 if !self.m.is_feature_enabled(FeatureKind::Lists) {
@@ -948,7 +938,9 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             }
 
             ast::PatKind::Cons(pat) => {
-                if !self.m.is_feature_enabled(FeatureKind::StructuralPatterns) {
+                if !matches!(pat.cons, ast::Cons::Inl | ast::Cons::Inr)
+                    && !self.m.is_feature_enabled(FeatureKind::StructuralPatterns)
+                {
                     result = Err(());
                     self.diag.emit(make_feature_disabled_error(
                         SemaError::StructuralPatternNotAllowed {

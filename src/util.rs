@@ -31,8 +31,8 @@ pub fn format_list<T: Display>(
                             write!(f, ", ")?;
                         }
 
-                        if idx + 1 == self.1.len() {
-                            write!(f, "{}", self.1)?;
+                        if idx + 1 == self.0.len() {
+                            write!(f, "{} ", self.1)?;
                         }
 
                         write!(f, "{v}")?;

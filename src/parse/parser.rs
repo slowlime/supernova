@@ -481,7 +481,7 @@ prec_table! {
             Symbol::Not => |parser, prec| parser.parse_expr_apply(prec, None),
             Symbol::NatPred => |parser, prec| parser.parse_expr_apply(prec, None),
             Symbol::NatIsZero => |parser, prec| parser.parse_expr_apply(prec, None),
-            Symbol::Fix => |parser, prec| parser.parse_expr_apply(prec, None),
+            Symbol::Fix => |parser, prec| parser.parse_expr_fix(prec),
             Symbol::NatRec => |parser, prec| parser.parse_expr_apply(prec, None),
             Symbol::Fold => |parser, prec| parser.parse_expr_fold(prec),
             Symbol::Unfold => |parser, prec| parser.parse_expr_unfold(prec),
@@ -502,6 +502,14 @@ fn primary_ty_expr_prec() -> u8 {
     TY_EXPR_PREC_TABLE
         .prefix
         .get(&TokenKind::Symbol(Symbol::LBrace))
+        .unwrap()
+        .1
+}
+
+fn rel_expr_prec() -> u8 {
+    EXPR_PREC_TABLE
+        .infix
+        .get(&TokenKind::Symbol(Symbol::Less))
         .unwrap()
         .1
 }
@@ -1466,6 +1474,23 @@ impl<'src> Parser<'src> {
         })
     }
 
+    fn parse_expr_fix(&mut self, _prec: u8) -> Result<ast::Expr<'src>, ParserError<'src>> {
+        let fix_kw = self.expect(Symbol::Fix)?;
+        self.expect(Symbol::LParen)?;
+        let expr = self.parse_expr_impl(0)?;
+        let rparen = self.expect(Symbol::RParen)?;
+
+        Ok(ast::Expr {
+            id: Default::default(),
+            location: fix_kw.span.convex_hull(&rparen.span).into(),
+            kind: ast::ExprFix {
+                fix_kw: Some(fix_kw),
+                expr: Box::new(expr),
+            }
+            .into(),
+        })
+    }
+
     fn parse_expr_fold(&mut self, prec: u8) -> Result<ast::Expr<'src>, ParserError<'src>> {
         let fold_kw = self.expect(Symbol::Fold)?;
         self.expect(Symbol::LBracket)?;
@@ -1700,7 +1725,7 @@ impl<'src> Parser<'src> {
     ) -> Result<ast::Expr<'src>, ParserError<'src>> {
         let lbrace = self.expect(Symbol::LBrace)?;
 
-        if self.at(TokenKind::Ident) && self.lookahead(1, Symbol::Colon) {
+        if self.at(TokenKind::Ident) && self.lookahead(1, Symbol::Equals) {
             self.parse_expr_record(lbrace)
         } else {
             self.parse_expr_tuple(lbrace)
@@ -1745,7 +1770,7 @@ impl<'src> Parser<'src> {
         } else {
             loop {
                 let name = self.parse_name("a record field name")?;
-                self.expect(Symbol::Colon)?;
+                self.expect(Symbol::Equals)?;
                 let expr = self.parse_expr_impl(0)?;
                 fields.push(ast::ExprRecordField { name, expr });
 
@@ -1787,9 +1812,9 @@ impl<'src> Parser<'src> {
         })
     }
 
-    fn parse_expr_match(&mut self, prec: u8) -> Result<ast::Expr<'src>, ParserError<'src>> {
+    fn parse_expr_match(&mut self, _prec: u8) -> Result<ast::Expr<'src>, ParserError<'src>> {
         let match_kw = self.expect(Symbol::Match)?;
-        let expr = self.parse_expr_impl(prec)?;
+        let expr = self.parse_expr_impl(rel_expr_prec())?;
         self.expect(Symbol::LBrace)?;
 
         let mut arms = vec![];
@@ -1885,7 +1910,18 @@ impl<'src> Parser<'src> {
 
             let expr = self.parse_expr_impl(prec)?;
             let semicolon = self.consume(Symbol::Semicolon)?;
+            let is_end = semicolon.is_none();
             exprs.push((expr, semicolon));
+
+            if is_end {
+                break;
+            }
+        }
+
+        if exprs.len() == 1 {
+            // we have an expression terminated with `;`.
+            // this is not a sequence expression.
+            return Ok(exprs.pop().unwrap().0);
         }
 
         Ok(ast::Expr {

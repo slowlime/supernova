@@ -314,7 +314,7 @@ impl PatMat {
                 .into_iter()
                 .find(|c| !present.contains(c)),
 
-            TyKind::Fn(_) => unreachable!(),
+            TyKind::Fn(_) => None,
 
             TyKind::Tuple(_) => [Cons::Tuple].into_iter().find(|c| !present.contains(c)),
 

@@ -120,8 +120,7 @@ macro_rules! define_ext {
 
 define_ext! {
     // Syntactic sugar and derived forms.
-    Patterns "patterns";
-    StructuralPatterns "structural patterns" (ast::Extension::StructuralPatterns) => Patterns;
+    StructuralPatterns "structural patterns" (ast::Extension::StructuralPatterns);
     LetBindings "let-bindings" (ast::Extension::LetBindings);
     NestedFunctionDeclarations "nested function declarations"
         (ast::Extension::NestedFunctionDeclarations);
@@ -145,10 +144,10 @@ define_ext! {
     EmptyTuple "empty tuple/record";
     Tuples "tuples" (ast::Extension::Tuples) => EmptyTuple, Pairs;
     Records "records" (ast::Extension::Records) => EmptyTuple;
-    SumTypes "sum types" (ast::Extension::SumTypes) => Patterns;
-    Variants "variant types" (ast::Extension::Variants) => Patterns;
+    SumTypes "sum types" (ast::Extension::SumTypes);
+    Variants "variant types" (ast::Extension::Variants);
     NullaryVariantLabels "nullary variant labels" (ast::Extension::NullaryVariantLabels);
-    Enumerations "enumeration types" => Patterns;
+    Enumerations "enumeration types";
     Lists "list types" (ast::Extension::Lists);
 
     // References.

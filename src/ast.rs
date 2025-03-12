@@ -146,7 +146,7 @@ impl<'src> AstRecurse<'src> for DeclFn<'src> {
         }
 
         for decl in &self.decls {
-            decl.recurse(visitor);
+            visitor.visit_decl(decl);
         }
 
         self.body.recurse(visitor);
@@ -171,7 +171,7 @@ impl<'src> AstRecurse<'src> for DeclFn<'src> {
         }
 
         for decl in &mut self.decls {
-            decl.recurse_mut(visitor);
+            visitor.visit_decl(decl);
         }
 
         self.body.recurse_mut(visitor);
