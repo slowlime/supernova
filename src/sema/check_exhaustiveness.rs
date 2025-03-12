@@ -3,9 +3,10 @@
 
 use std::collections::VecDeque;
 use std::fmt::{self, Display};
+use std::mem;
 
 use fxhash::FxHashSet;
-use num::{BigUint, FromPrimitive};
+use num::{BigUint, Zero};
 
 use crate::ast;
 use crate::ast::visit::{AstRecurse, DefaultVisitor};
@@ -65,6 +66,7 @@ impl DeconstructedPat {
                         }
 
                         if pat.fields[1].cons == Cons::EmptyList {
+                            elems.push(&pat.fields[0]);
                             write!(f, "[")?;
 
                             for (idx, elem) in elems.iter().enumerate() {
@@ -78,7 +80,7 @@ impl DeconstructedPat {
                             write!(f, "]")
                         } else {
                             for elem in &elems {
-                                write!(f, "cons({}", elem.display(self.1))?;
+                                write!(f, "cons({}, ", elem.display(self.1))?;
                             }
 
                             write!(
@@ -96,7 +98,31 @@ impl DeconstructedPat {
                         }
                     }
 
-                    Cons::Succ => write!(f, "succ({})", self.0.fields[0].display(self.1)),
+                    Cons::Succ => {
+                        let mut n = 0usize;
+                        let mut pat = self.0;
+
+                        while pat.cons == Cons::Succ {
+                            n += 1;
+                            pat = &pat.fields[0];
+                        }
+
+                        if let Cons::Int(m) = &pat.cons {
+                            write!(f, "{}", m + n)
+                        } else {
+                            for _ in 0..n {
+                                write!(f, "succ(")?;
+                            }
+
+                            write!(f, "{}", pat.display(self.1))?;
+
+                            for _ in 0..n {
+                                write!(f, ")")?;
+                            }
+
+                            Ok(())
+                        }
+                    }
 
                     Cons::Tuple => {
                         write!(f, "{{")?;
@@ -288,6 +314,35 @@ struct PatMat {
 }
 
 impl PatMat {
+    fn split_first_conses(&mut self) {
+        // natural literals are aliases for iterated `succ`. if the matrix contains both a non-zero
+        // literal and a `succ`, we want to split off an implicit `succ` from these literals to
+        // avoid problems later.
+        if self.rows.iter().any(|row| row.pats[0].cons == Cons::Succ) {
+            for row in &mut self.rows {
+                match &mut row.pats[0].cons {
+                    Cons::Int(n) if n.is_zero() => {}
+
+                    Cons::Int(n) => {
+                        *n -= 1usize;
+                        let ty_id = row.pats[0].ty_id;
+                        let pat = mem::replace(
+                            &mut row.pats[0],
+                            DeconstructedPat {
+                                ty_id,
+                                cons: Cons::Succ,
+                                fields: vec![],
+                            },
+                        );
+                        row.pats[0].fields.push(pat);
+                    }
+
+                    _ => {}
+                }
+            }
+        }
+    }
+
     fn first_conses<'a>(&'a self, m: &Module<'_>) -> (FxHashSet<&'a Cons>, Option<Cons>) {
         let mut present = FxHashSet::default();
 
@@ -306,8 +361,18 @@ impl PatMat {
                 .into_iter()
                 .find(|c| !present.contains(c)),
 
-            TyKind::Nat => (0..)
-                .map(|n| Cons::Int(BigUint::from_u64(n).unwrap()))
+            TyKind::Nat if present.contains(&Cons::Succ) => {
+                const ZERO: Cons = Cons::Int(BigUint::ZERO);
+
+                if present.contains(&ZERO) {
+                    None
+                } else {
+                    Some(ZERO)
+                }
+            }
+
+            TyKind::Nat => (0usize..)
+                .map(|n| Cons::Int(n.into()))
                 .find(|c| !present.contains(c)),
 
             TyKind::Sum(_, _) => [Cons::Inl, Cons::Inr]
@@ -549,7 +614,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         }
     }
 
-    fn do_check_exhaustiveness(&mut self, mat: PatMat, arity: usize) -> Option<PatMatRow> {
+    fn do_check_exhaustiveness(&mut self, mut mat: PatMat, arity: usize) -> Option<PatMatRow> {
         if arity == 0 {
             return if mat.rows.is_empty() {
                 Some(PatMatRow {
@@ -559,6 +624,8 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 None
             };
         }
+
+        mat.split_first_conses();
 
         let (present, missing) = mat.first_conses(self.m);
         let head_ty_id = mat.ty_ids[0];

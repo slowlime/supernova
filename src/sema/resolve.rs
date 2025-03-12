@@ -73,10 +73,14 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
     fn resolve_decls(&mut self) -> Result {
         let mut result = Ok(());
         let mut unprocessed = self.m.root_decl_ids().collect::<Vec<_>>();
+        // so that diagnostics refer to declarations in the correct order.
+        unprocessed.reverse();
 
         while let Some(decl_id) = unprocessed.pop() {
             result = result.and(self.resolve_decl(decl_id));
+            let start = unprocessed.len();
             self.m.decls[decl_id].for_each_child(|decl_id| unprocessed.push(decl_id));
+            unprocessed[start..].reverse();
         }
 
         result
