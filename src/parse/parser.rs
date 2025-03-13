@@ -267,6 +267,7 @@ struct PrecTable<F: ParseResultFamily> {
             for<'src> fn(
                 &mut Parser<'src>,
                 u8,
+                Location,
                 F::R<'src>,
             ) -> Result<F::R<'src>, ParserError<'src>>,
         ),
@@ -280,6 +281,7 @@ struct PrecTable<F: ParseResultFamily> {
             for<'src> fn(
                 &mut Parser<'src>,
                 u8,
+                Location,
                 F::R<'src>,
             ) -> Result<F::R<'src>, ParserError<'src>>,
         ),
@@ -371,7 +373,7 @@ prec_table! {
         },
 
         none infix {
-            Symbol::Plus => |parser, prec, lhs| parser.parse_ty_expr_sum(prec, lhs),
+            Symbol::Plus => |parser, prec, start, lhs| parser.parse_ty_expr_sum(prec, start, lhs),
         },
 
         prefix {
@@ -414,7 +416,7 @@ prec_table! {
         },
 
         left infix {
-            Symbol::Semicolon => |parser, prec, lhs| parser.parse_expr_seq(prec, lhs),
+            Symbol::Semicolon => |parser, prec, start, lhs| parser.parse_expr_seq(prec, start, lhs),
         },
 
         prefix {
@@ -422,21 +424,21 @@ prec_table! {
         },
 
         right infix {
-            Symbol::ColonEquals => |parser, prec, lhs| parser.parse_expr_binary(prec, lhs),
+            Symbol::ColonEquals => |parser, prec, start, lhs| parser.parse_expr_binary(prec, start, lhs),
         },
 
         none infix {
-            Symbol::Less => |parser, prec, lhs| parser.parse_expr_binary(prec, lhs),
-            Symbol::LessEquals => |parser, prec, lhs| parser.parse_expr_binary(prec, lhs),
-            Symbol::Greater => |parser, prec, lhs| parser.parse_expr_binary(prec, lhs),
-            Symbol::GreaterEquals => |parser, prec, lhs| parser.parse_expr_binary(prec, lhs),
-            Symbol::EqualsEquals => |parser, prec, lhs| parser.parse_expr_binary(prec, lhs),
-            Symbol::BangEquals => |parser, prec, lhs| parser.parse_expr_binary(prec, lhs),
+            Symbol::Less => |parser, prec, start, lhs| parser.parse_expr_binary(prec, start, lhs),
+            Symbol::LessEquals => |parser, prec, start, lhs| parser.parse_expr_binary(prec, start, lhs),
+            Symbol::Greater => |parser, prec, start, lhs| parser.parse_expr_binary(prec, start, lhs),
+            Symbol::GreaterEquals => |parser, prec, start, lhs| parser.parse_expr_binary(prec, start, lhs),
+            Symbol::EqualsEquals => |parser, prec, start, lhs| parser.parse_expr_binary(prec, start, lhs),
+            Symbol::BangEquals => |parser, prec, start, lhs| parser.parse_expr_binary(prec, start, lhs),
         },
 
         postfix {
-            Symbol::As => |parser, prec, lhs| parser.parse_expr_ascription(prec, lhs),
-            Symbol::Cast => |parser, prec, lhs| parser.parse_expr_cast(prec, lhs),
+            Symbol::As => |parser, prec, start, lhs| parser.parse_expr_ascription(prec, start, lhs),
+            Symbol::Cast => |parser, prec, start, lhs| parser.parse_expr_cast(prec, start, lhs),
         },
 
         prefix {
@@ -447,15 +449,15 @@ prec_table! {
         },
 
         left infix {
-            Symbol::Plus => |parser, prec, lhs| parser.parse_expr_binary(prec, lhs),
-            Symbol::Minus => |parser, prec, lhs| parser.parse_expr_binary(prec, lhs),
-            Symbol::Or => |parser, prec, lhs| parser.parse_expr_binary(prec, lhs),
+            Symbol::Plus => |parser, prec, start, lhs| parser.parse_expr_binary(prec, start, lhs),
+            Symbol::Minus => |parser, prec, start, lhs| parser.parse_expr_binary(prec, start, lhs),
+            Symbol::Or => |parser, prec, start, lhs| parser.parse_expr_binary(prec, start, lhs),
         },
 
         left infix {
-            Symbol::Star => |parser, prec, lhs| parser.parse_expr_binary(prec, lhs),
-            Symbol::Slash => |parser, prec, lhs| parser.parse_expr_binary(prec, lhs),
-            Symbol::And => |parser, prec, lhs| parser.parse_expr_binary(prec, lhs),
+            Symbol::Star => |parser, prec, start, lhs| parser.parse_expr_binary(prec, start, lhs),
+            Symbol::Slash => |parser, prec, start, lhs| parser.parse_expr_binary(prec, start, lhs),
+            Symbol::And => |parser, prec, start, lhs| parser.parse_expr_binary(prec, start, lhs),
         },
 
         prefix {
@@ -464,9 +466,9 @@ prec_table! {
         },
 
         postfix {
-            Symbol::LParen => |parser, prec, lhs| parser.parse_expr_apply(prec, Some(lhs)),
-            Symbol::LBracket => |parser, prec, lhs| parser.parse_expr_ty_apply(prec, lhs),
-            Symbol::Dot => |parser, prec, lhs| parser.parse_expr_field(prec, lhs),
+            Symbol::LParen => |parser, prec, start, lhs| parser.parse_expr_apply(prec, Some((start, lhs))),
+            Symbol::LBracket => |parser, prec, start, lhs| parser.parse_expr_ty_apply(prec, start, lhs),
+            Symbol::Dot => |parser, prec, start, lhs| parser.parse_expr_field(prec, start, lhs),
         },
 
         prefix {
@@ -519,18 +521,37 @@ fn rel_expr_prec() -> u8 {
 
 pub struct Parser<'src> {
     lexer: Lexer<'src>,
+    last_token_location: Option<Location>,
 }
 
 impl<'src> Parser<'src> {
     pub fn new(lexer: Lexer<'src>) -> Self {
-        Self { lexer }
+        Self {
+            lexer,
+            last_token_location: None,
+        }
+    }
+
+    fn next_token(&mut self) -> Result<Token<'src>, LexerError> {
+        let r = self.lexer.next().unwrap();
+
+        match &r {
+            Ok(token) => self.last_token_location = Some(token.span.into()),
+            Err(e) => self.last_token_location = Some(e.span.into()),
+        }
+
+        r
+    }
+
+    fn last_token_location(&self) -> Location {
+        self.last_token_location.unwrap()
     }
 
     fn consume(&mut self, matcher: impl Matcher) -> Result<Option<Token<'src>>, ParserError<'src>> {
         match self.lexer.peek().unwrap() {
-            Ok(token) if matcher.matches(token) => Ok(Some(self.lexer.next().unwrap().unwrap())),
+            Ok(token) if matcher.matches(token) => Ok(Some(self.next_token().unwrap())),
             Ok(_) => Ok(None),
-            Err(_) => Err(self.lexer.next().unwrap().unwrap_err().into()),
+            Err(_) => Err(self.next_token().unwrap_err().into()),
         }
     }
 
@@ -554,12 +575,12 @@ impl<'src> Parser<'src> {
         expected: impl IntoExpected,
     ) -> Result<Token<'src>, ParserError<'src>> {
         match self.lexer.peek().unwrap() {
-            Ok(token) if matcher.matches(token) => Ok(self.lexer.next().unwrap().unwrap()),
+            Ok(token) if matcher.matches(token) => Ok(self.next_token().unwrap()),
             Ok(token) => Err(ParserError::UnexpectedToken {
                 token: token.clone(),
                 expected: expected.into_expected(),
             }),
-            Err(_) => Err(self.lexer.next().unwrap().unwrap_err().into()),
+            Err(_) => Err(self.next_token().unwrap_err().into()),
         }
     }
 
@@ -568,12 +589,12 @@ impl<'src> Parser<'src> {
         matcher: impl Matcher + Expected,
     ) -> Result<Token<'src>, ParserError<'src>> {
         match self.lexer.peek().unwrap() {
-            Ok(token) if matcher.matches(token) => Ok(self.lexer.next().unwrap().unwrap()),
+            Ok(token) if matcher.matches(token) => Ok(self.next_token().unwrap()),
             Ok(token) => Err(ParserError::UnexpectedToken {
                 token: token.clone(),
                 expected: matcher.expected(),
             }),
-            Err(_) => Err(self.lexer.next().unwrap().unwrap_err().into()),
+            Err(_) => Err(self.next_token().unwrap_err().into()),
         }
     }
 
@@ -583,9 +604,9 @@ impl<'src> Parser<'src> {
         prec: u8,
         expected: impl IntoExpected,
     ) -> Result<F::R<'src>, ParserError<'src>> {
-        let mut lhs = match self.lexer.peek().unwrap() {
+        let (start, mut lhs) = match self.lexer.peek().unwrap() {
             Ok(token) => match table.prefix.get(&token.kind()) {
-                Some(&((), rhs_prec, parse)) => parse(self, rhs_prec)?,
+                Some(&((), rhs_prec, parse)) => (token.span.into(), parse(self, rhs_prec)?),
 
                 None => {
                     return Err(ParserError::UnexpectedToken {
@@ -595,7 +616,7 @@ impl<'src> Parser<'src> {
                 }
             },
 
-            Err(_) => return Err(self.lexer.next().unwrap().unwrap_err().into()),
+            Err(_) => return Err(self.next_token().unwrap_err().into()),
         };
 
         loop {
@@ -606,7 +627,7 @@ impl<'src> Parser<'src> {
                             break;
                         }
 
-                        lhs = parse(self, lhs_prec, lhs)?;
+                        lhs = parse(self, lhs_prec, start, lhs)?;
                     } else if let Some(&(lhs_prec, rhs_prec, parse)) =
                         table.infix.get(&token.kind())
                     {
@@ -614,13 +635,13 @@ impl<'src> Parser<'src> {
                             break;
                         }
 
-                        lhs = parse(self, rhs_prec, lhs)?;
+                        lhs = parse(self, rhs_prec, start, lhs)?;
                     } else {
                         break;
                     }
                 }
 
-                Err(_) => return Err(self.lexer.next().unwrap().unwrap_err().into()),
+                Err(_) => return Err(self.next_token().unwrap_err().into()),
             }
         }
 
@@ -825,7 +846,7 @@ impl<'src> Parser<'src> {
         self.expect_with_message(Symbol::LBrace, "a function body")?;
         let decls = self.parse_decls()?;
         let body = self.parse_fn_body()?;
-        let end = self.expect(Symbol::RBrace)?;
+        self.expect(Symbol::RBrace)?;
 
         let start = annotations
             .iter()
@@ -833,11 +854,10 @@ impl<'src> Parser<'src> {
             .chain(generic_kw.as_ref().map(|token| token.span))
             .next()
             .unwrap_or(fn_kw.span);
-        let span = start.convex_hull(&end.span);
 
         Ok(ast::Decl {
             id: Default::default(),
-            location: span.into(),
+            location: start.convex_hull(&self.last_token_location()),
             kind: ast::DeclFn {
                 annotations,
                 generic_kw,
@@ -867,7 +887,7 @@ impl<'src> Parser<'src> {
 
         Ok(ast::Decl {
             id: Default::default(),
-            location: type_kw.span.convex_hull(&ty_expr.location),
+            location: type_kw.span.convex_hull(&self.last_token_location()),
             kind: ast::DeclTypeAlias {
                 type_kw: Some(type_kw),
                 binding,
@@ -904,7 +924,7 @@ impl<'src> Parser<'src> {
 
         Ok(ast::Decl {
             id: Default::default(),
-            location: exception_kw.span.convex_hull(&ty_expr.location),
+            location: exception_kw.span.convex_hull(&self.last_token_location()),
             kind: ast::DeclExceptionType {
                 exception_kw: Some(exception_kw),
                 ty_expr,
@@ -923,7 +943,7 @@ impl<'src> Parser<'src> {
 
         Ok(ast::Decl {
             id: Default::default(),
-            location: exception_kw.span.convex_hull(&variant_ty_expr.location),
+            location: exception_kw.span.convex_hull(&self.last_token_location()),
             kind: ast::DeclExceptionVariant {
                 exception_kw: Some(exception_kw),
                 name,
@@ -985,7 +1005,7 @@ impl<'src> Parser<'src> {
 
         Ok(ast::TyExpr {
             id: Default::default(),
-            location: ref_token.span.convex_hull(&ty_expr.location),
+            location: ref_token.span.convex_hull(&self.last_token_location()),
             kind: ast::TyExprRef {
                 ref_token: Some(ref_token),
                 ty_expr: Box::new(ty_expr),
@@ -997,6 +1017,7 @@ impl<'src> Parser<'src> {
     fn parse_ty_expr_sum(
         &mut self,
         prec: u8,
+        start: Location,
         lhs: ast::TyExpr<'src>,
     ) -> Result<ast::TyExpr<'src>, ParserError<'src>> {
         let plus_token = self.expect(Symbol::Plus)?;
@@ -1004,7 +1025,7 @@ impl<'src> Parser<'src> {
 
         Ok(ast::TyExpr {
             id: Default::default(),
-            location: lhs.location.convex_hull(&rhs.location),
+            location: start.convex_hull(&self.last_token_location()),
             kind: ast::TyExprSum {
                 lhs: Box::new(lhs),
                 plus_token: Some(plus_token),
@@ -1035,7 +1056,7 @@ impl<'src> Parser<'src> {
 
         Ok(ast::TyExpr {
             id: Default::default(),
-            location: fn_kw.span.convex_hull(&ret.location),
+            location: fn_kw.span.convex_hull(&self.last_token_location()),
             kind: ast::TyExprFn {
                 fn_kw: Some(fn_kw),
                 params,
@@ -1062,7 +1083,7 @@ impl<'src> Parser<'src> {
         }
 
         let ty_expr = self.parse_ty_expr_impl(prec)?;
-        let location = forall_kw.span.convex_hull(&ty_expr.location);
+        let location = forall_kw.span.convex_hull(&self.last_token_location());
 
         Ok(bindings
             .into_iter()
@@ -1091,7 +1112,7 @@ impl<'src> Parser<'src> {
 
         Ok(ast::TyExpr {
             id: Default::default(),
-            location: mu_kw.span.convex_hull(&ty_expr.location),
+            location: mu_kw.span.convex_hull(&self.last_token_location()),
             kind: ast::TyExprMu {
                 mu_kw: Some(mu_kw),
                 binding,
@@ -1120,23 +1141,19 @@ impl<'src> Parser<'src> {
     ) -> Result<ast::TyExpr<'src>, ParserError<'src>> {
         let mut elems = vec![];
 
-        let rbrace = if let Some(token) = self.consume(Symbol::RBrace)? {
-            token
-        } else {
+        if self.consume(Symbol::RBrace)?.is_none() {
             loop {
                 elems.push(self.parse_ty_expr_impl(0)?);
 
-                let token = self.expect([Symbol::Comma, Symbol::RBrace])?;
-
-                if Symbol::RBrace.matches(&token) {
-                    break token;
+                if Symbol::RBrace.matches(&self.expect([Symbol::Comma, Symbol::RBrace])?) {
+                    break;
                 }
             }
         };
 
         Ok(ast::TyExpr {
             id: Default::default(),
-            location: lbrace.span.convex_hull(&rbrace.span).into(),
+            location: lbrace.span.convex_hull(&self.last_token_location()),
             kind: ast::TyExprTuple { elems }.into(),
         })
     }
@@ -1147,26 +1164,22 @@ impl<'src> Parser<'src> {
     ) -> Result<ast::TyExpr<'src>, ParserError<'src>> {
         let mut fields = vec![];
 
-        let rbrace = if let Some(token) = self.consume(Symbol::RBrace)? {
-            token
-        } else {
+        if self.consume(Symbol::RBrace)?.is_none() {
             loop {
                 let name = self.parse_name("a record field name")?;
                 self.expect(Symbol::Colon)?;
                 let ty_expr = self.parse_ty_expr_impl(0)?;
                 fields.push(ast::TyExprRecordField { name, ty_expr });
 
-                let token = self.expect([Symbol::Comma, Symbol::RBrace])?;
-
-                if Symbol::RBrace.matches(&token) {
-                    break token;
+                if Symbol::RBrace.matches(&self.expect([Symbol::Comma, Symbol::RBrace])?) {
+                    break;
                 }
             }
         };
 
         Ok(ast::TyExpr {
             id: Default::default(),
-            location: lbrace.span.convex_hull(&rbrace.span).into(),
+            location: lbrace.span.convex_hull(&self.last_token_location()),
             kind: ast::TyExprRecord { fields }.into(),
         })
     }
@@ -1175,9 +1188,7 @@ impl<'src> Parser<'src> {
         let ltriangle = self.expect(Symbol::LTriangle)?;
         let mut fields = vec![];
 
-        let rtriangle = if let Some(token) = self.consume(Symbol::RTriangle)? {
-            token
-        } else {
+        if self.consume(Symbol::RTriangle)?.is_none() {
             loop {
                 let name = self.parse_name("a variant name")?;
 
@@ -1189,17 +1200,15 @@ impl<'src> Parser<'src> {
 
                 fields.push(ast::TyExprVariantField { name, ty_expr });
 
-                let token = self.expect([Symbol::Comma, Symbol::RTriangle])?;
-
-                if Symbol::RTriangle.matches(&token) {
-                    break token;
+                if Symbol::RTriangle.matches(&self.expect([Symbol::Comma, Symbol::RTriangle])?) {
+                    break;
                 }
             }
         };
 
         Ok(ast::TyExpr {
             id: Default::default(),
-            location: ltriangle.span.convex_hull(&rtriangle.span).into(),
+            location: ltriangle.span.convex_hull(&self.last_token_location()),
             kind: ast::TyExprVariant { fields }.into(),
         })
     }
@@ -1207,11 +1216,11 @@ impl<'src> Parser<'src> {
     fn parse_ty_expr_list(&mut self, _prec: u8) -> Result<ast::TyExpr<'src>, ParserError<'src>> {
         let lbracket = self.expect(Symbol::LBracket)?;
         let ty_expr = self.parse_ty_expr_impl(0)?;
-        let rbracket = self.expect(Symbol::RBracket)?;
+        self.expect(Symbol::RBracket)?;
 
         Ok(ast::TyExpr {
             id: Default::default(),
-            location: lbracket.span.convex_hull(&rbracket.span).into(),
+            location: lbracket.span.convex_hull(&self.last_token_location()),
             kind: ast::TyExprList {
                 ty_expr: Box::new(ty_expr),
             }
@@ -1333,16 +1342,13 @@ impl<'src> Parser<'src> {
     fn parse_expr_field(
         &mut self,
         _prec: u8,
+        start: Location,
         base: ast::Expr<'src>,
     ) -> Result<ast::Expr<'src>, ParserError<'src>> {
         self.expect(Symbol::Dot)?;
 
-        let field_location;
         let field = if self.at(TokenKind::Ident) {
-            let name = self.parse_name("a field name")?;
-            field_location = name.location();
-
-            ast::ExprFieldName::Name(name)
+            ast::ExprFieldName::Name(self.parse_name("a field name")?)
         } else {
             let token = self.expect_with_message(TokenKind::Int, ["a field name", "an index"])?;
             let index = token
@@ -1351,14 +1357,14 @@ impl<'src> Parser<'src> {
                 .unwrap()
                 .try_into()
                 .map_err(|_| ParserError::TupleIndexTooLarge { span: token.span })?;
-            field_location = token.span.into();
+            let field_location = token.span.into();
 
             ast::ExprFieldName::Index(field_location, index)
         };
 
         Ok(ast::Expr {
             id: Default::default(),
-            location: base.location.convex_hull(&field_location),
+            location: start.convex_hull(&self.last_token_location()),
             kind: ast::ExprField {
                 base: Box::new(base),
                 field,
@@ -1381,11 +1387,11 @@ impl<'src> Parser<'src> {
         let throw_kw = self.expect(Symbol::Throw)?;
         self.expect(Symbol::LParen)?;
         let exc = self.parse_expr_impl(0)?;
-        let rparen = self.expect(Symbol::RParen)?;
+        self.expect(Symbol::RParen)?;
 
         Ok(ast::Expr {
             id: Default::default(),
-            location: throw_kw.span.convex_hull(&rparen.span).into(),
+            location: throw_kw.span.convex_hull(&self.last_token_location()),
             kind: ast::ExprThrow { exc: Box::new(exc) }.into(),
         })
     }
@@ -1416,11 +1422,11 @@ impl<'src> Parser<'src> {
     ) -> Result<ast::Expr<'src>, ParserError<'src>> {
         self.expect(Symbol::LBrace)?;
         let arm = self.parse_arm()?;
-        let rbrace = self.expect(Symbol::RBrace)?;
+        self.expect(Symbol::RBrace)?;
 
         Ok(ast::Expr {
             id: Default::default(),
-            location: try_kw.span.convex_hull(&rbrace.span).into(),
+            location: try_kw.span.convex_hull(&self.last_token_location()),
             kind: ast::ExprTry {
                 try_expr: Box::new(try_expr),
                 fallback: ast::ExprTryFallback::Catch(Box::new(arm)),
@@ -1442,11 +1448,11 @@ impl<'src> Parser<'src> {
         self.expect(Symbol::With)?;
         self.expect(Symbol::LBrace)?;
         let fallback = self.parse_expr_impl(0)?;
-        let rbrace = self.expect(Symbol::RBrace)?;
+        self.expect(Symbol::RBrace)?;
 
         Ok(ast::Expr {
             id: Default::default(),
-            location: try_kw.span.convex_hull(&rbrace.span).into(),
+            location: try_kw.span.convex_hull(&self.last_token_location()),
             kind: ast::ExprTryCast {
                 try_expr: Box::new(try_expr),
                 ty_expr,
@@ -1464,11 +1470,11 @@ impl<'src> Parser<'src> {
     ) -> Result<ast::Expr<'src>, ParserError<'src>> {
         self.expect(Symbol::LBrace)?;
         let fallback = self.parse_expr_impl(0)?;
-        let rbrace = self.expect(Symbol::RBrace)?;
+        self.expect(Symbol::RBrace)?;
 
         Ok(ast::Expr {
             id: Default::default(),
-            location: try_kw.span.convex_hull(&rbrace.span).into(),
+            location: try_kw.span.convex_hull(&self.last_token_location()),
             kind: ast::ExprTry {
                 try_expr: Box::new(try_expr),
                 fallback: ast::ExprTryFallback::With(Box::new(fallback)),
@@ -1481,11 +1487,11 @@ impl<'src> Parser<'src> {
         let fix_kw = self.expect(Symbol::Fix)?;
         self.expect(Symbol::LParen)?;
         let expr = self.parse_expr_impl(0)?;
-        let rparen = self.expect(Symbol::RParen)?;
+        self.expect(Symbol::RParen)?;
 
         Ok(ast::Expr {
             id: Default::default(),
-            location: fix_kw.span.convex_hull(&rparen.span).into(),
+            location: fix_kw.span.convex_hull(&self.last_token_location()),
             kind: ast::ExprFix {
                 fix_kw: Some(fix_kw),
                 expr: Box::new(expr),
@@ -1503,7 +1509,7 @@ impl<'src> Parser<'src> {
 
         Ok(ast::Expr {
             id: Default::default(),
-            location: fold_kw.span.convex_hull(&expr.location),
+            location: fold_kw.span.convex_hull(&self.last_token_location()),
             kind: ast::ExprFold {
                 fold_kw: Some(fold_kw),
                 ty_expr,
@@ -1522,7 +1528,7 @@ impl<'src> Parser<'src> {
 
         Ok(ast::Expr {
             id: Default::default(),
-            location: unfold_kw.span.convex_hull(&expr.location),
+            location: unfold_kw.span.convex_hull(&self.last_token_location()),
             kind: ast::ExprUnfold {
                 unfold_kw: Some(unfold_kw),
                 ty_expr,
@@ -1535,10 +1541,10 @@ impl<'src> Parser<'src> {
     fn parse_expr_apply(
         &mut self,
         _prec: u8,
-        lhs: Option<ast::Expr<'src>>,
+        lhs: Option<(Location, ast::Expr<'src>)>,
     ) -> Result<ast::Expr<'src>, ParserError<'src>> {
-        let callee = match lhs {
-            Some(lhs) => ast::Callee::Expr(Box::new(lhs)),
+        let (start, callee) = match lhs {
+            Some((start, lhs)) => (start, ast::Callee::Expr(Box::new(lhs))),
 
             None => {
                 let kw = self.expect_with_message(
@@ -1573,10 +1579,13 @@ impl<'src> Parser<'src> {
                     _ => unreachable!(),
                 };
 
-                ast::Callee::Builtin {
-                    kw: Some(kw),
-                    builtin,
-                }
+                (
+                    kw.span.into(),
+                    ast::Callee::Builtin {
+                        kw: Some(kw),
+                        builtin,
+                    },
+                )
             }
         };
 
@@ -1598,7 +1607,7 @@ impl<'src> Parser<'src> {
 
         Ok(ast::Expr {
             id: Default::default(),
-            location: callee.location().convex_hull(&rparen.span),
+            location: start.convex_hull(&self.last_token_location()),
             kind: ast::ExprApply {
                 callee,
                 lparen: Some(lparen),
@@ -1612,29 +1621,26 @@ impl<'src> Parser<'src> {
     fn parse_expr_ty_apply(
         &mut self,
         _prec: u8,
+        start: Location,
         lhs: ast::Expr<'src>,
     ) -> Result<ast::Expr<'src>, ParserError<'src>> {
         self.expect(Symbol::LBracket)?;
 
         let mut args = vec![];
 
-        let rbracket = if let Some(rbracket) = self.consume(Symbol::RBracket)? {
-            rbracket
-        } else {
+        if self.consume(Symbol::RBracket)?.is_none() {
             loop {
                 args.push(self.parse_ty_expr()?);
 
-                let token = self.expect([Symbol::Comma, Symbol::RBracket])?;
-
-                if Symbol::RBracket.matches(&token) {
-                    break token;
+                if Symbol::RBracket.matches(&self.expect([Symbol::Comma, Symbol::RBracket])?) {
+                    break;
                 }
             }
         };
 
         Ok(ast::Expr {
             id: Default::default(),
-            location: lhs.location.convex_hull(&rbracket.span),
+            location: start.convex_hull(&self.last_token_location()),
             kind: ast::ExprTyApply {
                 callee: Box::new(lhs),
                 args,
@@ -1646,6 +1652,7 @@ impl<'src> Parser<'src> {
     fn parse_expr_ascription(
         &mut self,
         _prec: u8,
+        start: Location,
         lhs: ast::Expr<'src>,
     ) -> Result<ast::Expr<'src>, ParserError<'src>> {
         let as_kw = self.expect(Symbol::As)?;
@@ -1653,7 +1660,7 @@ impl<'src> Parser<'src> {
 
         Ok(ast::Expr {
             id: Default::default(),
-            location: lhs.location.convex_hull(&ty_expr.location),
+            location: start.convex_hull(&self.last_token_location()),
             kind: ast::ExprAscription {
                 expr: Box::new(lhs),
                 as_kw: Some(as_kw),
@@ -1666,6 +1673,7 @@ impl<'src> Parser<'src> {
     fn parse_expr_cast(
         &mut self,
         _prec: u8,
+        start: Location,
         lhs: ast::Expr<'src>,
     ) -> Result<ast::Expr<'src>, ParserError<'src>> {
         let cast_kw = self.expect(Symbol::Cast)?;
@@ -1674,7 +1682,7 @@ impl<'src> Parser<'src> {
 
         Ok(ast::Expr {
             id: Default::default(),
-            location: lhs.location.convex_hull(&ty_expr.location),
+            location: start.convex_hull(&self.last_token_location()),
             kind: ast::ExprCast {
                 expr: Box::new(lhs),
                 cast_kw: Some(cast_kw),
@@ -1709,11 +1717,11 @@ impl<'src> Parser<'src> {
 
         self.expect(Symbol::LBrace)?;
         let body = self.parse_fn_body()?;
-        let rbrace = self.expect(Symbol::RBrace)?;
+        self.expect(Symbol::RBrace)?;
 
         Ok(ast::Expr {
             id: Default::default(),
-            location: fn_kw.span.convex_hull(&rbrace.span).into(),
+            location: fn_kw.span.convex_hull(&self.last_token_location()),
             kind: ast::ExprFn {
                 params,
                 body: Box::new(body),
@@ -1741,23 +1749,19 @@ impl<'src> Parser<'src> {
     ) -> Result<ast::Expr<'src>, ParserError<'src>> {
         let mut elems = vec![];
 
-        let rbrace = if let Some(token) = self.consume(Symbol::RBrace)? {
-            token
-        } else {
+        if self.consume(Symbol::RBrace)?.is_none() {
             loop {
                 elems.push(self.parse_expr_impl(0)?);
 
-                let token = self.expect([Symbol::Comma, Symbol::RBrace])?;
-
-                if Symbol::RBrace.matches(&token) {
-                    break token;
+                if Symbol::RBrace.matches(&self.expect([Symbol::Comma, Symbol::RBrace])?) {
+                    break;
                 }
             }
         };
 
         Ok(ast::Expr {
             id: Default::default(),
-            location: lbrace.span.convex_hull(&rbrace.span).into(),
+            location: lbrace.span.convex_hull(&self.last_token_location()),
             kind: ast::ExprTuple { elems }.into(),
         })
     }
@@ -1768,26 +1772,22 @@ impl<'src> Parser<'src> {
     ) -> Result<ast::Expr<'src>, ParserError<'src>> {
         let mut fields = vec![];
 
-        let rbrace = if let Some(token) = self.consume(Symbol::RBrace)? {
-            token
-        } else {
+        if self.consume(Symbol::RBrace)?.is_none() {
             loop {
                 let name = self.parse_name("a record field name")?;
                 self.expect(Symbol::Equals)?;
                 let expr = self.parse_expr_impl(0)?;
                 fields.push(ast::ExprRecordField { name, expr });
 
-                let token = self.expect([Symbol::Comma, Symbol::RBrace])?;
-
-                if Symbol::RBrace.matches(&token) {
-                    break token;
+                if Symbol::RBrace.matches(&self.expect([Symbol::Comma, Symbol::RBrace])?) {
+                    break;
                 }
             }
         };
 
         Ok(ast::Expr {
             id: Default::default(),
-            location: lbrace.span.convex_hull(&rbrace.span).into(),
+            location: lbrace.span.convex_hull(&self.last_token_location()),
             kind: ast::ExprRecord { fields }.into(),
         })
     }
@@ -1802,11 +1802,11 @@ impl<'src> Parser<'src> {
             None
         };
 
-        let rtriangle = self.expect(Symbol::RTriangle)?;
+        self.expect(Symbol::RTriangle)?;
 
         Ok(ast::Expr {
             id: Default::default(),
-            location: ltriangle.span.convex_hull(&rtriangle.span).into(),
+            location: ltriangle.span.convex_hull(&self.last_token_location()),
             kind: ast::ExprVariant {
                 label,
                 expr: expr.map(Box::new),
@@ -1822,23 +1822,19 @@ impl<'src> Parser<'src> {
 
         let mut arms = vec![];
 
-        let rbrace = if let Some(token) = self.consume(Symbol::RBrace)? {
-            token
-        } else {
+        if self.consume(Symbol::RBrace)?.is_none() {
             loop {
                 arms.push(self.parse_arm()?);
 
-                let token = self.expect([Symbol::Pipe, Symbol::RBrace])?;
-
-                if Symbol::RBrace.matches(&token) {
-                    break token;
+                if Symbol::RBrace.matches(&self.expect([Symbol::Pipe, Symbol::RBrace])?) {
+                    break;
                 }
             }
         };
 
         Ok(ast::Expr {
             id: Default::default(),
-            location: match_kw.span.convex_hull(&rbrace.span).into(),
+            location: match_kw.span.convex_hull(&self.last_token_location()),
             kind: ast::ExprMatch {
                 expr: Box::new(expr),
                 arms,
@@ -1851,23 +1847,19 @@ impl<'src> Parser<'src> {
         let lbracket = self.expect(Symbol::LBracket)?;
         let mut elems = vec![];
 
-        let rbracket = if let Some(token) = self.consume(Symbol::RBracket)? {
-            token
-        } else {
+        if self.consume(Symbol::RBracket)?.is_none() {
             loop {
                 elems.push(self.parse_expr_impl(0)?);
 
-                let token = self.expect([Symbol::Comma, Symbol::RBracket])?;
-
-                if Symbol::RBracket.matches(&token) {
-                    break token;
+                if Symbol::RBracket.matches(&self.expect([Symbol::Comma, Symbol::RBracket])?) {
+                    break;
                 }
             }
         };
 
         Ok(ast::Expr {
             id: Default::default(),
-            location: lbracket.span.convex_hull(&rbracket.span).into(),
+            location: lbracket.span.convex_hull(&self.last_token_location()),
             kind: ast::ExprList { elems }.into(),
         })
     }
@@ -1882,7 +1874,7 @@ impl<'src> Parser<'src> {
 
         Ok(ast::Expr {
             id: Default::default(),
-            location: if_kw.span.convex_hull(&else_expr.location),
+            location: if_kw.span.convex_hull(&self.last_token_location()),
             kind: ast::ExprIf {
                 cond: Box::new(cond),
                 then_expr: Box::new(then_expr),
@@ -1895,6 +1887,7 @@ impl<'src> Parser<'src> {
     fn parse_expr_seq(
         &mut self,
         prec: u8,
+        start: Location,
         lhs: ast::Expr<'src>,
     ) -> Result<ast::Expr<'src>, ParserError<'src>> {
         let semicolon = self.expect(Symbol::Semicolon)?;
@@ -1929,21 +1922,7 @@ impl<'src> Parser<'src> {
 
         Ok(ast::Expr {
             id: Default::default(),
-            location: match exprs.last().unwrap() {
-                (_, Some(semicolon)) => exprs
-                    .first()
-                    .unwrap()
-                    .0
-                    .location
-                    .convex_hull(&semicolon.span),
-
-                (expr, _) => exprs
-                    .first()
-                    .unwrap()
-                    .0
-                    .location
-                    .convex_hull(&expr.location),
-            },
+            location: start.convex_hull(&self.last_token_location()),
             kind: ast::ExprSeq { exprs }.into(),
         })
     }
@@ -1968,7 +1947,7 @@ impl<'src> Parser<'src> {
 
         Ok(ast::Expr {
             id: Default::default(),
-            location: let_kw.span.convex_hull(&body.location),
+            location: let_kw.span.convex_hull(&self.last_token_location()),
             kind: ast::ExprLet {
                 let_kw: Some(let_kw),
                 rec,
@@ -2001,7 +1980,7 @@ impl<'src> Parser<'src> {
 
         Ok(ast::Expr {
             id: Default::default(),
-            location: generic_kw.span.convex_hull(&expr.location),
+            location: generic_kw.span.convex_hull(&self.last_token_location()),
             kind: ast::ExprGeneric {
                 generics,
                 expr: Box::new(expr),
@@ -2023,7 +2002,7 @@ impl<'src> Parser<'src> {
 
         Ok(ast::Expr {
             id: Default::default(),
-            location: token.span.convex_hull(&rhs.location),
+            location: token.span.convex_hull(&self.last_token_location()),
             kind: ast::ExprUnary {
                 token: Some(token),
                 op,
@@ -2036,6 +2015,7 @@ impl<'src> Parser<'src> {
     fn parse_expr_binary(
         &mut self,
         prec: u8,
+        start: Location,
         lhs: ast::Expr<'src>,
     ) -> Result<ast::Expr<'src>, ParserError<'src>> {
         let token = self.expect_with_message(
@@ -2078,7 +2058,7 @@ impl<'src> Parser<'src> {
 
         Ok(ast::Expr {
             id: Default::default(),
-            location: lhs.location.convex_hull(&rhs.location),
+            location: start.convex_hull(&self.last_token_location()),
             kind: ast::ExprBinary {
                 lhs: Box::new(lhs),
                 token: Some(token),
@@ -2105,8 +2085,8 @@ impl<'src> Parser<'src> {
         prec_table! {
             static PAT_PREC_TABLE<PatFamily> = {
                 postfix {
-                    Symbol::Cast => |parser, prec, lhs| parser.parse_pat_cast(prec, lhs),
-                    Symbol::As => |parser, prec, lhs| parser.parse_pat_ascription(prec, lhs),
+                    Symbol::Cast => |parser, prec, start, lhs| parser.parse_pat_cast(prec, start, lhs),
+                    Symbol::As => |parser, prec, start, lhs| parser.parse_pat_ascription(prec, start, lhs),
                 },
 
                 prefix {
@@ -2140,11 +2120,11 @@ impl<'src> Parser<'src> {
             None
         };
 
-        let rtriangle = self.expect(Symbol::RTriangle)?;
+        self.expect(Symbol::RTriangle)?;
 
         Ok(ast::Pat {
             id: Default::default(),
-            location: ltriangle.span.convex_hull(&rtriangle.span).into(),
+            location: ltriangle.span.convex_hull(&self.last_token_location()),
             nested: false,
             kind: ast::PatVariant {
                 label,
@@ -2167,23 +2147,19 @@ impl<'src> Parser<'src> {
         self.expect(Symbol::LParen)?;
         let mut args = vec![];
 
-        let rparen = if let Some(token) = self.consume(Symbol::RParen)? {
-            token
-        } else {
+        if self.consume(Symbol::RParen)?.is_none() {
             loop {
                 args.push(self.parse_pat_impl(0)?.with_nested(true));
 
-                let token = self.expect([Symbol::Comma, Symbol::RParen])?;
-
-                if Symbol::RParen.matches(&token) {
-                    break token;
+                if Symbol::RParen.matches(&self.expect([Symbol::Comma, Symbol::RParen])?) {
+                    break;
                 }
             }
         };
 
         Ok(ast::Pat {
             id: Default::default(),
-            location: token.span.convex_hull(&rparen.span).into(),
+            location: token.span.convex_hull(&self.last_token_location()),
             nested: false,
             kind: ast::PatCons { cons, args }.into(),
         })
@@ -2208,23 +2184,19 @@ impl<'src> Parser<'src> {
     ) -> Result<ast::Pat<'src>, ParserError<'src>> {
         let mut elems = vec![];
 
-        let rbrace = if let Some(token) = self.consume(Symbol::RBrace)? {
-            token
-        } else {
+        if self.consume(Symbol::RBrace)?.is_none() {
             loop {
                 elems.push(self.parse_pat_impl(0)?.with_nested(true));
 
-                let token = self.expect([Symbol::Comma, Symbol::RBrace])?;
-
-                if Symbol::RBrace.matches(&token) {
-                    break token;
+                if Symbol::RBrace.matches(&self.expect([Symbol::Comma, Symbol::RBrace])?) {
+                    break;
                 }
             }
         };
 
         Ok(ast::Pat {
             id: Default::default(),
-            location: lbrace.span.convex_hull(&rbrace.span).into(),
+            location: lbrace.span.convex_hull(&self.last_token_location()),
             nested: false,
             kind: ast::PatTuple { elems }.into(),
         })
@@ -2236,26 +2208,22 @@ impl<'src> Parser<'src> {
     ) -> Result<ast::Pat<'src>, ParserError<'src>> {
         let mut fields = vec![];
 
-        let rbrace = if let Some(token) = self.consume(Symbol::RBrace)? {
-            token
-        } else {
+        if self.consume(Symbol::RBrace)?.is_none() {
             loop {
                 let name = self.parse_name("a record field name")?;
                 self.expect(Symbol::Equals)?;
                 let pat = self.parse_pat_impl(0)?.with_nested(true);
                 fields.push(ast::PatRecordField { name, pat });
 
-                let token = self.expect([Symbol::Comma, Symbol::RBrace])?;
-
-                if Symbol::RBrace.matches(&token) {
-                    break token;
+                if Symbol::RBrace.matches(&self.expect([Symbol::Comma, Symbol::RBrace])?) {
+                    break;
                 }
             }
         };
 
         Ok(ast::Pat {
             id: Default::default(),
-            location: lbrace.span.convex_hull(&rbrace.span).into(),
+            location: lbrace.span.convex_hull(&self.last_token_location()),
             nested: false,
             kind: ast::PatRecord { fields }.into(),
         })
@@ -2265,23 +2233,19 @@ impl<'src> Parser<'src> {
         let lbracket = self.expect(Symbol::LBracket)?;
         let mut elems = vec![];
 
-        let rbracket = if let Some(token) = self.consume(Symbol::RBracket)? {
-            token
-        } else {
+        if self.consume(Symbol::RBracket)?.is_none() {
             loop {
                 elems.push(self.parse_pat_impl(0)?.with_nested(true));
 
-                let token = self.expect([Symbol::Comma, Symbol::RBracket])?;
-
-                if Symbol::RBracket.matches(&token) {
-                    break token;
+                if Symbol::RBracket.matches(&self.expect([Symbol::Comma, Symbol::RBracket])?) {
+                    break;
                 }
             }
         };
 
         Ok(ast::Pat {
             id: Default::default(),
-            location: lbracket.span.convex_hull(&rbracket.span).into(),
+            location: lbracket.span.convex_hull(&self.last_token_location()),
             nested: false,
             kind: ast::PatList { elems }.into(),
         })
@@ -2340,6 +2304,7 @@ impl<'src> Parser<'src> {
     fn parse_pat_ascription(
         &mut self,
         _prec: u8,
+        start: Location,
         pat: ast::Pat<'src>,
     ) -> Result<ast::Pat<'src>, ParserError<'src>> {
         self.expect(Symbol::As)?;
@@ -2347,7 +2312,7 @@ impl<'src> Parser<'src> {
 
         Ok(ast::Pat {
             id: Default::default(),
-            location: pat.location.convex_hull(&ty_expr.location),
+            location: start.convex_hull(&self.last_token_location()),
             nested: false,
             kind: ast::PatAscription {
                 pat: Box::new(pat),
@@ -2360,6 +2325,7 @@ impl<'src> Parser<'src> {
     fn parse_pat_cast(
         &mut self,
         _prec: u8,
+        start: Location,
         pat: ast::Pat<'src>,
     ) -> Result<ast::Pat<'src>, ParserError<'src>> {
         self.expect(Symbol::Cast)?;
@@ -2368,7 +2334,7 @@ impl<'src> Parser<'src> {
 
         Ok(ast::Pat {
             id: Default::default(),
-            location: pat.location.convex_hull(&ty_expr.location),
+            location: start.convex_hull(&self.last_token_location()),
             nested: false,
             kind: ast::PatCast {
                 pat: Box::new(pat),
@@ -2384,11 +2350,11 @@ impl<'src> Parser<'src> {
 
         if self.consume(Symbol::Comma)?.is_some() {
             let rhs = self.parse_pat_impl(0)?.with_nested(true);
-            let rparen = self.expect(Symbol::RParen)?;
+            self.expect(Symbol::RParen)?;
 
             Ok(ast::Pat {
                 id: Default::default(),
-                location: lparen.span.convex_hull(&rparen.span).into(),
+                location: lparen.span.convex_hull(&self.last_token_location()),
                 nested: false,
                 kind: ast::PatCons {
                     cons: ast::Cons::Cons,
