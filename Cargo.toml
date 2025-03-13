@@ -14,3 +14,12 @@ phf = { version = "0.11.3", features = ["macros"] }
 slotmap = "1.0.7"
 strum = { version = "0.27.1", features = ["derive"] }
 thiserror = "2.0.11"
+
+[[test]]
+name = "test-runner"
+path = "tests/runner/main.rs"
+harness = false
+
+[dev-dependencies]
+colored = "3.0.0"
+glob = "0.3.2"

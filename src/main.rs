@@ -1,19 +1,14 @@
-pub mod ast;
 mod cli;
-pub mod diag;
-pub mod location;
-pub mod parse;
-pub mod sema;
-pub mod sourcemap;
-pub mod util;
 
 use std::process::ExitCode;
 use std::{fs, io};
 
+use supernova::diag::{DiagCtx, StderrDiagCtx};
+use supernova::parse::{Cursor, Lexer, Parser};
+use supernova::sema;
+use supernova::sourcemap::SourceMap;
+
 use self::cli::Args;
-use self::diag::{DiagCtx, StderrDiagCtx};
-use self::parse::{Cursor, Lexer, Parser};
-use self::sourcemap::SourceMap;
 
 fn main() -> ExitCode {
     let args = Args::parse();
