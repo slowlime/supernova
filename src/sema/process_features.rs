@@ -1,10 +1,9 @@
-use ariadne::ReportBuilder;
 use fxhash::FxHashSet;
 
 use crate::ast;
-use crate::diag::{DiagCtx, IntoReportBuilder};
+use crate::diag::{DiagCtx, Diagnostic, IntoDiagnostic};
 use crate::location::Location;
-use crate::util::format_list;
+use crate::util::format_iter;
 
 use super::feature::{EnableReason, Feature, FeatureKind};
 use super::{DeclId, ExprId, Module, PatId, Result, SemaError, TyExprId};
@@ -20,13 +19,10 @@ struct Pass<'ast, 'm, D> {
     diag: &'m mut D,
 }
 
-fn make_feature_disabled_error(
-    report: impl IntoReportBuilder,
-    feature: FeatureKind,
-) -> ReportBuilder<'static, Location> {
-    let mut report = report
-        .into_report_builder()
-        .with_note(format!("feature {feature} is disabled"));
+fn make_feature_disabled_error(diag: impl IntoDiagnostic, feature: FeatureKind) -> Diagnostic {
+    let mut diag = diag
+        .into_diagnostic()
+        .with_note(format!("feature \"{feature}\" is disabled"));
 
     let extensions = feature
         .extension()
@@ -36,21 +32,19 @@ fn make_feature_disabled_error(
     match &extensions[..] {
         [] => {}
 
-        &[extension] => {
-            report = report.with_help(format!(
-                "you can enable the feature with the {extension} extension"
-            ))
-        }
+        &[extension] => diag.add_note(format!(
+            "you can enable the feature with the #{extension} extension"
+        )),
 
         _ => {
-            report = report.with_help(format!(
+            diag.add_note(format!(
                 "you can enable the feature with any of the following extensions: {}",
-                format_list(&extensions, "or", ""),
+                format_iter(extensions.iter().map(|ext| format!("#{ext}")), "or", ""),
             ));
         }
     }
 
-    report
+    diag
 }
 
 impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
@@ -536,7 +530,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                     );
 
                     if (1..=2).contains(idx) {
-                        report = report.with_help(format!(
+                        report.add_note(format!(
                             "alternately, you can enable pairs only with the {} extension",
                             FeatureKind::Pairs.extension().unwrap(),
                         ));
@@ -1175,7 +1169,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                         SemaError::TupleNotAllowed { location },
                         FeatureKind::Pairs,
                     )
-                    .with_help(format!(
+                    .with_note(format!(
                         "alternately, you can enable tuples of arbitrary sizes with the {} extension",
                         FeatureKind::Tuples.extension().unwrap(),
                     )),

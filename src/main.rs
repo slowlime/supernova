@@ -39,7 +39,9 @@ fn main() -> ExitCode {
     let cursor = Cursor::new(f);
     let lexer = Lexer::new(cursor);
     let parser = Parser::new(lexer);
+
     let mut diag = StderrDiagCtx::new(&sourcemap);
+    diag.set_show_stella_codes(args.stella_error_codes);
 
     let mut ast = match parser.parse() {
         Ok(ast) => ast,

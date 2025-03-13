@@ -1,11 +1,28 @@
-use ariadne::{Color, Label, Report, ReportBuilder, ReportKind};
 use thiserror::Error;
 
-use crate::diag::IntoReportBuilder;
+use crate::diag::{Code, Diagnostic, IntoDiagnostic, Label, code};
 use crate::location::Location;
 use crate::util::format_iter;
 
 use super::feature::{EnableReason, FeatureKind};
+
+const ERROR_UNEXPECTED_TUPLE_LENGTH: Code =
+    code!(sema::tuple_length_mismatch as "ERROR_UNEXPECTED_TUPLE_LENGTH");
+const ERROR_UNEXPECTED_RECORD_FIELDS: Code =
+    code!(sema::unexpected_record_field as "ERROR_UNEXPECTED_RECORD_FIELDS");
+const ERROR_MISSING_RECORD_FIELDS: Code =
+    code!(sema::missing_record_field as "ERROR_MISSING_RECORD_FIELDS");
+const ERROR_UNEXPECTED_VARIANT_LABEL: Code =
+    code!(sema::no_such_variant_label as "ERROR_UNEXPECTED_VARIANT_LABEL");
+const ERROR_AMBIGUOUS_SUM_TYPE: Code =
+    code!(sema::ambiguous_sum_type as "ERROR_AMBIGUOUS_SUM_TYPE");
+const ERROR_AMBIGUOUS_VARIANT_TYPE: Code =
+    code!(sema::ambiguous_variant_type as "ERROR_AMBIGUOUS_VARIANT_TYPE");
+const ERROR_AMBIGUOUS_LIST_TYPE: Code = code!(sema::ambiguous_list_type as "ERROR_AMBIGUOUS_LIST");
+const ERROR_NON_EXHAUSTIVE_MATCH_PATTERNS: Code =
+    code!(sema::match_non_exhaustive as "ERROR_NON_EXHAUSTIVE_MATCH_PATTERNS");
+const ERROR_INCORRECT_NUMBER_OF_ARGUMENTS: Code =
+    code!(sema::wrong_arg_count as "ERROR_INCORRECT_NUMBER_OF_ARGUMENTS");
 
 #[derive(Error, Debug, Clone)]
 pub enum SemaError {
@@ -260,7 +277,7 @@ pub enum SemaError {
     },
 
     #[error("the program is missing a `main` function")]
-    MissingMain { location: Location },
+    MissingMain,
 
     #[error("the expression has a wrong type: expected `{expected_ty}`, got `{actual_ty}`")]
     UnexpectedTypeForExpression {
@@ -546,602 +563,568 @@ pub enum SemaError {
     IncorrectArityOfMain { location: Location, actual: usize },
 }
 
-impl IntoReportBuilder for SemaError {
-    fn into_report_builder(self) -> ReportBuilder<'static, Location> {
+impl IntoDiagnostic for SemaError {
+    fn into_diagnostic(self) -> Diagnostic {
         match &self {
             Self::ConflictingFeatures { location, features } => {
-                let mut builder = Report::build(ReportKind::Error, *location)
-                    .with_code("sema::conflicting_features")
-                    .with_message(&self)
-                    .with_label(Label::new(*location).with_color(Color::Red));
+                let mut diag = Diagnostic::error()
+                    .at(*location)
+                    .with_code(code!(sema::conflicting_features))
+                    .with_msg(&self)
+                    .with_label(Label::primary(*location))
+                    .make();
 
                 for (feature, reason) in features {
                     match reason {
-                        EnableReason::Extension(location @ Location::UserCode(_)) => builder
-                            .add_label(Label::new(*location).with_message(format!(
+                        EnableReason::Extension(location @ Location::UserCode(_)) => diag
+                            .add_label(Label::secondary(*location).with_msg(format!(
                                 "the feature {feature} was enabled by the extension here"
                             ))),
 
-                        EnableReason::Extension(_) => builder
+                        EnableReason::Extension(_) => diag
                             .add_note(format!("the feature {feature} was enabled by an extension")),
 
-                        EnableReason::Feature(f) => builder.add_note(format!(
+                        EnableReason::Feature(f) => diag.add_note(format!(
                             "the feature {feature} was enabled as a dependency of the feature {f}"
                         )),
                     }
                 }
 
-                builder
+                diag
             }
 
-            Self::NoFunctionParams { location } => Report::build(ReportKind::Error, *location)
-                .with_code("sema::no_function_params")
-                .with_message(&self)
-                .with_label(Label::new(*location).with_color(Color::Red)),
+            Self::NoFunctionParams { location } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::no_function_params))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .make(),
 
-            Self::MultipleFunctionParams { location } => {
-                Report::build(ReportKind::Error, *location)
-                    .with_code("sema::multiple_function_params")
-                    .with_message(&self)
-                    .with_label(Label::new(*location).with_color(Color::Red))
-            }
+            Self::MultipleFunctionParams { location } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::multiple_function_params))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .make(),
 
             Self::FunctionHasTypeParams {
                 location,
                 generic_kw_location,
-            } => {
-                let mut report = Report::build(ReportKind::Error, *location)
-                    .with_code("sema::function_has_type_params")
-                    .with_message(&self);
-
-                if generic_kw_location.has_span() {
-                    report.add_label(Label::new(*generic_kw_location).with_color(Color::Red));
-                }
-
-                report
-            }
+            } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::function_has_type_params))
+                .with_msg(&self)
+                .with_label(Label::primary(*generic_kw_location))
+                .make(),
 
             Self::FunctionHasThrows {
                 location,
                 throws_kw_location,
-            } => {
-                let mut report = Report::build(ReportKind::Error, *location)
-                    .with_code("sema::function_has_throws")
-                    .with_message(&self);
-
-                if throws_kw_location.has_span() {
-                    report.add_label(Label::new(*throws_kw_location).with_color(Color::Red));
-                }
-
-                report
-            }
+            } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::function_has_throws))
+                .with_msg(&self)
+                .with_label(Label::primary(*throws_kw_location))
+                .make(),
 
             Self::IllegalNestedDecl {
                 location,
                 func_name_location,
-            } => {
-                let mut report = Report::build(ReportKind::Error, *location)
-                    .with_code("sema::illegal_nested_decl")
-                    .with_message(&self)
-                    .with_label(Label::new(*location).with_color(Color::Red));
+            } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::illegal_nested_decl))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .with_label(
+                    Label::secondary(*func_name_location).with_msg("in the function defined here"),
+                )
+                .make(),
 
-                if func_name_location.has_span() {
-                    report.add_label(
-                        Label::new(*func_name_location)
-                            .with_message("in the function defined here"),
-                    );
-                }
+            Self::TypeAliasNotAllowed { location } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::type_alias_not_allowed))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .make(),
 
-                report
-            }
+            Self::ExceptionTypeDeclNotAllowed { location } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::exception_type_decl_not_allowed))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .make(),
 
-            Self::TypeAliasNotAllowed { location } => Report::build(ReportKind::Error, *location)
-                .with_code("sema::type_alias_not_allowed")
-                .with_message(&self)
-                .with_label(Label::new(*location).with_color(Color::Red)),
+            Self::ExceptionVariantDeclNotAllowed { location } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::exception_variant_decl_not_allowed))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .make(),
 
-            Self::ExceptionTypeDeclNotAllowed { location } => {
-                Report::build(ReportKind::Error, *location)
-                    .with_code("sema::exception_type_decl_not_allowed")
-                    .with_message(&self)
-                    .with_label(Label::new(*location).with_color(Color::Red))
-            }
-
-            Self::ExceptionVariantDeclNotAllowed { location } => {
-                Report::build(ReportKind::Error, *location)
-                    .with_code("sema::exception_variant_decl_not_allowed")
-                    .with_message(&self)
-                    .with_label(Label::new(*location).with_color(Color::Red))
-            }
-
-            Self::ReferenceTypeNotAllowed { location } => {
-                Report::build(ReportKind::Error, *location)
-                    .with_code("sema::reference_type_not_allowed")
-                    .with_message(&self)
-                    .with_label(Label::new(*location).with_color(Color::Red))
-            }
+            Self::ReferenceTypeNotAllowed { location } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::reference_type_not_allowed))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .make(),
 
             Self::SumTypeNotAllowed {
                 location,
                 plus_location,
-            } => {
-                let mut report = Report::build(ReportKind::Error, *location)
-                    .with_code("sema::sum_type_not_allowed")
-                    .with_message(&self);
+            } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::sum_type_not_allowed))
+                .with_msg(&self)
+                .with_label(Label::primary(*plus_location))
+                .make(),
 
-                if plus_location.has_span() {
-                    report.add_label(Label::new(*plus_location).with_color(Color::Red));
-                }
+            Self::UniversalTypeNotAllowed { location } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::universal_type_not_allowed))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .make(),
 
-                report
-            }
+            Self::RecursiveTypeNotAllowed { location } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::recursive_type_not_allowed))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .make(),
 
-            Self::UniversalTypeNotAllowed { location } => {
-                Report::build(ReportKind::Error, *location)
-                    .with_code("sema::universal_type_not_allowed")
-                    .with_message(&self)
-                    .with_label(Label::new(*location).with_color(Color::Red))
-            }
+            Self::EmptyTupleNotAllowed { location } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::empty_tuple_not_allowed))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .make(),
 
-            Self::RecursiveTypeNotAllowed { location } => {
-                Report::build(ReportKind::Error, *location)
-                    .with_code("sema::recursive_type_not_allowed")
-                    .with_message(&self)
-                    .with_label(Label::new(*location).with_color(Color::Red))
-            }
+            Self::TupleNotAllowed { location } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::tuple_not_allowed))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .make(),
 
-            Self::EmptyTupleNotAllowed { location } => Report::build(ReportKind::Error, *location)
-                .with_code("sema::empty_tuple_not_allowed")
-                .with_message(&self)
-                .with_label(Label::new(*location).with_color(Color::Red)),
+            Self::IllegalPairElementCount { location } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::illegal_pair_element_count))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .make(),
 
-            Self::TupleNotAllowed { location } => Report::build(ReportKind::Error, *location)
-                .with_code("sema::tuple_not_allowed")
-                .with_message(&self),
+            Self::RecordNotAllowed { location } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::record_not_allowed))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .make(),
 
-            Self::IllegalPairElementCount { location } => {
-                Report::build(ReportKind::Error, *location)
-                    .with_code("sema::illegal_pair_element_count")
-                    .with_message(&self)
-                    .with_label(Label::new(*location).with_color(Color::Red))
-            }
-
-            Self::RecordNotAllowed { location } => Report::build(ReportKind::Error, *location)
-                .with_code("sema::record_not_allowed")
-                .with_message(&self)
-                .with_label(Label::new(*location).with_color(Color::Red)),
-
-            Self::VariantNotAllowed { location } => Report::build(ReportKind::Error, *location)
-                .with_code("sema::variant_not_allowed")
-                .with_message(&self)
-                .with_label(Label::new(*location).with_color(Color::Red)),
+            Self::VariantNotAllowed { location } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::variant_not_allowed))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .make(),
 
             Self::NullaryVariantLabelNotAllowed {
                 location,
                 variant_location,
-            } => {
-                let mut report = Report::build(ReportKind::Error, *location)
-                    .with_code("sema::nullary_variant_label_not_allowed")
-                    .with_message(&self)
-                    .with_label(Label::new(*location).with_color(Color::Red));
+            } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::nullary_variant_label_not_allowed))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .with_label(Label::secondary(*variant_location).with_msg("in the variant here"))
+                .make(),
 
-                if variant_location.has_span() {
-                    report.add_label(
-                        Label::new(*variant_location).with_message("in the variant here"),
-                    )
-                }
+            Self::ListNotAllowed { location } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::list_not_allowed))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .make(),
 
-                report
-            }
+            Self::UnitTypeNotAllowed { location } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::unit_type_not_allowed))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .make(),
 
-            Self::ListNotAllowed { location } => Report::build(ReportKind::Error, *location)
-                .with_code("sema::list_not_allowed")
-                .with_message(&self)
-                .with_label(Label::new(*location).with_color(Color::Red)),
+            Self::TopTypeNotAllowed { location } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::top_type_not_allowed))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .make(),
 
-            Self::UnitTypeNotAllowed { location } => Report::build(ReportKind::Error, *location)
-                .with_code("sema::unit_type_not_allowed")
-                .with_message(&self)
-                .with_label(Label::new(*location).with_color(Color::Red)),
+            Self::BotTypeNotAllowed { location } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::bot_type_not_allowed))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .make(),
 
-            Self::TopTypeNotAllowed { location } => Report::build(ReportKind::Error, *location)
-                .with_code("sema::top_type_not_allowed")
-                .with_message(&self)
-                .with_label(Label::new(*location).with_color(Color::Red)),
+            Self::TypeInferenceNotAvailable { location } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::type_inference_not_available))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .make(),
 
-            Self::BotTypeNotAllowed { location } => Report::build(ReportKind::Error, *location)
-                .with_code("sema::bot_type_not_allowed")
-                .with_message(&self)
-                .with_label(Label::new(*location).with_color(Color::Red)),
+            Self::NaturalLiteralNotAllowed { location } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::natural_literal_not_allowed))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .make(),
 
-            Self::TypeInferenceNotAvailable { location } => {
-                Report::build(ReportKind::Error, *location)
-                    .with_code("sema::type_inference_not_available")
-                    .with_message(&self)
-                    .with_label(Label::new(*location).with_color(Color::Red))
-            }
+            Self::AddressLiteralNotAllowed { location } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::address_literal_not_allowed))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .make(),
 
-            Self::NaturalLiteralNotAllowed { location } => {
-                Report::build(ReportKind::Error, *location)
-                    .with_code("sema::natural_literal_not_allowed")
-                    .with_message(&self)
-                    .with_label(Label::new(*location).with_color(Color::Red))
-            }
+            Self::FieldExprNotAllowed { location } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::field_expr_not_allowed))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .make(),
 
-            Self::AddressLiteralNotAllowed { location } => {
-                Report::build(ReportKind::Error, *location)
-                    .with_code("sema::address_literal_not_allowed")
-                    .with_message(&self)
-                    .with_label(Label::new(*location).with_color(Color::Red))
-            }
+            Self::PanicExprNotAllowed { location } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::panic_expr_not_allowed))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .make(),
 
-            Self::FieldExprNotAllowed { location } => Report::build(ReportKind::Error, *location)
-                .with_code("sema::field_expr_not_allowed")
-                .with_message(&self)
-                .with_label(Label::new(*location).with_color(Color::Red)),
+            Self::ThrowExprNotAllowed { location } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::throw_expr_not_allowed))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .make(),
 
-            Self::PanicExprNotAllowed { location } => Report::build(ReportKind::Error, *location)
-                .with_code("sema::panic_expr_not_allowed")
-                .with_message(&self)
-                .with_label(Label::new(*location).with_color(Color::Red)),
+            Self::TryCatchExprNotAllowed { location } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::try_catch_expr_not_allowed))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .make(),
 
-            Self::ThrowExprNotAllowed { location } => Report::build(ReportKind::Error, *location)
-                .with_code("sema::throw_expr_not_allowed")
-                .with_message(&self)
-                .with_label(Label::new(*location).with_color(Color::Red)),
+            Self::CastExprNotAllowed { location } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::cast_expr_not_allowed))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .make(),
 
-            Self::TryCatchExprNotAllowed { location } => {
-                Report::build(ReportKind::Error, *location)
-                    .with_code("sema::try_catch_expr_not_allowed")
-                    .with_message(&self)
-                    .with_label(Label::new(*location).with_color(Color::Red))
-            }
+            Self::FixExprNotAllowed { location } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::fix_expr_not_allowed))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .make(),
 
-            Self::CastExprNotAllowed { location } => Report::build(ReportKind::Error, *location)
-                .with_code("sema::cast_expr_not_allowed")
-                .with_message(&self)
-                .with_label(Label::new(*location).with_color(Color::Red)),
+            Self::FoldExprNotAllowed { location } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::fold_expr_not_allowed))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .make(),
 
-            Self::FixExprNotAllowed { location } => Report::build(ReportKind::Error, *location)
-                .with_code("sema::fix_expr_not_allowed")
-                .with_message(&self)
-                .with_label(Label::new(*location).with_color(Color::Red)),
+            Self::ApplyExprNotAllowed { location } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::apply_expr_not_allowed))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .make(),
 
-            Self::FoldExprNotAllowed { location } => Report::build(ReportKind::Error, *location)
-                .with_code("sema::fold_expr_not_allowed")
-                .with_message(&self)
-                .with_label(Label::new(*location).with_color(Color::Red)),
-
-            Self::ApplyExprNotAllowed { location } => Report::build(ReportKind::Error, *location)
-                .with_code("sema::apply_expr_not_allowed")
-                .with_message(&self)
-                .with_label(Label::new(*location).with_color(Color::Red)),
-
-            Self::TyApplyExprNotAllowed { location } => Report::build(ReportKind::Error, *location)
-                .with_code("sema::ty_apply_expr_not_allowed")
-                .with_message(&self)
-                .with_label(Label::new(*location).with_color(Color::Red)),
+            Self::TyApplyExprNotAllowed { location } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::ty_apply_expr_not_allowed))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .make(),
 
             Self::AscriptionExprNotAllowed {
                 location,
                 as_location,
-            } => {
-                let mut report = Report::build(ReportKind::Error, *location)
-                    .with_code("sema::ascription_expr_not_allowed")
-                    .with_message(&self);
-
-                if as_location.has_span() {
-                    report.add_label(Label::new(*as_location).with_color(Color::Red));
-                }
-
-                report
-            }
+            } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::ascription_expr_not_allowed))
+                .with_msg(&self)
+                .with_label(Label::primary(*as_location))
+                .make(),
 
             Self::SeqExprNotAllowed {
                 location,
                 semicolon_locations,
             } => {
-                let mut report = Report::build(ReportKind::Error, *location)
-                    .with_code("sema::seq_expr_not_allowed")
-                    .with_message(&self);
+                let mut diag = Diagnostic::error()
+                    .at(*location)
+                    .with_code(code!(sema::seq_expr_not_allowed))
+                    .with_msg(&self)
+                    .make();
 
                 for semicolon_location in semicolon_locations {
-                    if semicolon_location.has_span() {
-                        report.add_label(Label::new(*semicolon_location).with_color(Color::Red));
-                    }
+                    diag.add_label(Label::primary(*semicolon_location));
                 }
 
-                report
+                diag
             }
 
             Self::LetExprNotAllowed {
                 location,
                 let_location,
-            } => {
-                let mut report = Report::build(ReportKind::Error, *location)
-                    .with_code("sema::let_expr_not_allowed")
-                    .with_message(&self);
-
-                if let_location.has_span() {
-                    report.add_label(Label::new(*let_location).with_color(Color::Red));
-                }
-
-                report
-            }
+            } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::let_expr_not_allowed))
+                .with_msg(&self)
+                .with_label(Label::primary(*let_location))
+                .make(),
 
             Self::LetrecExprNotAllowed {
                 location,
                 letrec_location,
-            } => {
-                let mut report = Report::build(ReportKind::Error, *location)
-                    .with_code("sema::letrec_expr_not_allowed")
-                    .with_message(&self);
+            } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::letrec_expr_not_allowed))
+                .with_msg(&self)
+                .with_label(Label::primary(*letrec_location))
+                .make(),
 
-                if letrec_location.has_span() {
-                    report.add_label(Label::new(*letrec_location).with_color(Color::Red));
-                }
+            Self::GenericExprNotAllowed { location } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::generic_expr_not_allowed))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .make(),
 
-                report
-            }
-
-            Self::GenericExprNotAllowed { location } => Report::build(ReportKind::Error, *location)
-                .with_code("sema::generic_expr_not_allowed")
-                .with_message(&self)
-                .with_label(Label::new(*location).with_color(Color::Red)),
-
-            Self::NewExprNotAllowed { location } => Report::build(ReportKind::Error, *location)
-                .with_code("sema::new_expr_not_allowed")
-                .with_message(&self)
-                .with_label(Label::new(*location).with_color(Color::Red)),
+            Self::NewExprNotAllowed { location } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::new_expr_not_allowed))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .make(),
 
             Self::DerefExprNotAllowed {
                 location,
                 star_location,
-            } => {
-                let mut report = Report::build(ReportKind::Error, *location)
-                    .with_code("sema::deref_expr_not_allowed")
-                    .with_message(&self);
-
-                if star_location.has_span() {
-                    report.add_label(Label::new(*star_location).with_color(Color::Red));
-                }
-
-                report
-            }
+            } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::deref_expr_not_allowed))
+                .with_msg(&self)
+                .with_label(Label::primary(*star_location))
+                .make(),
 
             Self::ArithOpNotAllowed {
                 location,
                 op_location,
-            } => {
-                let mut report = Report::build(ReportKind::Error, *location)
-                    .with_code("sema::arith_op_not_allowed")
-                    .with_message(&self);
-
-                if op_location.has_span() {
-                    report.add_label(Label::new(*op_location).with_color(Color::Red));
-                }
-
-                report
-            }
+            } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::arith_op_not_allowed))
+                .with_msg(&self)
+                .with_label(Label::primary(*op_location))
+                .make(),
 
             Self::ComparisonOpNotAllowed {
                 location,
                 op_location,
-            } => {
-                let mut report = Report::build(ReportKind::Error, *location)
-                    .with_code("sema::cmp_op_not_allowed")
-                    .with_message(&self);
-
-                if op_location.has_span() {
-                    report.add_label(Label::new(*op_location).with_color(Color::Red));
-                }
-
-                report
-            }
+            } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::cmp_op_not_allowed))
+                .with_msg(&self)
+                .with_label(Label::primary(*op_location))
+                .make(),
 
             Self::AssignExprNotAllowed {
                 location,
                 colon_eq_location,
-            } => {
-                let mut report = Report::build(ReportKind::Error, *location)
-                    .with_code("sema::assign_expr_not_allowed")
-                    .with_message(&self);
+            } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::assign_expr_not_allowed))
+                .with_msg(&self)
+                .with_label(Label::primary(*colon_eq_location))
+                .make(),
 
-                if colon_eq_location.has_span() {
-                    report.add_label(Label::new(*colon_eq_location).with_color(Color::Red));
-                }
+            Self::NestedPatternNotAllowed { location } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::nested_pattern_not_allowed))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .make(),
 
-                report
-            }
+            Self::GeneralPatternNotAllowed { location } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::general_pattern_not_allowed))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .make(),
 
-            Self::NestedPatternNotAllowed { location } => {
-                Report::build(ReportKind::Error, *location)
-                    .with_code("sema::nested_pattern_not_allowed")
-                    .with_message(&self)
-                    .with_label(Label::new(*location).with_color(Color::Red))
-            }
+            Self::StructuralPatternNotAllowed { location } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::structural_pattern_not_allowed))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .make(),
 
-            Self::GeneralPatternNotAllowed { location } => {
-                Report::build(ReportKind::Error, *location)
-                    .with_code("sema::general_pattern_not_allowed")
-                    .with_message(&self)
-                    .with_label(Label::new(*location).with_color(Color::Red))
-            }
+            Self::InjectionPatternNotAllowed { location } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::injection_pattern_not_allowed))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .make(),
 
-            Self::StructuralPatternNotAllowed { location } => {
-                Report::build(ReportKind::Error, *location)
-                    .with_code("sema::structural_pattern_not_allowed")
-                    .with_message(&self)
-                    .with_label(Label::new(*location).with_color(Color::Red))
-            }
+            Self::AscriptionPatternNotAllowed { location } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::ascription_pattern_not_allowed))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .make(),
 
-            Self::InjectionPatternNotAllowed { location } => {
-                Report::build(ReportKind::Error, *location)
-                    .with_code("sema::injection_pattern_not_allowed")
-                    .with_message(&self)
-                    .with_label(Label::new(*location).with_color(Color::Red))
-            }
-
-            Self::AscriptionPatternNotAllowed { location } => {
-                Report::build(ReportKind::Error, *location)
-                    .with_code("sema::ascription_pattern_not_allowed")
-                    .with_message(&self)
-                    .with_label(Label::new(*location).with_color(Color::Red))
-            }
-
-            Self::CastPatternNotAllowed { location } => Report::build(ReportKind::Error, *location)
-                .with_code("sema::cast_pattern_not_allowed")
-                .with_message(&self)
-                .with_label(Label::new(*location).with_color(Color::Red)),
+            Self::CastPatternNotAllowed { location } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::cast_pattern_not_allowed))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .make(),
 
             Self::DuplicateRecordTypeFields {
                 name: _,
                 location,
                 prev_location,
-            } => {
-                let mut report = Report::build(ReportKind::Error, *location)
-                    .with_code("sema::duplicate_record_type_fields")
-                    .with_message(&self)
-                    .with_label(Label::new(*location).with_color(Color::Red));
-
-                if prev_location.has_span() {
-                    report.add_label(
-                        Label::new(*prev_location)
-                            .with_message("the field was previously declared here"),
-                    );
-                }
-
-                report
-            }
+            } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(
+                    sema::duplicate_record_type_fields
+                    as "ERROR_DUPLICATE_RECORD_TYPE_FIELDS"
+                ))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .with_label(
+                    Label::secondary(*prev_location)
+                        .with_msg("the field was previously declared here"),
+                )
+                .make(),
 
             Self::DuplicateVariantTypeFields {
                 name: _,
                 location,
                 prev_location,
-            } => {
-                let mut report = Report::build(ReportKind::Error, *location)
-                    .with_code("sema::duplicate_variant_type_fields")
-                    .with_message(&self)
-                    .with_label(Label::new(*location).with_color(Color::Red));
-
-                if prev_location.has_span() {
-                    report.add_label(
-                        Label::new(*prev_location)
-                            .with_message("the field was previously declared here"),
-                    );
-                }
-
-                report
-            }
+            } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(
+                    sema::duplicate_variant_type_fields
+                    as "ERROR_DUPLICATE_VARIANT_TYPE_FIELDS"
+                ))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .with_label(
+                    Label::secondary(*prev_location)
+                        .with_msg("the field was previously declared here"),
+                )
+                .make(),
 
             Self::DuplicateRecordFields {
                 name: _,
                 location,
                 prev_location,
-            } => {
-                let mut report = Report::build(ReportKind::Error, *location)
-                    .with_code("sema::duplicate_record_fields")
-                    .with_message(&self)
-                    .with_label(Label::new(*location).with_color(Color::Red));
-
-                if prev_location.has_span() {
-                    report.add_label(
-                        Label::new(*prev_location)
-                            .with_message("the field was previously declared here"),
-                    );
-                }
-
-                report
-            }
+            } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::duplicate_record_fields as "ERROR_DUPLICATE_RECORD_FIELDS"))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .with_label(
+                    Label::secondary(*prev_location)
+                        .with_msg("the field was previously declared here"),
+                )
+                .make(),
 
             Self::DuplicateRecordPatternFields {
                 name: _,
                 location,
                 prev_location,
-            } => {
-                let mut report = Report::build(ReportKind::Error, *location)
-                    .with_code("sema::duplicate_record_pattern_fields")
-                    .with_message(&self)
-                    .with_label(Label::new(*location).with_color(Color::Red));
+            } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::duplicate_record_pattern_fields))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .with_label(
+                    Label::secondary(*prev_location)
+                        .with_msg("the field was previously matched here"),
+                )
+                .make(),
 
-                if prev_location.has_span() {
-                    report.add_label(
-                        Label::new(*prev_location)
-                            .with_message("the field was previously matched here"),
-                    );
-                }
+            Self::UndefinedTy { name: _, location } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::undefined_type))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .make(),
 
-                report
-            }
-
-            Self::UndefinedTy { name: _, location } => Report::build(ReportKind::Error, *location)
-                .with_code("sema::undefined_type")
-                .with_message(&self)
-                .with_label(Label::new(*location).with_color(Color::Red)),
-
-            Self::UndefinedVariable { name: _, location } => {
-                Report::build(ReportKind::Error, *location)
-                    .with_code("sema::undefined_variable")
-                    .with_message(&self)
-                    .with_label(Label::new(*location).with_color(Color::Red))
-            }
+            Self::UndefinedVariable { name: _, location } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::undefined_variable as "ERROR_UNDEFINED_VARIABLE"))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .make(),
 
             Self::DuplicateVariableDef {
                 name: _,
                 location,
                 prev_location,
-            } => {
-                let mut report = Report::build(ReportKind::Error, *location)
-                    .with_code("sema::duplicate_variable_def")
-                    .with_message(&self)
-                    .with_label(Label::new(*location).with_color(Color::Red));
-
-                if prev_location.has_span() {
-                    report.add_label(
-                        Label::new(*prev_location)
-                            .with_message("the variable was previously defined here"),
-                    );
-                }
-
-                report
-            }
+            } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::duplicate_variable_def))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .with_label(
+                    Label::secondary(*prev_location)
+                        .with_msg("the variable was previously defined here"),
+                )
+                .make(),
 
             Self::DuplicateTyDef {
                 name: _,
                 location,
                 prev_location,
-            } => {
-                let mut report = Report::build(ReportKind::Error, *location)
-                    .with_code("sema::duplicate_ty_def")
-                    .with_message(&self)
-                    .with_label(Label::new(*location).with_color(Color::Red));
+            } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::duplicate_ty_def))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .with_label(
+                    Label::secondary(*prev_location)
+                        .with_msg("the type was previously defined here"),
+                )
+                .make(),
 
-                if prev_location.has_span() {
-                    report.add_label(
-                        Label::new(*prev_location)
-                            .with_message("the type was previously defined here"),
-                    );
-                }
-
-                report
-            }
-
-            Self::MissingMain { location } => Report::build(ReportKind::Error, *location)
-                .with_code("sema::missing_main")
-                .with_message(&self),
+            Self::MissingMain => Diagnostic::error()
+                .without_location()
+                .with_code(code!(sema::missing_main as "ERROR_MISSING_MAIN"))
+                .with_msg(&self)
+                .make(),
 
             Self::UnexpectedTypeForExpression {
                 location,
                 expected_ty: _,
                 actual_ty,
-            } => Report::build(ReportKind::Error, *location)
-                .with_code("sema::unexpected_type_for_expression")
-                .with_message(&self)
+            } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(
+                    sema::expr_type_mismatch
+                    as "ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION"
+                ))
+                .with_msg(&self)
                 .with_label(
-                    Label::new(*location)
-                        .with_message(format!("this expression has the type `{actual_ty}`"))
-                        .with_color(Color::Red),
-                ),
+                    Label::primary(*location)
+                        .with_msg(format!("this expression has the type `{actual_ty}`")),
+                )
+                .make(),
 
             Self::UnexpectedFieldAccess {
                 location,
@@ -1149,24 +1132,16 @@ impl IntoReportBuilder for SemaError {
                 record_ty,
                 base_location,
                 field_location,
-            } => {
-                let mut report = Report::build(ReportKind::Error, *location)
-                    .with_code("sema::unexpected_field_access")
-                    .with_message(&self);
-
-                if base_location.has_span() {
-                    report.add_label(
-                        Label::new(*base_location)
-                            .with_message(format!("the record has the type `{record_ty}`")),
-                    );
-                }
-
-                if field_location.has_span() {
-                    report.add_label(Label::new(*field_location).with_color(Color::Red));
-                }
-
-                report
-            }
+            } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::no_such_field as "ERROR_UNEXPECTED_FIELD_ACCESS"))
+                .with_msg(&self)
+                .with_label(Label::primary(*field_location))
+                .with_label(
+                    Label::secondary(*base_location)
+                        .with_msg(format!("the record has the type `{record_ty}`")),
+                )
+                .make(),
 
             Self::ExtractingFieldOfNonRecordTy {
                 location,
@@ -1174,48 +1149,32 @@ impl IntoReportBuilder for SemaError {
                 actual_ty,
                 base_location,
                 field_location,
-            } => {
-                let mut report = Report::build(ReportKind::Error, *location)
-                    .with_code("sema::not_a_record")
-                    .with_message(&self);
-
-                if base_location.has_span() {
-                    report.add_label(
-                        Label::new(*base_location)
-                            .with_message(format!("this expression has the type `{actual_ty}`")),
-                    );
-                }
-
-                if field_location.has_span() {
-                    report.add_label(Label::new(*field_location).with_color(Color::Red));
-                }
-
-                report
-            }
+            } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::extracting_field_of_non_record_ty as "ERROR_NOT_A_RECORD"))
+                .with_msg(&self)
+                .with_label(Label::primary(*field_location))
+                .with_label(
+                    Label::secondary(*base_location)
+                        .with_msg(format!("this expression has the type `{actual_ty}`")),
+                )
+                .make(),
 
             Self::IndexingNonTupleTy {
                 location,
                 actual_ty,
                 base_location,
                 field_location,
-            } => {
-                let mut report = Report::build(ReportKind::Error, *location)
-                    .with_code("sema::not_a_tuple")
-                    .with_message(&self);
-
-                if base_location.has_span() {
-                    report.add_label(
-                        Label::new(*base_location)
-                            .with_message(format!("this expression has the type `{actual_ty}`")),
-                    );
-                }
-
-                if field_location.has_span() {
-                    report.add_label(Label::new(*field_location).with_color(Color::Red));
-                }
-
-                report
-            }
+            } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::indexing_non_tuple_ty as "ERROR_NOT_A_TUPLE"))
+                .with_msg(&self)
+                .with_label(Label::primary(*field_location))
+                .with_label(
+                    Label::secondary(*base_location)
+                        .with_msg(format!("this expression has the type `{actual_ty}`")),
+                )
+                .make(),
 
             Self::TupleIndexOutOfBounds {
                 location,
@@ -1225,161 +1184,161 @@ impl IntoReportBuilder for SemaError {
                 base_location,
                 field_location,
             } => {
-                let mut report = Report::build(ReportKind::Error, *location)
-                    .with_code("sema::tuple_index_out_of_bounds")
-                    .with_message(&self)
-                    .with_note(format!("the tuple's length is {tuple_len}"));
-
-                if base_location.has_span() {
-                    report.add_label(
-                        Label::new(*base_location)
-                            .with_message(format!("this tuple has the type `{actual_ty}`")),
-                    );
-                }
-
-                if field_location.has_span() {
-                    report.add_label(Label::new(*field_location).with_color(Color::Red));
-                }
+                let mut diag = Diagnostic::error()
+                    .at(*location)
+                    .with_code(code!(sema::no_such_element as "ERROR_TUPLE_INDEX_OUT_OF_BOUNDS"))
+                    .with_msg(&self)
+                    .with_note(format!("the tuple's length is {tuple_len}"))
+                    .with_label(Label::primary(*field_location))
+                    .with_label(
+                        Label::secondary(*base_location)
+                            .with_msg(format!("this tuple has the type `{actual_ty}`")),
+                    )
+                    .make();
 
                 if *idx == 0 {
-                    report.set_help("perhaps you meant to access the first element: tuple elements are indexed starting from 1");
+                    diag.add_note("perhaps you meant to access the first element: tuple elements are indexed starting from 1");
                 }
 
-                report
+                diag
             }
 
             Self::FixNotFunction {
                 location,
                 actual_ty,
                 inner_location,
-            } => {
-                let mut report = Report::build(ReportKind::Error, *location)
-                    .with_code("sema::not_a_function")
-                    .with_message(&self)
-                    .with_label(Label::new(*location).with_color(Color::Red));
-
-                if inner_location.has_span() {
-                    report.add_label(
-                        Label::new(*inner_location)
-                            .with_message(format!("this expression has the type `{actual_ty}`")),
-                    );
-                }
-
-                report
-            }
+            } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::fix_not_function as "ERROR_NOT_A_FUNCTION"))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .with_label(
+                    Label::secondary(*inner_location)
+                        .with_msg(format!("this expression has the type `{actual_ty}`")),
+                )
+                .make(),
 
             Self::FixWrongFunctionParamCount {
                 location,
                 actual_ty,
                 inner_location,
-            } => {
-                let mut report = Report::build(ReportKind::Error, *location)
-                    .with_code("sema::fix_wrong_function_param_count")
-                    .with_message(&self)
-                    .with_label(Label::new(*location).with_color(Color::Red));
-
-                if inner_location.has_span() {
-                    report.add_label(
-                        Label::new(*inner_location)
-                            .with_message(format!("this expression has the type `{actual_ty}`",)),
-                    );
-                }
-
-                report
-            }
+            } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::fix_wrong_function_param_count))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .with_label(
+                    Label::secondary(*inner_location)
+                        .with_msg(format!("this expression has the type `{actual_ty}`",)),
+                )
+                .make(),
 
             Self::IncorrectNumberOfArgumentsInExpr {
                 location,
                 expected: _,
                 actual: _,
-            } => Report::build(ReportKind::Error, *location)
-                .with_code("sema::incorrect_number_of_arguments")
-                .with_message(&self)
-                .with_label(Label::new(*location).with_color(Color::Red)),
+            } => Diagnostic::error()
+                .at(*location)
+                .with_code(ERROR_INCORRECT_NUMBER_OF_ARGUMENTS)
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .make(),
 
             Self::IncorrectNumberOfArgumentsInPat {
                 location,
                 expected: _,
                 actual: _,
-            } => Report::build(ReportKind::Error, *location)
-                .with_code("sema::incorrect_number_of_arguments")
-                .with_message(&self)
-                .with_label(Label::new(*location).with_color(Color::Red)),
+            } => Diagnostic::error()
+                .at(*location)
+                .with_code(ERROR_INCORRECT_NUMBER_OF_ARGUMENTS)
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .make(),
 
             Self::UnexpectedInjection {
                 location,
                 expected_ty: _,
-            } => Report::build(ReportKind::Error, *location)
-                .with_code("sema::unexpected_injection")
-                .with_message(&self)
-                .with_label(Label::new(*location).with_color(Color::Red)),
+            } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::unexpected_injection as "ERROR_UNEXPECTED_INJECTION"))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .make(),
 
-            Self::AmbiguousSumTypeInExpr { location } => {
-                Report::build(ReportKind::Error, *location)
-                    .with_code("sema::ambiguous_sum_type")
-                    .with_message(&self)
-                    .with_label(Label::new(*location).with_color(Color::Red))
-                    .with_help("ascribe a sum type to the expression with the `as` operator")
-            }
+            Self::AmbiguousSumTypeInExpr { location } => Diagnostic::error()
+                .at(*location)
+                .with_code(ERROR_AMBIGUOUS_SUM_TYPE)
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .with_note("ascribe a sum type to the expression with the `as` operator")
+                .make(),
 
-            Self::AmbiguousSumTypeInPat { location } => Report::build(ReportKind::Error, *location)
-                .with_code("sema::ambiguous_sum_type")
-                .with_message(&self)
-                .with_label(Label::new(*location).with_color(Color::Red))
-                .with_help("ascribe a sum type to the pattern with the `as` operator"),
+            Self::AmbiguousSumTypeInPat { location } => Diagnostic::error()
+                .at(*location)
+                .with_code(ERROR_AMBIGUOUS_SUM_TYPE)
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .with_note("ascribe a sum type to the pattern with the `as` operator")
+                .make(),
 
             Self::UnexpectedList {
                 location,
                 expected_ty: _,
-            } => Report::build(ReportKind::Error, *location)
-                .with_code("sema::unexpected_list")
-                .with_message(&self)
-                .with_label(Label::new(*location).with_color(Color::Red)),
+            } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::unexpected_list as "ERROR_UNEXPECTED_LIST"))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .make(),
 
             Self::ExprTyNotList {
                 location,
                 actual_ty: _,
-            } => Report::build(ReportKind::Error, *location)
-                .with_code("sema::not_a_list")
-                .with_message(&self)
-                .with_label(Label::new(*location).with_color(Color::Red)),
+            } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::expr_ty_not_list as "ERROR_NOT_A_LIST"))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .make(),
 
             Self::ApplyNotFunction {
                 location,
                 actual_ty,
                 callee_location,
-            } => {
-                let mut report = Report::build(ReportKind::Error, *location)
-                    .with_code("sema::not_a_function")
-                    .with_message(&self);
-
-                if callee_location.has_span() {
-                    report.add_label(
-                        Label::new(*callee_location)
-                            .with_message(format!("this expression has the type `{actual_ty}`"))
-                            .with_color(Color::Red),
-                    );
-                }
-
-                report
-            }
+            } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::apply_not_function as "ERROR_NOT_A_FUNCTION"))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .with_label(
+                    Label::secondary(*callee_location)
+                        .with_msg(format!("this expression has the type `{actual_ty}`")),
+                )
+                .make(),
 
             Self::UnexpectedLambda {
                 location,
                 expected_ty: _,
-            } => Report::build(ReportKind::Error, *location)
-                .with_code("sema::unexpected_lambda")
-                .with_message(&self)
-                .with_label(Label::new(*location).with_color(Color::Red)),
+            } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::unexpected_fn as "ERROR_UNEXPECTED_LAMBDA"))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .make(),
 
             Self::UnexpectedNumberOfParametersInLambda {
                 location,
                 actual: _,
                 expected: _,
-            } => Report::build(ReportKind::Error, *location)
-                .with_code("sema::unexpected_number_of_parameters_in_lambda")
-                .with_message(&self)
-                .with_label(Label::new(*location).with_color(Color::Red)),
+            } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(
+                    sema::wrong_fn_param_count
+                    as "ERROR_UNEXPECTED_NUMBER_OF_PARAMETERS_IN_LAMBDA"
+                ))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .make(),
 
             Self::UnexpectedTypeForParameter {
                 location,
@@ -1387,334 +1346,294 @@ impl IntoReportBuilder for SemaError {
                 expected_ty: _,
                 actual_ty,
                 expr_location,
-            } => {
-                let mut report = Report::build(ReportKind::Error, *location)
-                    .with_code("sema::unexpected_type_for_parameter")
-                    .with_message(&self)
-                    .with_label(
-                        Label::new(*location)
-                            .with_message(format!("this parameter has the type `{actual_ty}`"))
-                            .with_color(Color::Red),
-                    );
-
-                if expr_location.has_span() {
-                    report.add_label(
-                        Label::new(*expr_location)
-                            .with_message("in this anonymous function expression"),
-                    );
-                }
-
-                report
-            }
+            } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::param_ty_mismatch as "ERROR_UNEXPECTED_TYPE_FOR_PARAMETER"))
+                .with_msg(&self)
+                .with_label(
+                    Label::primary(*location)
+                        .with_msg(format!("this parameter has the type `{actual_ty}`")),
+                )
+                .with_label(
+                    Label::secondary(*expr_location)
+                        .with_msg("in this anonymous function expression"),
+                )
+                .make(),
 
             Self::UnexpectedTuple {
                 location,
                 expected_ty: _,
-            } => Report::build(ReportKind::Error, *location)
-                .with_code("sema::unexpected_tuple")
-                .with_message(&self)
-                .with_label(Label::new(*location).with_color(Color::Red)),
+            } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::unexpected_tuple as "ERROR_UNEXPECTED_TUPLE"))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .make(),
 
             Self::UnexpectedTupleLengthInExpr {
                 location,
                 actual: _,
                 expected: _,
-            } => Report::build(ReportKind::Error, *location)
-                .with_code("sema::unexpected_tuple_length")
-                .with_message(&self)
-                .with_label(Label::new(*location).with_color(Color::Red)),
+            } => Diagnostic::error()
+                .at(*location)
+                .with_code(ERROR_UNEXPECTED_TUPLE_LENGTH)
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .make(),
 
             Self::UnexpectedTupleLengthInPat {
                 location,
                 actual: _,
                 expected: _,
-            } => Report::build(ReportKind::Error, *location)
-                .with_code("sema::unexpected_tuple_length")
-                .with_message(&self)
-                .with_label(Label::new(*location).with_color(Color::Red)),
+            } => Diagnostic::error()
+                .at(*location)
+                .with_code(ERROR_UNEXPECTED_TUPLE_LENGTH)
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .make(),
 
             Self::UnexpectedRecord {
                 location,
                 expected_ty: _,
-            } => Report::build(ReportKind::Error, *location)
-                .with_code("sema::unexpected_record")
-                .with_message(&self)
-                .with_label(Label::new(*location).with_color(Color::Red)),
+            } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::unexpected_record as "ERROR_UNEXPECTED_RECORD"))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .make(),
 
             Self::UnexpectedRecordFieldInExpr {
                 location,
                 name: _,
                 expected_ty: _,
                 expr_location,
-            } => {
-                let mut report = Report::build(ReportKind::Error, *location)
-                    .with_code("sema::unexpected_record_fields")
-                    .with_message(&self)
-                    .with_label(Label::new(*location).with_color(Color::Red));
-
-                if expr_location.has_span() {
-                    report.add_label(
-                        Label::new(*expr_location).with_message("in this record expression"),
-                    );
-                }
-
-                report
-            }
+            } => Diagnostic::error()
+                .at(*location)
+                .with_code(ERROR_UNEXPECTED_RECORD_FIELDS)
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .with_label(Label::secondary(*expr_location).with_msg("in this record expression"))
+                .make(),
 
             Self::UnexpectedRecordFieldInPat {
                 location,
                 name: _,
                 expected_ty: _,
                 pat_location,
-            } => {
-                let mut report = Report::build(ReportKind::Error, *location)
-                    .with_code("sema::unexpected_record_fields")
-                    .with_message(&self)
-                    .with_label(Label::new(*location).with_color(Color::Red));
-
-                if pat_location.has_span() {
-                    report.add_label(
-                        Label::new(*pat_location).with_message("in this record pattern"),
-                    );
-                }
-
-                report
-            }
+            } => Diagnostic::error()
+                .at(*location)
+                .with_code(ERROR_UNEXPECTED_RECORD_FIELDS)
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .with_label(Label::secondary(*pat_location).with_msg("in this record pattern"))
+                .make(),
 
             Self::MissingRecordFieldInExpr {
                 location,
                 name: _,
                 expected_ty: _,
-            } => Report::build(ReportKind::Error, *location)
-                .with_code("sema::missing_record_fields")
-                .with_message(&self)
-                .with_label(Label::new(*location).with_color(Color::Red)),
+            } => Diagnostic::error()
+                .at(*location)
+                .with_code(ERROR_MISSING_RECORD_FIELDS)
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .make(),
 
             Self::MissingRecordFieldInPat {
                 location,
                 name: _,
                 expected_ty: _,
-            } => Report::build(ReportKind::Error, *location)
-                .with_code("sema::missing_record_fields")
-                .with_message(&self)
-                .with_label(Label::new(*location).with_color(Color::Red)),
+            } => Diagnostic::error()
+                .at(*location)
+                .with_code(ERROR_MISSING_RECORD_FIELDS)
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .make(),
 
-            Self::AmbiguousVariantExprType { location } => {
-                Report::build(ReportKind::Error, *location)
-                    .with_code("sema::ambiguous_variant_type")
-                    .with_message(&self)
-                    .with_label(Label::new(*location).with_color(Color::Red))
-                    .with_help("ascribe a variant type to the expression with the `as` operator")
-            }
+            Self::AmbiguousVariantExprType { location } => Diagnostic::error()
+                .at(*location)
+                .with_code(ERROR_AMBIGUOUS_VARIANT_TYPE)
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .with_note("ascribe a variant type to the expression with the `as` operator")
+                .make(),
 
-            Self::AmbiguousVariantPatType { location } => {
-                Report::build(ReportKind::Error, *location)
-                    .with_code("sema::ambiguous_variant_type")
-                    .with_message(&self)
-                    .with_label(Label::new(*location).with_color(Color::Red))
-                    .with_help("ascribe a variant type to the pattern with the `as` operator")
-            }
+            Self::AmbiguousVariantPatType { location } => Diagnostic::error()
+                .at(*location)
+                .with_code(ERROR_AMBIGUOUS_VARIANT_TYPE)
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .with_note("ascribe a variant type to the pattern with the `as` operator")
+                .make(),
 
             Self::UnexpectedVariant {
                 location,
                 expected_ty: _,
-            } => Report::build(ReportKind::Error, *location)
-                .with_code("sema::unexpected_variant")
-                .with_message(&self)
-                .with_label(Label::new(*location).with_color(Color::Red)),
+            } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::unexpected_variant as "ERROR_UNEXPECTED_VARIANT"))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .make(),
 
             Self::UnexpectedVariantLabelInExpr {
                 location,
                 name: _,
                 expected_ty: _,
                 expr_location,
-            } => {
-                let mut report = Report::build(ReportKind::Error, *location)
-                    .with_code("sema::unexpected_variant_label")
-                    .with_message(&self)
-                    .with_label(Label::new(*location).with_color(Color::Red));
-
-                if expr_location.has_span() {
-                    report.add_label(
-                        Label::new(*expr_location).with_message("in this variant expression"),
-                    );
-                }
-
-                report
-            }
+            } => Diagnostic::error()
+                .at(*location)
+                .with_code(ERROR_UNEXPECTED_VARIANT_LABEL)
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .with_label(Label::secondary(*expr_location).with_msg("in this variant expression"))
+                .make(),
 
             Self::UnexpectedVariantLabelInPat {
                 location,
                 name: _,
                 expected_ty: _,
                 pat_location,
-            } => {
-                let mut report = Report::build(ReportKind::Error, *location)
-                    .with_code("sema::unexpected_variant_label")
-                    .with_message(&self)
-                    .with_label(Label::new(*location).with_color(Color::Red));
-
-                if pat_location.has_span() {
-                    report.add_label(
-                        Label::new(*pat_location).with_message("in this variant pattern"),
-                    );
-                }
-
-                report
-            }
+            } => Diagnostic::error()
+                .at(*location)
+                .with_code(ERROR_UNEXPECTED_VARIANT_LABEL)
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .with_label(Label::secondary(*pat_location).with_msg("in this variant pattern"))
+                .make(),
 
             Self::UnexpectedDataForNullaryLabel {
                 location,
                 name: _,
                 expected_ty: _,
                 expr_location,
-            } => {
-                let mut report = Report::build(ReportKind::Error, *location)
-                    .with_code("sema::unexpected_data_for_nullary_label")
-                    .with_message(&self)
-                    .with_label(Label::new(*location).with_color(Color::Red));
-
-                if expr_location.has_span() {
-                    report.add_label(
-                        Label::new(*expr_location).with_message("in this variant expression"),
-                    );
-                }
-
-                report
-            }
+            } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::unexpected_data_for_nullary_label))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .with_label(Label::secondary(*expr_location).with_msg("in this variant expression"))
+                .make(),
 
             Self::UnexpectedNonNullaryVariantPattern {
                 location,
                 name: _,
                 expected_ty: _,
                 pat_location,
-            } => {
-                let mut report = Report::build(ReportKind::Error, *location)
-                    .with_code("sema::unexpected_non_nullary_variant_pattern")
-                    .with_message(&self)
-                    .with_label(Label::new(*location).with_color(Color::Red));
-
-                if pat_location.has_span() {
-                    report.add_label(
-                        Label::new(*pat_location).with_message("in this variant pattern"),
-                    );
-                }
-
-                report
-            }
+            } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::unexpected_non_nullary_variant_pattern))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .with_label(Label::secondary(*pat_location).with_msg("in this variant pattern"))
+                .make(),
 
             Self::MissingDataForLabel {
                 location,
                 name: _,
                 expected_ty,
                 expr_location,
-            } => {
-                let mut report = Report::build(ReportKind::Error, *location)
-                    .with_code("sema::missing_data_for_label")
-                    .with_message(&self)
-                    .with_label(Label::new(*location).with_color(Color::Red));
-
-                if expr_location.has_span() {
-                    report.add_label(Label::new(*expr_location).with_message(format!(
-                        "this variant expression has the type `{expected_ty}`"
-                    )));
-                }
-
-                report
-            }
+            } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::missing_data_for_label))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .with_label(Label::secondary(*expr_location).with_msg(format!(
+                    "this variant expression has the type `{expected_ty}`"
+                )))
+                .make(),
 
             Self::UnexpectedNullaryVariantPattern {
                 location,
                 name: _,
                 expected_ty,
                 pat_location,
-            } => {
-                let mut report = Report::build(ReportKind::Error, *location)
-                    .with_code("sema::unexpected_nullary_variant_pattern")
-                    .with_message(&self)
-                    .with_label(Label::new(*location).with_color(Color::Red));
+            } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::unexpected_nullary_variant_pattern))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .with_label(
+                    Label::secondary(*pat_location)
+                        .with_msg(format!("this variant pattern has the type `{expected_ty}`")),
+                )
+                .make(),
 
-                if pat_location.has_span() {
-                    report.add_label(Label::new(*pat_location).with_message(format!(
-                        "this variant pattern has the type `{expected_ty}`"
-                    )));
-                }
+            Self::IllegalEmptyMatching { location } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::empty_match as "ERROR_ILLEGAL_EMPTY_MATCHING"))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .make(),
 
-                report
-            }
+            Self::AmbiguousEmptyListExprTy { location } => Diagnostic::error()
+                .at(*location)
+                .with_code(ERROR_AMBIGUOUS_LIST_TYPE)
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .with_note("ascribe a list type to the expression with the `as` operator")
+                .make(),
 
-            Self::IllegalEmptyMatching { location } => Report::build(ReportKind::Error, *location)
-                .with_code("sema::illegal_empty_matching")
-                .with_message(&self)
-                .with_label(Label::new(*location).with_color(Color::Red)),
-
-            Self::AmbiguousEmptyListExprTy { location } => {
-                Report::build(ReportKind::Error, *location)
-                    .with_code("sema::ambiguous_list_type")
-                    .with_message(&self)
-                    .with_label(Label::new(*location).with_color(Color::Red))
-                    .with_help("ascribe a list type to the expression with the `as` operator")
-            }
-
-            Self::AmbiguousEmptyListPatTy { location } => {
-                Report::build(ReportKind::Error, *location)
-                    .with_code("sema::ambiguous_list_type")
-                    .with_message(&self)
-                    .with_label(Label::new(*location).with_color(Color::Red))
-                    .with_help("ascribe a list type to the pattern with the `as` operator")
-            }
+            Self::AmbiguousEmptyListPatTy { location } => Diagnostic::error()
+                .at(*location)
+                .with_code(ERROR_AMBIGUOUS_LIST_TYPE)
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .with_note("ascribe a list type to the pattern with the `as` operator")
+                .make(),
 
             Self::UnexpectedPatternForType {
                 location,
                 expected_ty: _,
-            } => Report::build(ReportKind::Error, *location)
-                .with_code("sema::unexpected_pattern_for_type")
-                .with_message(&self)
-                .with_label(Label::new(*location).with_color(Color::Red)),
+            } => Diagnostic::error()
+                .at(*location)
+                .with_code(
+                    code!(sema::invalid_pattern_for_ty as "ERROR_UNEXPECTED_PATTERN_FOR_TYPE"),
+                )
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .make(),
 
-            Self::AmbiguousBindingPatType { location } => {
-                Report::build(ReportKind::Error, *location)
-                    .with_code("sema::ambiguous_binding_type")
-                    .with_message(&self)
-                    .with_label(Label::new(*location).with_color(Color::Red))
-            }
+            Self::AmbiguousBindingPatType { location } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::ambiguous_binding_type))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .make(),
 
             Self::NonExhaustiveMatchPatterns {
                 location,
                 scrutinee_location,
                 witness,
-            } => {
-                let mut report = Report::build(ReportKind::Error, *location)
-                    .with_code("sema::non_exhaustive_match_patterns")
-                    .with_message(&self);
+            } => Diagnostic::error()
+                .at(*location)
+                .with_code(ERROR_NON_EXHAUSTIVE_MATCH_PATTERNS)
+                .with_msg(&self)
+                .with_label(
+                    Label::primary(*scrutinee_location)
+                        .with_msg(format!("no pattern matches `{witness}`")),
+                )
+                .make(),
 
-                if scrutinee_location.has_span() {
-                    report.add_label(
-                        Label::new(*scrutinee_location)
-                            .with_message(format!("no pattern matches `{witness}`",))
-                            .with_color(Color::Red),
-                    );
-                }
-
-                report
-            }
-
-            Self::NonIrrefutableLetPattern { location, witness } => {
-                Report::build(ReportKind::Error, *location)
-                    .with_code("sema::non_exhaustive_match_patterns")
-                    .with_message(&self)
-                    .with_label(Label::new(*location).with_color(Color::Red))
-                    .with_note(format!("no pattern matches `{witness}`"))
-                    .with_note("a let pattern must be applicable to all values of this type")
-            }
+            Self::NonIrrefutableLetPattern { location, witness } => Diagnostic::error()
+                .at(*location)
+                .with_code(ERROR_NON_EXHAUSTIVE_MATCH_PATTERNS)
+                .with_msg(&self)
+                .with_label(
+                    Label::primary(*location).with_msg(format!("no pattern matches `{witness}`")),
+                )
+                .with_note("a let pattern must be applicable to all values of this type")
+                .make(),
 
             Self::IncorrectArityOfMain {
                 location,
                 actual: _,
-            } => Report::build(ReportKind::Error, *location)
-                .with_code("sema::incorrect_arity_of_main")
-                .with_message(&self)
-                .with_label(Label::new(*location).with_color(Color::Red)),
+            } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::wrong_main_param_count as "ERROR_INCORRECT_ARITY_OF_MAIN"))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .make(),
         }
     }
 }

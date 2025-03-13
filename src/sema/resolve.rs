@@ -145,9 +145,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
 
     fn find_main_decl(&mut self) -> Result {
         let Some(&binding_id) = self.m.scopes[self.m.root_scope_id].values.get("main") else {
-            self.diag.emit(SemaError::MissingMain {
-                location: self.m.location,
-            });
+            self.diag.emit(SemaError::MissingMain);
 
             return Err(());
         };

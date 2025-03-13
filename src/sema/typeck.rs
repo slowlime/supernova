@@ -1,10 +1,9 @@
 use std::mem;
 
-use ariadne::{Label, ReportBuilder};
 use fxhash::{FxHashMap, FxHashSet};
 
 use crate::ast;
-use crate::diag::{DiagCtx, IntoReportBuilder};
+use crate::diag::{DiagCtx, Diagnostic, IntoDiagnostic, Label};
 use crate::location::Location;
 use crate::util::SliceExt;
 
@@ -331,10 +330,10 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
 
     fn augment_error_with_expectation(
         &self,
-        report: impl IntoReportBuilder,
+        diag: impl IntoDiagnostic,
         source: ExpectationSource,
-    ) -> ReportBuilder<'static, Location> {
-        let mut report = report.into_report_builder();
+    ) -> Diagnostic {
+        let mut diag = diag.into_diagnostic();
 
         match source {
             ExpectationSource::FnDeclRet(decl_id) => {
@@ -345,17 +344,17 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
 
                 if let Some(ret_ty_expr) = &decl_fn.ret {
                     if ret_ty_expr.location.has_span() {
-                        report.add_label(
-                            Label::new(ret_ty_expr.location)
-                                .with_message("expected because of the return type here"),
+                        diag.add_label(
+                            Label::secondary(ret_ty_expr.location)
+                                .with_msg("expected because of the return type here"),
                         );
                     } else if decl.location.has_span() {
-                        report.add_label(
-                            Label::new(decl.location)
-                                .with_message("expected because of this function's return type"),
+                        diag.add_label(
+                            Label::secondary(decl.location)
+                                .with_msg("expected because of this function's return type"),
                         );
                     } else {
-                        report.add_note(format!(
+                        diag.add_note(format!(
                             "expected because of the return type of the function `{}`",
                             decl_fn.binding.name.as_str(),
                         ));
@@ -366,12 +365,9 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             ExpectationSource::FixArg(expr_id) => {
                 let expr = self.m.exprs[expr_id].def;
 
-                if expr.location.has_span() {
-                    report.add_label(
-                        Label::new(expr.location)
-                            .with_message("the fixpoint combinator requires that the parameter type matches the return type")
-                    );
-                }
+                diag.add_label(Label::secondary(expr.location).with_msg(
+                    "the fixpoint combinator requires that the parameter type matches the return type"
+                ));
             }
 
             ExpectationSource::InjectionArg {
@@ -381,13 +377,11 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             } => {
                 let expr = self.m.exprs[expr_id].def;
 
-                if expr.location.has_span() {
-                    report.add_label(Label::new(expr.location).with_message(format!(
-                        "expected by the {} injection into the sum type `{}`",
-                        if is_left { "left" } else { "right" },
-                        self.m.display_ty(sum_ty_id),
-                    )));
-                }
+                diag.add_label(Label::secondary(expr.location).with_msg(format!(
+                    "expected by the {} injection into the sum type `{}`",
+                    if is_left { "left" } else { "right" },
+                    self.m.display_ty(sum_ty_id),
+                )));
             }
 
             ExpectationSource::InjectionPat {
@@ -397,13 +391,11 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             } => {
                 let pat = self.m.pats[pat_id].def;
 
-                if pat.location.has_span() {
-                    report.add_label(Label::new(pat.location).with_message(format!(
-                        "expected by the {} injection into the sum type `{}`",
-                        if is_left { "left" } else { "right" },
-                        self.m.display_ty(sum_ty_id),
-                    )));
-                }
+                diag.add_label(Label::secondary(pat.location).with_msg(format!(
+                    "expected by the {} injection into the sum type `{}`",
+                    if is_left { "left" } else { "right" },
+                    self.m.display_ty(sum_ty_id),
+                )));
             }
 
             ExpectationSource::ConsArg {
@@ -414,18 +406,14 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 let expr = self.m.exprs[expr_id].def;
                 let arg_expr = self.m.exprs[arg_expr_id].def;
 
-                if arg_expr.location.has_span() {
-                    report.add_label(Label::new(arg_expr.location).with_message(format!(
-                        "expected because this expression has the type `{}`",
-                        self.m.display_ty(elem_ty_id),
-                    )));
-                }
+                diag.add_label(Label::secondary(arg_expr.location).with_msg(format!(
+                    "expected because this expression has the type `{}`",
+                    self.m.display_ty(elem_ty_id),
+                )));
 
-                if expr.location.has_span() {
-                    report.add_label(
-                        Label::new(expr.location).with_message("in this `cons` expression"),
-                    );
-                }
+                diag.add_label(
+                    Label::secondary(expr.location).with_msg("in this `cons` expression"),
+                );
             }
 
             ExpectationSource::ConsPat {
@@ -436,37 +424,28 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 let pat = self.m.pats[pat_id].def;
                 let arg_pat = self.m.pats[arg_pat_id].def;
 
-                if arg_pat.location.has_span() {
-                    report.add_label(Label::new(arg_pat.location).with_message(format!(
-                        "expected because this pattern has the type `{}`",
-                        self.m.display_ty(elem_ty_id),
-                    )));
-                }
+                diag.add_label(Label::secondary(arg_pat.location).with_msg(format!(
+                    "expected because this pattern has the type `{}`",
+                    self.m.display_ty(elem_ty_id),
+                )));
 
-                if pat.location.has_span() {
-                    report
-                        .add_label(Label::new(pat.location).with_message("in this `cons` pattern"));
-                }
+                diag.add_label(Label::secondary(pat.location).with_msg("in this `cons` pattern"));
             }
 
             ExpectationSource::BuiltinArg { expr_id, builtin } => {
                 let expr = self.m.exprs[expr_id].def;
 
-                if expr.location.has_span() {
-                    report.add_label(Label::new(expr.location).with_message(format!(
-                        "expected as an argument to this `{builtin}` expression"
-                    )));
-                }
+                diag.add_label(Label::secondary(expr.location).with_msg(format!(
+                    "expected as an argument to this `{builtin}` expression"
+                )));
             }
 
             ExpectationSource::BuiltinConsPat { pat_id, cons } => {
                 let pat = self.m.pats[pat_id].def;
 
-                if pat.location.has_span() {
-                    report.add_label(Label::new(pat.location).with_message(format!(
-                        "expected as an argument to this `{cons}` constructor pattern"
-                    )));
-                }
+                diag.add_label(Label::secondary(pat.location).with_msg(format!(
+                    "expected as an argument to this `{cons}` constructor pattern"
+                )));
             }
 
             ExpectationSource::FnArg {
@@ -478,24 +457,20 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 let expr = self.m.exprs[expr_id].def;
                 let callee_expr = self.m.exprs[callee_expr_id].def;
 
-                if callee_expr.location.has_span() {
-                    report.add_label(Label::new(callee_expr.location).with_message(format!(
-                        "expected as an argument #{} to this function",
-                        arg_idx + 1,
-                    )));
+                diag.add_label(Label::secondary(callee_expr.location).with_msg(format!(
+                    "expected as an argument #{} to this function",
+                    arg_idx + 1,
+                )));
 
-                    report.add_label(Label::new(callee_expr.location).with_message(format!(
-                        "the callee has the type `{}`",
-                        self.m.display_ty(callee_ty_id),
-                    )));
-                }
+                diag.add_label(Label::secondary(callee_expr.location).with_msg(format!(
+                    "the callee has the type `{}`",
+                    self.m.display_ty(callee_ty_id),
+                )));
 
-                if expr.location.has_span() {
-                    report.add_label(
-                        Label::new(expr.location)
-                            .with_message("in this function application expression"),
-                    );
-                }
+                diag.add_label(
+                    Label::secondary(expr.location)
+                        .with_msg("in this function application expression"),
+                );
             }
 
             ExpectationSource::AscriptionExpr {
@@ -505,114 +480,91 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 let expr = self.m.exprs[expr_id].def;
                 let ty_expr = &self.m.ty_exprs[ty_expr_id].def;
 
-                if ty_expr.location.has_span() {
-                    report.add_label(
-                        Label::new(ty_expr.location)
-                            .with_message("expected due to this type ascription"),
-                    );
-                }
+                diag.add_label(
+                    Label::secondary(ty_expr.location)
+                        .with_msg("expected due to this type ascription"),
+                );
 
-                if expr.location.has_span() {
-                    report.add_label(
-                        Label::new(expr.location)
-                            .with_message("in this type ascription expression"),
-                    );
-                }
+                diag.add_label(
+                    Label::secondary(expr.location).with_msg("in this type ascription expression"),
+                );
             }
 
             ExpectationSource::AscriptionPat { pat_id, ty_expr_id } => {
                 let pat = self.m.pats[pat_id].def;
                 let ty_expr = &self.m.ty_exprs[ty_expr_id].def;
 
-                if ty_expr.location.has_span() {
-                    report.add_label(
-                        Label::new(ty_expr.location)
-                            .with_message("expected due to this type ascription"),
-                    );
-                }
+                diag.add_label(
+                    Label::secondary(ty_expr.location)
+                        .with_msg("expected due to this type ascription"),
+                );
 
-                if pat.location.has_span() {
-                    report.add_label(
-                        Label::new(pat.location).with_message("in this type ascription pattern"),
-                    );
-                }
+                diag.add_label(
+                    Label::secondary(pat.location).with_msg("in this type ascription pattern"),
+                );
             }
 
             ExpectationSource::FnExprRet(expr_id) => {
                 let expr = self.m.exprs[expr_id].def;
 
-                if expr.location.has_span() {
-                    report.add_label(
-                        Label::new(expr.location)
-                            .with_message("expected as this anonymous function's return type"),
-                    );
-                }
+                diag.add_label(
+                    Label::secondary(expr.location)
+                        .with_msg("expected as this anonymous function's return type"),
+                );
             }
 
             ExpectationSource::TupleExprElem { expr_id, ty_id } => {
                 let expr = self.m.exprs[expr_id].def;
 
-                if expr.location.has_span() {
-                    report.add_label(Label::new(expr.location).with_message(format!(
-                        "expected for this tuple expression to have the type `{}`",
-                        self.m.display_ty(ty_id)
-                    )));
-                }
+                diag.add_label(Label::secondary(expr.location).with_msg(format!(
+                    "expected for this tuple expression to have the type `{}`",
+                    self.m.display_ty(ty_id)
+                )));
             }
 
             ExpectationSource::TuplePatElem { pat_id, ty_id } => {
                 let pat = self.m.pats[pat_id].def;
 
-                if pat.location.has_span() {
-                    report.add_label(Label::new(pat.location).with_message(format!(
-                        "expected for this tuple pattern to have the type `{}`",
-                        self.m.display_ty(ty_id)
-                    )));
-                }
+                diag.add_label(Label::secondary(pat.location).with_msg(format!(
+                    "expected for this tuple pattern to have the type `{}`",
+                    self.m.display_ty(ty_id)
+                )));
             }
 
             ExpectationSource::RecordExprField { expr_id, ty_id } => {
                 let expr = self.m.exprs[expr_id].def;
 
-                if expr.location.has_span() {
-                    report.add_label(Label::new(expr.location).with_message(format!(
-                        "expected for this record expression to have the type `{}`",
-                        self.m.display_ty(ty_id),
-                    )));
-                }
+                diag.add_label(Label::secondary(expr.location).with_msg(format!(
+                    "expected for this record expression to have the type `{}`",
+                    self.m.display_ty(ty_id),
+                )));
             }
 
             ExpectationSource::RecordPatField { pat_id, ty_id } => {
                 let pat = self.m.pats[pat_id].def;
 
-                if pat.location.has_span() {
-                    report.add_label(Label::new(pat.location).with_message(format!(
-                        "expected for this record pattern to have the type `{}`",
-                        self.m.display_ty(ty_id),
-                    )));
-                }
+                diag.add_label(Label::secondary(pat.location).with_msg(format!(
+                    "expected for this record pattern to have the type `{}`",
+                    self.m.display_ty(ty_id),
+                )));
             }
 
             ExpectationSource::VariantExprData { expr_id, ty_id } => {
                 let expr = self.m.exprs[expr_id].def;
 
-                if expr.location.has_span() {
-                    report.add_label(Label::new(expr.location).with_message(format!(
-                        "expected for this variant expression to have the type `{}`",
-                        self.m.display_ty(ty_id),
-                    )));
-                }
+                diag.add_label(Label::secondary(expr.location).with_msg(format!(
+                    "expected for this variant expression to have the type `{}`",
+                    self.m.display_ty(ty_id),
+                )));
             }
 
             ExpectationSource::VariantPatData { pat_id, ty_id } => {
                 let pat = self.m.pats[pat_id].def;
 
-                if pat.location.has_span() {
-                    report.add_label(Label::new(pat.location).with_message(format!(
-                        "expected for this variant pattern to have the type `{}`",
-                        self.m.display_ty(ty_id),
-                    )));
-                }
+                diag.add_label(Label::secondary(pat.location).with_msg(format!(
+                    "expected for this variant pattern to have the type `{}`",
+                    self.m.display_ty(ty_id),
+                )));
             }
 
             ExpectationSource::Scrutinee {
@@ -623,19 +575,14 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 let scrutinee = self.m.exprs[scrutinee_expr_id].def;
                 let match_expr = self.m.exprs[match_expr_id].def;
 
-                if scrutinee.location.has_span() {
-                    report.add_label(Label::new(scrutinee.location).with_message(format!(
-                        "this expression has the type `{}`",
-                        self.m.display_ty(scrutinee_ty_id),
-                    )));
+                diag.add_label(Label::secondary(scrutinee.location).with_msg(format!(
+                    "this expression has the type `{}`",
+                    self.m.display_ty(scrutinee_ty_id),
+                )));
 
-                    if match_expr.location.has_span() {
-                        report.add_label(
-                            Label::new(match_expr.location)
-                                .with_message("in this match expression"),
-                        );
-                    }
-                }
+                diag.add_label(
+                    Label::secondary(match_expr.location).with_msg("in this match expression"),
+                );
             }
 
             ExpectationSource::MatchArmBody {
@@ -646,19 +593,14 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 let first_arm = self.m.exprs[first_arm_expr_id].def;
                 let match_expr = self.m.exprs[match_expr_id].def;
 
-                if first_arm.location.has_span() {
-                    report.add_label(Label::new(first_arm.location).with_message(format!(
-                        "this arm has the type `{}`",
-                        self.m.display_ty(ty_id),
-                    )));
+                diag.add_label(Label::secondary(first_arm.location).with_msg(format!(
+                    "this arm has the type `{}`",
+                    self.m.display_ty(ty_id),
+                )));
 
-                    if match_expr.location.has_span() {
-                        report.add_label(
-                            Label::new(match_expr.location)
-                                .with_message("in this match expression"),
-                        );
-                    }
-                }
+                diag.add_label(
+                    Label::secondary(match_expr.location).with_msg("in this match expression"),
+                );
             }
 
             ExpectationSource::ListExprElem {
@@ -669,18 +611,14 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 let first_elem = self.m.exprs[first_elem_expr_id].def;
                 let list_expr = self.m.exprs[list_expr_id].def;
 
-                if first_elem.location.has_span() {
-                    report.add_label(Label::new(first_elem.location).with_message(format!(
-                        "this element has the type `{}`",
-                        self.m.display_ty(ty_id),
-                    )));
+                diag.add_label(Label::secondary(first_elem.location).with_msg(format!(
+                    "this element has the type `{}`",
+                    self.m.display_ty(ty_id),
+                )));
 
-                    if list_expr.location.has_span() {
-                        report.add_label(
-                            Label::new(list_expr.location).with_message("in this list expression"),
-                        );
-                    }
-                }
+                diag.add_label(
+                    Label::secondary(list_expr.location).with_msg("in this list expression"),
+                );
             }
 
             ExpectationSource::ListPatElem {
@@ -691,28 +629,23 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 let first_elem = self.m.pats[first_elem_pat_id].def;
                 let list_pat = self.m.pats[list_pat_id].def;
 
-                if first_elem.location.has_span() {
-                    report.add_label(Label::new(first_elem.location).with_message(format!(
-                        "this element has the type `{}`",
-                        self.m.display_ty(ty_id),
-                    )));
+                diag.add_label(Label::secondary(first_elem.location).with_msg(format!(
+                    "this element has the type `{}`",
+                    self.m.display_ty(ty_id),
+                )));
 
-                    if list_pat.location.has_span() {
-                        report.add_label(
-                            Label::new(list_pat.location).with_message("in this list pattern"),
-                        );
-                    }
-                }
+                diag.add_label(
+                    Label::secondary(list_pat.location).with_msg("in this list pattern"),
+                );
             }
 
             ExpectationSource::IfCond { expr_id } => {
                 let expr = self.m.exprs[expr_id].def;
 
-                if expr.location.has_span() {
-                    report.add_label(Label::new(expr.location).with_message(
-                        "expected because this is the condition of this `if` expression",
-                    ));
-                }
+                diag.add_label(
+                    Label::secondary(expr.location)
+                        .with_msg("expected because this is the condition of this `if` expression"),
+                );
             }
 
             ExpectationSource::IfBranch {
@@ -723,18 +656,14 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 let then_expr = self.m.exprs[then_expr_id].def;
                 let if_expr = self.m.exprs[if_expr_id].def;
 
-                if then_expr.location.has_span() {
-                    report.add_label(Label::new(then_expr.location).with_message(format!(
-                        "expected because this branch has the type `{}`",
-                        self.m.display_ty(ty_id),
-                    )));
+                diag.add_label(Label::secondary(then_expr.location).with_msg(format!(
+                    "expected because this branch has the type `{}`",
+                    self.m.display_ty(ty_id),
+                )));
 
-                    if if_expr.location.has_span() {
-                        report.add_label(
-                            Label::new(if_expr.location).with_message("in this `if` expression"),
-                        );
-                    }
-                }
+                diag.add_label(
+                    Label::secondary(if_expr.location).with_msg("in this `if` expression"),
+                );
             }
 
             ExpectationSource::Seq {
@@ -743,29 +672,23 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             } => {
                 let expr = self.m.exprs[expr_id].def;
 
-                if semi_location.has_span() {
-                    report.add_label(
-                        Label::new(semi_location)
-                            .with_message("expected because it is followed by a semicolon"),
-                    );
-                }
+                diag.add_label(
+                    Label::secondary(semi_location)
+                        .with_msg("expected because it is followed by a semicolon"),
+                );
 
-                if expr.location.has_span() {
-                    report.add_label(
-                        Label::new(expr.location).with_message("in this sequence expression"),
-                    );
-                }
+                diag.add_label(
+                    Label::secondary(expr.location).with_msg("in this sequence expression"),
+                );
             }
 
             ExpectationSource::LetRecBinding { pat_id, ty_id } => {
                 let pat = self.m.pats[pat_id].def;
 
-                if pat.location.has_span() {
-                    report.add_label(Label::new(pat.location).with_message(format!(
-                        "this pattern has the type `{}`",
-                        self.m.display_ty(ty_id),
-                    )));
-                }
+                diag.add_label(Label::secondary(pat.location).with_msg(format!(
+                    "this pattern has the type `{}`",
+                    self.m.display_ty(ty_id),
+                )));
             }
 
             ExpectationSource::LetBinding {
@@ -774,25 +697,21 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             } => {
                 let init_expr = self.m.exprs[init_expr_id].def;
 
-                if init_expr.location.has_span() {
-                    report.add_label(Label::new(init_expr.location).with_message(format!(
-                        "this expression has the type `{}`",
-                        self.m.display_ty(ty_id),
-                    )));
-                }
+                diag.add_label(Label::secondary(init_expr.location).with_msg(format!(
+                    "this expression has the type `{}`",
+                    self.m.display_ty(ty_id),
+                )));
             }
 
             ExpectationSource::BinOp { op_location } => {
-                if op_location.has_span() {
-                    report.add_label(
-                        Label::new(op_location)
-                            .with_message("expected because it's an operand to this operator"),
-                    );
-                }
+                diag.add_label(
+                    Label::secondary(op_location)
+                        .with_msg("expected because it's an operand to this operator"),
+                );
             }
         }
 
-        report
+        diag
     }
 
     fn make_expr_ty_error(
@@ -801,15 +720,15 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         ty_id: TyId,
         expected_ty_id: TyId,
         source: ExpectationSource,
-    ) -> ReportBuilder<'static, Location> {
-        let report = SemaError::UnexpectedTypeForExpression {
-            location: self.m.exprs[expr_id].def.location,
-            expected_ty: self.m.display_ty(expected_ty_id).to_string(),
-            actual_ty: self.m.display_ty(ty_id).to_string(),
-        }
-        .into_report_builder();
-
-        self.augment_error_with_expectation(report, source)
+    ) -> Diagnostic {
+        self.augment_error_with_expectation(
+            SemaError::UnexpectedTypeForExpression {
+                location: self.m.exprs[expr_id].def.location,
+                expected_ty: self.m.display_ty(expected_ty_id).to_string(),
+                actual_ty: self.m.display_ty(ty_id).to_string(),
+            },
+            source,
+        )
     }
 
     fn typeck_decls(&mut self) -> Result {
@@ -1165,12 +1084,12 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 let mut report = self.make_expr_ty_error(expr_id, ty_id, expected_ty_id, source);
 
                 if self.m.bindings[binding_id].location.has_span() {
-                    report.add_label(
-                        Label::new(self.m.bindings[binding_id].location).with_message(format!(
+                    report.add_label(Label::secondary(self.m.bindings[binding_id].location).with_msg(
+                        format!(
                             "the binding `{}` is defined here",
                             self.m.bindings[binding_id].name,
-                        )),
-                    );
+                        ),
+                    ));
                 }
 
                 self.diag.emit(report);

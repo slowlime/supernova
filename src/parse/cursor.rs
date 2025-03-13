@@ -89,7 +89,7 @@ impl Iterator for Cursor<'_> {
             return None;
         };
 
-        self.pos += 1;
+        self.pos += c.len_utf8() as u64;
 
         Some(c)
     }

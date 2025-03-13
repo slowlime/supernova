@@ -1,12 +1,11 @@
 use std::borrow::Cow;
 
-use ariadne::{Color, Label, Report, ReportBuilder, ReportKind};
 use fxhash::FxHashMap;
 use strum::VariantArray;
 use thiserror::Error;
 
 use crate::ast;
-use crate::diag::IntoReportBuilder;
+use crate::diag::{Diagnostic, IntoDiagnostic, Label, code};
 use crate::location::{ConvexHull, Location, Span};
 use crate::util::{format_iter, format_list};
 
@@ -41,61 +40,65 @@ pub enum ParserError<'src> {
     LexerError(#[from] LexerError),
 }
 
-impl IntoReportBuilder for ParserError<'_> {
-    fn into_report_builder(self) -> ReportBuilder<'static, Location> {
+impl IntoDiagnostic for ParserError<'_> {
+    fn into_diagnostic(self) -> Diagnostic {
         match self {
             Self::UnexpectedToken {
                 ref token,
                 ref expected,
-            } => Report::build(ReportKind::Error, token.span.into())
-                .with_message(format!("unexpected token {}", token.value))
-                .with_code("parser::unexpected_token")
-                .with_label(Label::new(token.span.into()).with_color(Color::Red))
-                .with_help(format!(
+            } => Diagnostic::error()
+                .at(token.span)
+                .with_msg(format!("unexpected token {}", token.value))
+                .with_code(code!(parser::unexpected_token))
+                .with_label(Label::primary(token.span))
+                .with_note(format!(
                     "expected {}",
                     format_list(expected, "or", "nothing")
-                )),
+                ))
+                .make(),
 
-            Self::UnknownLanguage { span, language: _ } => {
-                Report::build(ReportKind::Error, span.into())
-                    .with_message(&self)
-                    .with_code("parser::unknown_language")
-                    .with_label(Label::new(span.into()).with_color(Color::Red))
-                    .with_help("the only supported language is `core`")
-            }
+            Self::UnknownLanguage { span, language: _ } => Diagnostic::error()
+                .at(span)
+                .with_msg(&self)
+                .with_code(code!(parser::unknown_language))
+                .with_label(Label::primary(span))
+                .with_note("the only supported language is `core`")
+                .make(),
 
-            Self::UnknownExtension { span, extension: _ } => {
-                Report::build(ReportKind::Error, span.into())
-                    .with_message(&self)
-                    .with_code("parser::unknown_extension")
-                    .with_label(Label::new(span.into()).with_color(Color::Red))
-                    .with_help(format!(
-                        "supported extensions are {}",
-                        format_iter(
-                            ast::Extension::VARIANTS.iter().map(|ext| format!("#{ext}")),
-                            "and",
-                            "none",
-                        )
-                    ))
-            }
-
-            Self::DuplicateAnnotation { span, prev_span } => {
-                Report::build(ReportKind::Error, span.into())
-                    .with_message(&self)
-                    .with_code("parser::duplicate_annotation")
-                    .with_label(Label::new(span.into()).with_color(Color::Red))
-                    .with_label(
-                        Label::new(prev_span.into())
-                            .with_message("the previous such annotation was provided here"),
+            Self::UnknownExtension { span, extension: _ } => Diagnostic::error()
+                .at(span)
+                .with_msg(&self)
+                .with_code(code!(parser::unknown_extension))
+                .with_label(Label::primary(span))
+                .with_note(format!(
+                    "supported extensions are {}",
+                    format_iter(
+                        ast::Extension::VARIANTS.iter().map(|ext| format!("#{ext}")),
+                        "and",
+                        "none",
                     )
-            }
+                ))
+                .make(),
 
-            Self::TupleIndexTooLarge { span } => Report::build(ReportKind::Error, span.into())
-                .with_message(&self)
-                .with_code("parser::tuple_index_too_large")
-                .with_label(Label::new(span.into()).with_color(Color::Red)),
+            Self::DuplicateAnnotation { span, prev_span } => Diagnostic::error()
+                .at(span)
+                .with_msg(&self)
+                .with_code(code!(parser::duplicate_annotation))
+                .with_label(Label::primary(span))
+                .with_label(
+                    Label::secondary(prev_span)
+                        .with_msg("the previous such annotation was provided here"),
+                )
+                .make(),
 
-            Self::LexerError(e) => e.into_report_builder(),
+            Self::TupleIndexTooLarge { span } => Diagnostic::error()
+                .at(span)
+                .with_msg(&self)
+                .with_code(code!(parser::tuple_index_too_large))
+                .with_label(Label::primary(span))
+                .make(),
+
+            Self::LexerError(e) => e.into_diagnostic(),
         }
     }
 }

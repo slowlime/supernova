@@ -1,12 +1,11 @@
 use std::collections::VecDeque;
 use std::fmt::{self, Display};
 
-use ariadne::{Color, Label, Report, ReportBuilder, ReportKind};
 use num::{BigUint, Num};
 use thiserror::Error;
 
-use crate::diag::IntoReportBuilder;
-use crate::location::{Location, Span};
+use crate::diag::{Diagnostic, IntoDiagnostic, Label, code};
+use crate::location::Span;
 use crate::parse::token::Symbol;
 use crate::sourcemap::SourceId;
 
@@ -37,12 +36,39 @@ pub struct LexerError {
     pub span: Span,
 }
 
-impl IntoReportBuilder for LexerError {
-    fn into_report_builder(self) -> ReportBuilder<'static, Location> {
-        let report = Report::build(ReportKind::Error, self.span.into())
-            .with_label(Label::new(self.span.into()).with_color(Color::Red));
+impl IntoDiagnostic for LexerError {
+    fn into_diagnostic(self) -> Diagnostic {
+        let diag = Diagnostic::error()
+            .at(self.span)
+            .with_msg(&self)
+            .with_label(Label::primary(self.span));
 
-        self.kind.update_report(report)
+        match self.kind {
+            LexerErrorKind::UnterminatedComment => {
+                diag.with_code(code!(lexer::unterminated_comment)).make()
+            }
+
+            LexerErrorKind::UnrecognizedCharacter(_) => {
+                diag.with_code(code!(lexer::unrecognized_character)).make()
+            }
+
+            LexerErrorKind::MalformedNumber => {
+                diag.with_code(code!(lexer::malformed_number)).make()
+            }
+
+            LexerErrorKind::MalformedAddress => {
+                diag.with_code(code!(lexer::malformed_address)).make()
+            }
+
+            LexerErrorKind::MalformedExtension => {
+                diag.with_code(code!(lexer::malformed_extension)).make()
+            }
+
+            LexerErrorKind::UnterminatedAddress => diag
+                .with_code(code!(lexer::unterminated_address))
+                .with_note("the address literal must be immediately followed by `>`")
+                .make(),
+        }
     }
 }
 
@@ -81,33 +107,6 @@ pub enum LexerErrorKind {
 
     #[error("the address literal is unterminated")]
     UnterminatedAddress,
-}
-
-impl LexerErrorKind {
-    fn update_report(
-        &self,
-        mut report: ReportBuilder<'static, Location>,
-    ) -> ReportBuilder<'static, Location> {
-        report.set_message(self);
-
-        match self {
-            LexerErrorKind::UnterminatedComment => report.with_code("lexer::unterminated_comment"),
-
-            LexerErrorKind::UnrecognizedCharacter(_) => {
-                report.with_code("lexer::unrecognized_character")
-            }
-
-            LexerErrorKind::MalformedNumber => report.with_code("lexer::malformed_number"),
-
-            LexerErrorKind::MalformedAddress => report.with_code("lexer::malformed_address"),
-
-            LexerErrorKind::MalformedExtension => report.with_code("lexer::malformed_extension"),
-
-            LexerErrorKind::UnterminatedAddress => report
-                .with_code("lexer::unterminated_address")
-                .with_help("the address literal must be immediately followed by '>'"),
-        }
-    }
 }
 
 pub struct Lexer<'a> {
