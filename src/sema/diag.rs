@@ -1,5 +1,6 @@
 use thiserror::Error;
 
+use crate::ast;
 use crate::diag::{Code, Diagnostic, IntoDiagnostic, Label, code};
 use crate::location::Location;
 use crate::util::format_iter;
@@ -25,7 +26,14 @@ const ERROR_INCORRECT_NUMBER_OF_ARGUMENTS: Code =
     code!(sema::wrong_arg_count as "ERROR_INCORRECT_NUMBER_OF_ARGUMENTS");
 
 #[derive(Error, Debug, Clone)]
-pub enum SemaError {
+pub enum SemaDiag {
+    #[error("extension #{extension} is enabled several times")]
+    DuplicateExtension {
+        extension: ast::Extension,
+        location: Location,
+        prev_location: Location,
+    },
+
     #[error(
         "features {} conflict with each other",
         format_iter(
@@ -563,9 +571,24 @@ pub enum SemaError {
     IncorrectArityOfMain { location: Location, actual: usize },
 }
 
-impl IntoDiagnostic for SemaError {
+impl IntoDiagnostic for SemaDiag {
     fn into_diagnostic(self) -> Diagnostic {
         match &self {
+            Self::DuplicateExtension {
+                extension: _,
+                location,
+                prev_location,
+            } => Diagnostic::warn()
+                .at(*location)
+                .with_code(code!(sema::duplicate_extension))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .with_label(
+                    Label::secondary(*prev_location)
+                        .with_msg("the extension was previously enabled here"),
+                )
+                .make(),
+
             Self::ConflictingFeatures { location, features } => {
                 let mut diag = Diagnostic::error()
                     .at(*location)

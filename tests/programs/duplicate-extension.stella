@@ -1,8 +1,9 @@
+//! PASS
 language core;
 
-//! ERROR(sema::test)
+//! WARN(sema::duplicate_extension)
 extend with #lists, #lists;
 
-fn main(x : Nat) -> Nat {
+fn main(x : [Nat]) -> [Nat] {
   return x
 }

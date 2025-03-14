@@ -6,7 +6,7 @@ use crate::ast;
 use crate::ast::visit::{AstRecurse, Visitor};
 use crate::diag::DiagCtx;
 
-use super::{BindingId, BindingKind, DeclId, Module, Namespace, Result, Scope, ScopeId, SemaError};
+use super::{BindingId, BindingKind, DeclId, Module, Namespace, Result, Scope, ScopeId, SemaDiag};
 
 impl Module<'_> {
     pub(super) fn resolve(&mut self, diag: &mut impl DiagCtx) -> Result {
@@ -147,7 +147,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
 
     fn find_main_decl(&mut self) -> Result {
         let Some(&binding_id) = self.m.scopes[self.m.root_scope_id].values.get("main") else {
-            self.diag.emit(SemaError::MissingMain);
+            self.diag.emit(SemaDiag::MissingMain);
 
             return Err(());
         };
@@ -182,13 +182,13 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             let prev_binding = &self.m.bindings[prev_binding_id];
 
             self.diag.emit(match ns {
-                Namespace::Ty => SemaError::DuplicateTyDef {
+                Namespace::Ty => SemaDiag::DuplicateTyDef {
                     name,
                     location: binding.location,
                     prev_location: prev_binding.location,
                 },
 
-                Namespace::Value => SemaError::DuplicateVariableDef {
+                Namespace::Value => SemaDiag::DuplicateVariableDef {
                     name,
                     location: binding.location,
                     prev_location: prev_binding.location,
@@ -299,7 +299,7 @@ impl<'ast, D: DiagCtx> Visitor<'ast, 'ast> for Walker<'ast, '_, '_, D> {
                         fields.insert(field.name.as_str(), field.name.location())
                     {
                         self.result = Err(());
-                        self.pass.diag.emit(SemaError::DuplicateRecordTypeFields {
+                        self.pass.diag.emit(SemaDiag::DuplicateRecordTypeFields {
                             name: field.name.as_str().into(),
                             location: field.name.location(),
                             prev_location,
@@ -316,7 +316,7 @@ impl<'ast, D: DiagCtx> Visitor<'ast, 'ast> for Walker<'ast, '_, '_, D> {
                         fields.insert(field.name.as_str(), field.name.location())
                     {
                         self.result = Err(());
-                        self.pass.diag.emit(SemaError::DuplicateVariantTypeFields {
+                        self.pass.diag.emit(SemaDiag::DuplicateVariantTypeFields {
                             name: field.name.as_str().into(),
                             location: field.name.location(),
                             prev_location,
@@ -340,7 +340,7 @@ impl<'ast, D: DiagCtx> Visitor<'ast, 'ast> for Walker<'ast, '_, '_, D> {
                     self.pass.m.ty_name_exprs.insert(ty_expr.id, binding_id);
                 } else {
                     self.result = Err(());
-                    self.pass.diag.emit(SemaError::UndefinedTy {
+                    self.pass.diag.emit(SemaDiag::UndefinedTy {
                         name: t.name.as_str().into(),
                         location: t.name.location(),
                     });
@@ -368,7 +368,7 @@ impl<'ast, D: DiagCtx> Visitor<'ast, 'ast> for Walker<'ast, '_, '_, D> {
                     self.pass.m.name_exprs.insert(expr.id, binding_id);
                 } else {
                     self.result = Err(());
-                    self.pass.diag.emit(SemaError::UndefinedVariable {
+                    self.pass.diag.emit(SemaDiag::UndefinedVariable {
                         name: e.name.as_str().into(),
                         location: e.name.location(),
                     });
@@ -424,7 +424,7 @@ impl<'ast, D: DiagCtx> Visitor<'ast, 'ast> for Walker<'ast, '_, '_, D> {
                         fields.insert(field.name.as_str(), field.name.location())
                     {
                         self.result = Err(());
-                        self.pass.diag.emit(SemaError::DuplicateRecordFields {
+                        self.pass.diag.emit(SemaDiag::DuplicateRecordFields {
                             name: field.name.as_str().into(),
                             location: field.name.location(),
                             prev_location,
@@ -508,7 +508,7 @@ impl<'ast, D: DiagCtx> Visitor<'ast, 'ast> for Walker<'ast, '_, '_, D> {
                         self.result = Err(());
                         self.pass
                             .diag
-                            .emit(SemaError::DuplicateRecordPatternFields {
+                            .emit(SemaDiag::DuplicateRecordPatternFields {
                                 name: field.name.as_str().into(),
                                 location: field.name.location(),
                                 prev_location,

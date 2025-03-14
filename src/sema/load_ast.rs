@@ -1,23 +1,31 @@
+use fxhash::FxHashMap;
+
 use crate::ast;
 use crate::ast::visit::{AstRecurse, Visitor, VisitorMut};
+use crate::diag::DiagCtx;
 
 use super::feature::Feature;
-use super::{BindingInfo, BindingKind, DeclInfo, ExprInfo, Module, PatInfo, TyExprInfo};
+use super::{BindingInfo, BindingKind, DeclInfo, ExprInfo, Module, PatInfo, SemaDiag, TyExprInfo};
 
 impl<'ast> Module<'ast> {
-    pub(super) fn load_ast(&mut self, ast: &'ast mut ast::Program<'ast>) {
-        Pass::new(self, ast).run()
+    pub(super) fn load_ast(&mut self, ast: &'ast mut ast::Program<'ast>, diag: &mut impl DiagCtx) {
+        Pass::new(self, ast, diag).run()
     }
 }
 
-struct Pass<'ast, 'm> {
+struct Pass<'ast, 'm, D> {
     m: &'m mut Module<'ast>,
     ast: Option<&'ast mut ast::Program<'ast>>,
+    diag: &'m mut D,
 }
 
-impl<'ast, 'm> Pass<'ast, 'm> {
-    fn new(m: &'m mut Module<'ast>, ast: &'ast mut ast::Program<'ast>) -> Self {
-        Self { m, ast: Some(ast) }
+impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
+    fn new(m: &'m mut Module<'ast>, ast: &'ast mut ast::Program<'ast>, diag: &'m mut D) -> Self {
+        Self {
+            m,
+            ast: Some(ast),
+            diag,
+        }
     }
 
     fn run(mut self) {
@@ -29,8 +37,16 @@ impl<'ast, 'm> Pass<'ast, 'm> {
     }
 
     fn load_features(&mut self) {
+        let mut extensions = FxHashMap::default();
+
         for &(extension, location) in &self.ast.as_ref().unwrap().extensions {
-            if let Some(feature) = Feature::from_extension(extension, location) {
+            if let Some(prev_location) = extensions.insert(extension, location) {
+                self.diag.emit(SemaDiag::DuplicateExtension {
+                    extension,
+                    location,
+                    prev_location,
+                });
+            } else if let Some(feature) = Feature::from_extension(extension, location) {
                 self.m.features.insert(feature.kind, feature);
             }
         }

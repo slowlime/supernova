@@ -9,47 +9,55 @@ use crate::{TestResult, TestRunData};
 
 #[derive(From)]
 pub enum Directive {
-    Error(DirectiveError),
+    Diag(DirectiveDiag),
     Pass(DirectivePass),
 }
 
 impl Directive {
     pub fn check(&self, run_data: &TestRunData) -> TestResult {
         match self {
-            Self::Error(d) => d.check(run_data),
+            Self::Diag(d) => d.check(run_data),
             Self::Pass(d) => d.check(run_data),
         }
     }
 }
 
-pub struct DirectiveError {
+pub struct DirectiveDiag {
+    level: Level,
     line: usize,
-    err_start: Range<usize>,
+    diag_start: Range<usize>,
     code: Option<String>,
 }
 
-static DIRECTIVE_ERROR_REGEX: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r#"^ERROR\((?<code>[[:word:]]+::[[:word:]]+)\)$"#).unwrap());
+static DIRECTIVE_DIAG_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"^(?<level>ERROR|WARN)\((?<code>[[:word:]]+::[[:word:]]+)\)$"#).unwrap()
+});
 
-impl DirectiveError {
+impl DirectiveDiag {
     fn parse(directive: &str, line: usize, next_line_range: Range<usize>) -> Self {
-        let captures = DIRECTIVE_ERROR_REGEX.captures(directive).unwrap();
+        let captures = DIRECTIVE_DIAG_REGEX.captures(directive).unwrap();
+        let level = match captures.name("level").unwrap().as_str() {
+            "ERROR" => Level::Error,
+            "WARN" => Level::Warn,
+            level => panic!("unsupported diagnostic level `{level}`"),
+        };
         let code = captures.name("code").map(|m| m.as_str().into());
 
-        DirectiveError {
+        Self {
+            level,
             line,
-            err_start: next_line_range,
+            diag_start: next_line_range,
             code,
         }
     }
 
     pub fn check(&self, run_data: &TestRunData) -> TestResult {
         if run_data.diags.iter().any(|diag| {
-            diag.level == Level::Error
+            diag.level == self.level
                 && diag
                     .location
                     .span()
-                    .is_some_and(|span| self.err_start.contains(&span.start()))
+                    .is_some_and(|span| self.diag_start.contains(&span.start()))
                 && self
                     .code
                     .as_ref()
@@ -58,7 +66,7 @@ impl DirectiveError {
             TestResult::Passed
         } else {
             eprintln!(
-                "Could not find a diagnostic matching the ERROR directive at line {}",
+                "Could not find a diagnostic matching the directive at line {}",
                 self.line,
             );
 
@@ -88,11 +96,7 @@ impl DirectivePass {
 }
 
 static DIRECTIVE_REGEX: LazyLock<RegexSet> = LazyLock::new(|| {
-    RegexSet::new([
-        DIRECTIVE_ERROR_REGEX.as_str(),
-        DIRECTIVE_PASS_REGEX.as_str(),
-    ])
-    .unwrap()
+    RegexSet::new([DIRECTIVE_DIAG_REGEX.as_str(), DIRECTIVE_PASS_REGEX.as_str()]).unwrap()
 });
 
 fn split_lines(mut s: &str) -> Vec<(Range<usize>, &str)> {
@@ -140,7 +144,7 @@ pub fn parse_directives(s: &str) -> Result<Vec<Directive>, String> {
                 .map(|(r, _)| r.clone())
                 .unwrap_or(s.len()..s.len());
 
-            DirectiveError::parse(directive, idx + 1, next_line_range).into()
+            DirectiveDiag::parse(directive, idx + 1, next_line_range).into()
         } else if matches.matched(1) {
             DirectivePass::parse(directive).into()
         } else {

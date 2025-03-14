@@ -1,5 +1,5 @@
 mod check_exhaustiveness;
-mod error;
+mod diag;
 pub mod feature;
 mod load_ast;
 mod process_features;
@@ -17,7 +17,7 @@ use crate::location::Location;
 use self::feature::{Feature, FeatureKind};
 use self::ty::{Ty, TyKind, WellKnownTys};
 
-pub use self::error::SemaError;
+pub use self::diag::SemaDiag;
 
 new_key_type! {
     pub struct DeclId;
@@ -183,7 +183,7 @@ pub fn process<'ast>(
     diag: &mut impl DiagCtx,
 ) -> (Module<'ast>, Result) {
     let mut module = Module::new();
-    module.load_ast(ast);
+    module.load_ast(ast, diag);
 
     let result = (|| -> Result {
         module.process_features(diag)?;

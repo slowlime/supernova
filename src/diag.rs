@@ -84,10 +84,10 @@ impl Diagnostic {
         self.notes.push(note.to_string());
     }
 
-    pub fn error() -> DiagnosticBuilder<false, false, false> {
+    pub fn build(level: Level) -> DiagnosticBuilder<false, false, false> {
         DiagnosticBuilder {
             diag: Self {
-                level: Level::Error,
+                level,
                 location: Default::default(),
                 code: Default::default(),
                 msg: Default::default(),
@@ -95,6 +95,14 @@ impl Diagnostic {
                 labels: Default::default(),
             },
         }
+    }
+
+    pub fn error() -> DiagnosticBuilder<false, false, false> {
+        Self::build(Level::Error)
+    }
+
+    pub fn warn() -> DiagnosticBuilder<false, false, false> {
+        Self::build(Level::Warn)
     }
 }
 

@@ -13,7 +13,7 @@ use crate::ast::visit::{AstRecurse, DefaultVisitor};
 use crate::diag::DiagCtx;
 
 use super::ty::TyKind;
-use super::{Module, PatId, Result, SemaError, TyId};
+use super::{Module, PatId, Result, SemaDiag, TyId};
 
 #[derive(Debug, Clone)]
 struct DeconstructedPat {
@@ -703,7 +703,7 @@ impl<'ast, D: DiagCtx> DefaultVisitor<'ast, 'ast> for Walker<'ast, '_, '_, D> {
                     .check_exhaustiveness(&pat_ids, self.pass.m.exprs[e.expr.id].ty_id)
                 {
                     self.result = Err(());
-                    self.pass.diag.emit(SemaError::NonExhaustiveMatchPatterns {
+                    self.pass.diag.emit(SemaDiag::NonExhaustiveMatchPatterns {
                         location: expr.location,
                         scrutinee_location: e.expr.location,
                         witness: witness.display(self.pass.m).to_string(),
@@ -718,7 +718,7 @@ impl<'ast, D: DiagCtx> DefaultVisitor<'ast, 'ast> for Walker<'ast, '_, '_, D> {
                         self.pass.m.pats[binding.pat.id].ty_id,
                     ) {
                         self.result = Err(());
-                        self.pass.diag.emit(SemaError::NonIrrefutableLetPattern {
+                        self.pass.diag.emit(SemaDiag::NonIrrefutableLetPattern {
                             location: binding.pat.location,
                             witness: witness.display(self.pass.m).to_string(),
                         });
