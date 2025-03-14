@@ -1,0 +1,49 @@
+//! PASS
+language core;
+
+extend with #let-bindings;
+extend with #letrec-bindings;
+extend with #tuples;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #pattern-ascriptions;
+
+fn let-binding-is-not-visible-in-initializer(x : Nat) -> {Nat} {
+  return let x = {x} in x
+}
+
+fn previous-let-bindings-are-visible-in-successive-ones(x : Nat) -> {{{Nat}}} {
+  return let
+    a = {x},
+    b = {a},
+    c = {b}
+   in c
+}
+
+fn successive-let-bindings-are-not-visible-in-previous-ones(a : Nat, b : Nat) -> {Nat} {
+  return let
+    b = {a},
+    a = b
+   in a
+}
+
+fn letrec-bindings-are-visible-in-all-initializers(a : Nat, b : Nat, z : Nat) -> Nat {
+  return letrec
+    a as fn(Nat) -> Nat = fn(x : Nat) {
+      return match x {
+        0 => z
+      | succ(x) => b(x)
+      }
+    },
+    b as fn(Nat) -> Nat = fn(x : Nat) {
+      return match x {
+        0 => z
+      | succ(x) => a(x)
+      }
+    }
+   in a(z)
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}

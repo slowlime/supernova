@@ -47,11 +47,13 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
 
     fn run(mut self) -> Result {
         self.init_root_scopes();
-        self.resolve_decls()?;
-        self.resolve_defs()?;
-        self.find_main_decl()?;
 
-        Ok(())
+        let mut result = Ok(());
+        result = result.and(self.resolve_decls());
+        result = result.and(self.resolve_defs());
+        result = result.and(self.find_main_decl());
+
+        result
     }
 
     fn init_root_scopes(&mut self) {

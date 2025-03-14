@@ -1,0 +1,22 @@
+language core;
+
+extend with #records, #tuples, #variants, #unit-type;
+extend with #nested-function-declarations, #nullary-functions, #type-ascriptions, #structural-patterns;
+
+fn main(x : Nat) -> Nat {
+  //! ERROR(sema::duplicate_record_type_fields)
+  fn duplicate-record-field(x : {foo : Nat, bar : Bool, baz : Nat, bar : Bool}) -> Unit {
+    //! ERROR(sema::duplicate_record_fields)
+    return match {foo = unit, bar = unit, baz = unit, bar = unit} {
+      //! ERROR(sema::duplicate_record_pattern_fields)
+      {foo = foo, bar = bar0, baz = baz, bar = bar1} => foo
+    }
+  }
+
+  //! ERROR(sema::duplicate_variant_type_fields)
+  fn duplicate-variant-field(x : <|foo : Unit, bar : Unit, baz : Unit, bar : Unit|>) -> Unit {
+    return unit
+  }
+
+  return 0
+}

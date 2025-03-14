@@ -1,0 +1,83 @@
+//! PASS
+language core;
+
+extend with #nested-function-declarations;
+extend with #let-bindings;
+extend with #let-patterns;
+extend with #pattern-ascriptions;
+extend with #structural-patterns;
+extend with #tuples;
+extend with #unit-type;
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #letrec-bindings;
+
+fn foo() -> {Unit} {
+  return {unit}
+}
+
+fn nested-decl-shadows-outer-defs() -> Bool {
+  fn foo() -> Nat {
+    fn foo() -> Unit {
+      return foo()
+    }
+
+    return match foo() {
+      unit => 0
+    }
+  }
+
+  return match foo() {
+    _ as Nat => true
+  }
+}
+
+fn params-shadow-outer-defs(foo : Nat) -> Nat {
+  fn test(foo : Unit) -> Unit {
+    return (fn(foo : {Nat}) { return unit })({0})
+  }
+
+  return match test(unit) {
+    unit => (fn(foo : {Bool}) { return 0 })({false})
+  }
+}
+
+fn nested-decls-shadow-params(foo : Unit) -> Nat {
+  fn foo(x : Unit) -> Nat {
+    return 0
+  }
+
+  return foo(unit)
+}
+
+fn match-arm-bindings-shadow-outer-defs(x : {Nat, Bool}) -> Nat {
+  return match x {
+    {x, y} => x
+  }
+}
+
+fn let-bindings-shadow-outer-defs() -> Unit {
+  return
+    let foo = 0,
+        x = 0
+     in let x = unit
+         in x
+}
+
+fn each-successive-let-bindings-shadows-previous-ones() -> Unit {
+  return let
+    x = 0,
+    x = false,
+    x = unit
+   in x
+}
+
+fn letrec-bindings-shadow-outer-defs() -> Unit {
+  return
+    letrec foo as Bool = false
+     in unit
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}

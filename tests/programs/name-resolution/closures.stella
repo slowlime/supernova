@@ -1,0 +1,44 @@
+//! PASS
+language core;
+
+extend with #nested-function-declarations;
+extend with #structural-patterns;
+extend with #tuples;
+
+fn nested-decls-can-access-outer-defs(x : Nat) -> fn(Nat) -> fn(Bool) -> Nat {
+  fn inner(y : Nat) -> fn(Bool) -> Nat {
+    fn innermost(b : Bool) -> Nat {
+      return
+        if b
+        then x
+        else y
+    }
+
+    return innermost
+  }
+
+  return inner
+}
+
+fn anon-fns-can-access-outer-defs(x : Nat) -> fn(Nat) -> fn(Bool) -> Nat {
+  return fn(y : Nat) {
+    return fn(b : Bool) {
+      return
+        if b
+        then x
+        else y
+    }
+  }
+}
+
+fn anon-fs-can-close-over-pattern-bindings(x : {Nat, Nat}) -> fn(fn(Nat) -> Nat) -> Nat {
+  return match x {
+    {0, y} => fn(f : fn(Nat) -> Nat) { return y }
+  | {1, y} => fn(f : fn(Nat) -> Nat) { return f(y) }
+  | {_, y} => fn(f : fn(Nat) -> Nat) { return f(f(y)) }
+  }
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}

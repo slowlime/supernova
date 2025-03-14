@@ -1,0 +1,19 @@
+//! PASS
+language core;
+
+extend with #tuples;
+extend with #structural-patterns;
+
+fn match-arm-scopes-are-disjoint(x : {{Nat, Nat}, {Nat, Nat}}) -> Nat {
+  return match x {
+    {{x, y}, {z, 0}} => x
+  | {{x, y}, {0, w}} => w
+  | {{x, 0}, {z, w}} => z
+  | {{0, y}, {z, w}} => y
+  | {{x, y}, {z, w}} => x
+  }
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}
