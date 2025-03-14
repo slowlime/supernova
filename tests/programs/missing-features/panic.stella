@@ -1,0 +1,10 @@
+language core;
+
+fn wrong(x : Nat) -> Nat {
+  //! ERROR(sema::panic_expr_not_allowed)
+  return panic!
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}

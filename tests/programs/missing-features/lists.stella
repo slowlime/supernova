@@ -1,0 +1,34 @@
+language core;
+
+extend with #structural-patterns;
+
+//! ERROR(sema::list_not_allowed)
+fn wrong(x : [Nat]) -> Nat {
+  //! ERROR(sema::apply_expr_not_allowed)
+  return match cons(
+    //! ERROR(sema::apply_expr_not_allowed)
+    List::head(
+      //! ERROR(sema::apply_expr_not_allowed)
+      cons(
+        //! ERROR(sema::list_not_allowed)
+        [0],
+        x
+      )
+    ),
+    //! ERROR(sema::apply_expr_not_allowed)
+    List::tail(x)
+  ) {
+  //! ERROR(sema::list_not_allowed)
+    [] => 0
+  //! ERROR(sema::list_not_allowed)
+  | [x] => 1
+  //! ERROR(sema::list_not_allowed)
+  | cons(_, xs) =>
+      //! ERROR(sema::apply_expr_not_allowed)
+      List::isempty(xs)
+  }
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}

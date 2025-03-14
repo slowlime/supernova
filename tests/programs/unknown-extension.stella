@@ -1,0 +1,8 @@
+language core;
+
+//! ERROR(parser::unknown_extension)
+extend with #foobar;
+
+fn main(x : Nat) -> Nat {
+  return x
+}

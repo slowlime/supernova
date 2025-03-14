@@ -1,0 +1,8 @@
+language core;
+
+//! ERROR(sema::test)
+extend with #lists, #lists;
+
+fn main(x : Nat) -> Nat {
+  return x
+}

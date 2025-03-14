@@ -938,7 +938,7 @@ impl<'src> Parser<'src> {
         exception_kw: Token<'src>,
     ) -> Result<ast::Decl<'src>, ParserError<'src>> {
         let name = self.parse_name("an exception variant name")?;
-        self.expect(Symbol::Comma)?;
+        self.expect(Symbol::Colon)?;
         let variant_ty_expr = self.parse_ty_expr()?;
 
         Ok(ast::Decl {

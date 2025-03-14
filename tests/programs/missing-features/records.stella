@@ -1,0 +1,15 @@
+language core;
+
+//! ERROR(sema::record_not_allowed)
+fn wrong(x : {a : Nat}) -> {b : Nat} {
+  //! ERROR(sema::record_not_allowed)
+  return {
+    b =
+      //! ERROR(sema::field_expr_not_allowed)
+      x.a
+  }
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}

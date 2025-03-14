@@ -78,6 +78,8 @@ impl Test {
                     for diag in &run_data.diags {
                         let _ = to_report(diag, &Default::default()).eprint(source_map.to_cache());
                     }
+                } else {
+                    eprintln!("No diagnostics reported")
                 }
 
                 return TestResult::Failed;
@@ -109,7 +111,7 @@ impl TestCtx {
                     self.failed.insert(test.path.clone());
                     eprintln!(
                         "{}",
-                        format_args!("Test `{}` failed!", test.path).bright_red().bold()
+                        format_args!("Test `{}` {}!", test.path, "failed").bright_red()
                     );
                 }
             };

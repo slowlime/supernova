@@ -1,0 +1,22 @@
+language core;
+
+extend with #structural-patterns;
+
+//! ERROR(sema::sum_type_not_allowed)
+fn wrong(x : Nat + (Bool + Bool)) -> Bool {
+  return match
+    //! ERROR(sema::apply_expr_not_allowed)
+    inl(
+      //! ERROR(sema::apply_expr_not_allowed)
+      inr(x)
+    )
+  {
+    //! ERROR(sema::injection_pattern_not_allowed)
+    inl(inr(x)) => x
+  | y => 0
+  }
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}

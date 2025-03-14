@@ -1,0 +1,6 @@
+//! ERROR(parser::unknown_language)
+language foobar;
+
+fn main(x : Nat) -> Nat {
+  return x
+}

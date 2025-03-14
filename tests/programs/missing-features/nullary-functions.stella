@@ -1,0 +1,10 @@
+language core;
+
+//! ERROR(sema::no_function_params)
+fn wrong() -> Nat {
+  return 0
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}

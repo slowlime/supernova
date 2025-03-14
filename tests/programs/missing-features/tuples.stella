@@ -1,0 +1,16 @@
+language core;
+
+//! ERROR(sema::tuple_not_allowed)
+fn wrong(x : {Nat}) -> Nat {
+  //! ERROR(sema::tuple_not_allowed)
+  return {
+    //! ERROR(sema::empty_tuple_not_allowed)
+    {},
+    //! ERROR(sema::field_expr_not_allowed)
+    {0}.1
+  }
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}

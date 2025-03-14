@@ -1,0 +1,8 @@
+language core;
+
+extend with #tuples;
+
+fn main(x : {Nat}) -> Nat {
+  //! ERROR(parser::tuple_index_too_large)
+  return x.18446744073709551616
+}

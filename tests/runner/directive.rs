@@ -103,7 +103,7 @@ fn split_lines(mut s: &str) -> Vec<(Range<usize>, &str)> {
         let start = next_start;
 
         let (len, nl_len) = match s.find('\n') {
-            Some(pos) if s.get(pos - 1..pos) == Some("\r\n") => (pos - 1, 2),
+            Some(pos) if s.get(pos.saturating_sub(1)..pos) == Some("\r\n") => (pos - 1, 2),
             Some(pos) => (pos, 1),
             None => (s.len(), 0),
         };

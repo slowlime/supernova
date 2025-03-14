@@ -1,0 +1,10 @@
+language core;
+
+fn main(x : Nat) -> Nat {
+  //! ERROR(sema::illegal_nested_decl)
+  fn wrong(y : Nat) -> Nat {
+    return x
+  }
+
+  return wrong(x)
+}

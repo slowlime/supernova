@@ -1,0 +1,10 @@
+language core;
+
+fn wrong(x : Nat) -> Nat {
+  //! ERROR(sema::seq_expr_not_allowed)
+  return 0; succ(0); succ(succ(0)); x
+}
+
+fn main(x : Nat) -> Nat {
+  return x;
+}

@@ -1,0 +1,4 @@
+//! ERROR(parser::unexpected_token)
+fn main(x : Nat) -> Nat {
+  return x
+}

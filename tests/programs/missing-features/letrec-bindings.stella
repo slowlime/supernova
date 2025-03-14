@@ -1,0 +1,12 @@
+language core;
+
+extend with #let-bindings;
+
+fn wrong(x : Nat) -> Nat {
+  //! ERROR(sema::letrec_expr_not_allowed)
+  return letrec y = x in y
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}

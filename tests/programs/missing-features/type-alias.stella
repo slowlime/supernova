@@ -1,0 +1,8 @@
+language core;
+
+//! ERROR(sema::type_alias_not_allowed)
+type Foo = Nat
+
+fn main(x : Foo) -> Foo {
+  return x
+}

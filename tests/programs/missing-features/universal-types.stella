@@ -1,0 +1,10 @@
+language core;
+
+//! ERROR(sema::universal_type_not_allowed)
+fn wrong(x : forall T. fn(T) -> T) -> Nat {
+  return 0
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}

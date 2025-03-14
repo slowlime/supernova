@@ -1,0 +1,17 @@
+language core;
+
+extend with #pairs;
+
+//! ERROR(sema::empty_tuple_not_allowed)
+fn empty(x : {}) -> Nat {
+  return {
+    //! ERROR(sema::empty_tuple_not_allowed)
+    {},
+    //! ERROR(sema::illegal_pair_element_count)
+    {0}.0
+  }
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}

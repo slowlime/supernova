@@ -1,0 +1,20 @@
+language core;
+
+extend with #sequencing;
+
+//! ERROR(sema::function_has_throws)
+fn wrong-throws(x : Nat) -> Bool throws Bool {
+  //! ERROR(sema::try_catch_expr_not_allowed)
+  return try {
+    //! ERROR(sema::throw_expr_not_allowed)
+    throw(false)
+  } catch {
+    x => not(true)
+  }
+}
+
+//! ERROR(sema::exception_variant_decl_not_allowed)
+exception variant test : Nat
+
+//! ERROR(sema::exception_type_decl_not_allowed)
+exception type = Nat

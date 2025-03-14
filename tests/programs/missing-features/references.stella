@@ -1,0 +1,12 @@
+language core;
+
+//! ERROR(sema::reference_type_not_allowed)
+fn wrong(x : &Nat) -> Nat {
+  //! ERROR(sema::deref_expr_not_allowed)
+  return *(
+    //! ERROR(sema::new_expr_not_allowed)
+    *new(x)
+    //! ERROR(sema::assign_expr_not_allowed)
+    := 42
+  )
+}

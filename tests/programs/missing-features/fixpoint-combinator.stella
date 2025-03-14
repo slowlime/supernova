@@ -1,0 +1,10 @@
+language core;
+
+fn wrong(x : fn(Nat) -> Nat) -> Nat {
+  //! ERROR(sema::fix_expr_not_allowed)
+  return fix(x)
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}

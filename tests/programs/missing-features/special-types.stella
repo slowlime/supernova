@@ -1,0 +1,26 @@
+language core;
+
+extend with #multiparameter-functions, #structural-patterns;
+
+fn wrong(
+  //! ERROR(sema::unit_type_not_allowed)
+  x : Unit,
+  //! ERROR(sema::top_type_not_allowed)
+  y : Top,
+  //! ERROR(sema::bot_type_not_allowed)
+  z : Bot,
+  //! ERROR(sema::type_inference_not_available)
+  w : auto
+)
+//! ERROR(sema::unit_type_not_allowed)
+-> Unit
+{
+  return match x {
+    //! ERROR(sema::unit_type_not_allowed)
+    unit => x
+  }
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}

@@ -922,30 +922,30 @@ impl IntoDiagnostic for SemaError {
                 .make(),
 
             Self::ArithOpNotAllowed {
-                location,
+                location: _,
                 op_location,
             } => Diagnostic::error()
-                .at(*location)
+                .at(*op_location)
                 .with_code(code!(sema::arith_op_not_allowed))
                 .with_msg(&self)
                 .with_label(Label::primary(*op_location))
                 .make(),
 
             Self::ComparisonOpNotAllowed {
-                location,
+                location: _,
                 op_location,
             } => Diagnostic::error()
-                .at(*location)
+                .at(*op_location)
                 .with_code(code!(sema::cmp_op_not_allowed))
                 .with_msg(&self)
                 .with_label(Label::primary(*op_location))
                 .make(),
 
             Self::AssignExprNotAllowed {
-                location,
+                location: _,
                 colon_eq_location,
             } => Diagnostic::error()
-                .at(*location)
+                .at(*colon_eq_location)
                 .with_code(code!(sema::assign_expr_not_allowed))
                 .with_msg(&self)
                 .with_label(Label::primary(*colon_eq_location))

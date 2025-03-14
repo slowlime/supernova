@@ -1,0 +1,17 @@
+language core;
+
+extend with #variants;
+
+//! ERROR(sema::nullary_variant_label_not_allowed)
+fn wrong(x : <|x|>) -> Nat {
+  return match x {
+    //! ERROR(sema::nullary_variant_label_not_allowed)
+    <|x|> =>
+      //! ERROR(sema::nullary_variant_label_not_allowed)
+      wrong(<|x|>)
+  }
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}

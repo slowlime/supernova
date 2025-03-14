@@ -1,0 +1,10 @@
+language core;
+
+fn wrong(x : Nat) -> Bool {
+  //! ERROR(sema::cast_expr_not_allowed)
+  return match x cast as Bool {
+    y cast as Bool =>
+      //! ERROR(sema::cast_expr_not_allowed)
+      try { y } cast as Nat { x => x } with { false }
+  }
+}

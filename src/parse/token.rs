@@ -271,7 +271,7 @@ symbols! {
         "unit" => Unit,
         "variant" => Variant,
         "with" => With,
-        "µ" => Mu,
+        "μ" => Mu,
     }
 
     Special {

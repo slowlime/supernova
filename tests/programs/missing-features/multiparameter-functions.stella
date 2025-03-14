@@ -1,0 +1,10 @@
+language core;
+
+//! ERROR(sema::multiple_function_params)
+fn wrong(a : Nat, b : Nat) -> Nat {
+  return a
+}
+
+fn main(x : Nat) -> Nat {
+ return x
+}

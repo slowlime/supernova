@@ -1,0 +1,28 @@
+language core;
+
+extend with #let-bindings, #multiparameter-functions, #unit-type;
+
+fn wrong(a : Nat, b : Nat) -> Unit {
+  return
+        //! ERROR(sema::arith_op_not_allowed)
+    let _ = a + b,
+        //! ERROR(sema::arith_op_not_allowed)
+        _ = a - b,
+        //! ERROR(sema::arith_op_not_allowed)
+        _ = a * b,
+        //! ERROR(sema::arith_op_not_allowed)
+        _ = a / b,
+        //! ERROR(sema::cmp_op_not_allowed)
+        _ = a < b,
+        //! ERROR(sema::cmp_op_not_allowed)
+        _ = a <= b,
+        //! ERROR(sema::cmp_op_not_allowed)
+        _ = a > b,
+        //! ERROR(sema::cmp_op_not_allowed)
+        _ = a >= b,
+        //! ERROR(sema::cmp_op_not_allowed)
+        _ = a == b,
+        //! ERROR(sema::cmp_op_not_allowed)
+        _ = a != b
+     in unit
+}

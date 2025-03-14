@@ -1,0 +1,15 @@
+language core;
+
+//! ERROR(sema::variant_not_allowed)
+fn wrong(x : <|x : Nat, y : Bool|>) -> Nat {
+  return match x {
+    //! ERROR(sema::variant_not_allowed)
+    <|x|> => x
+    //! ERROR(sema::variant_not_allowed)
+  | <|y|> => 0
+  }
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}

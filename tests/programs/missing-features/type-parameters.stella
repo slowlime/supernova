@@ -1,0 +1,19 @@
+language core;
+
+//! ERROR(sema::function_has_type_params)
+generic fn wrong-generic-decl[T](x : T) -> T {
+  return x
+}
+
+fn wrong-generic-expr(x : Nat) -> Nat {
+  return (
+    //! ERROR(sema::generic_expr_not_allowed)
+    generic[T]
+    fn(x : T) {
+      return x
+    }
+  )(
+    //! ERROR(sema::ty_apply_expr_not_allowed)
+    wrong-generic-decl[Nat](x)
+  )
+}

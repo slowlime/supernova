@@ -1,0 +1,22 @@
+language core;
+
+extend with #structural-patterns;
+
+fn wrong-natural-literal(x : Bool) -> Nat {
+  //! ERROR(sema::natural_literal_not_allowed)
+  return match 10 {
+    2 => 0
+  | _ => succ(0)
+  }
+}
+
+fn wrong-address-literal(x : Bool) -> Nat {
+  //! ERROR(sema::address_literal_not_allowed)
+  return match <0x1234> {
+    _ => 0
+  }
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}

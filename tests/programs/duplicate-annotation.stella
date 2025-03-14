@@ -1,0 +1,6 @@
+language core;
+
+//! ERROR(parser::duplicate_annotation)
+inline inline fn main(x : Nat) -> Nat {
+  return x
+}

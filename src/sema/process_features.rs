@@ -531,7 +531,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
 
                     if (1..=2).contains(idx) {
                         report.add_note(format!(
-                            "alternately, you can enable pairs only with the {} extension",
+                            "alternately, you can enable pairs only with the #{} extension",
                             FeatureKind::Pairs.extension().unwrap(),
                         ));
                     }
