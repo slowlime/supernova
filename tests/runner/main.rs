@@ -4,13 +4,13 @@ use std::fs;
 use std::path::Path;
 use std::process::ExitCode;
 
-use colored::Colorize;
 use fxhash::FxHashSet;
 use glob::glob;
 use supernova::diag::{DiagCtx, Diagnostic, IntoDiagnostic, to_report};
 use supernova::parse::{Cursor, Lexer, Parser};
 use supernova::sema;
 use supernova::sourcemap::SourceMap;
+use yansi::Paint;
 
 use self::directive::{Directive, parse_directives};
 
@@ -98,7 +98,7 @@ struct TestCtx {
 impl TestCtx {
     pub fn run(&mut self, tests: Vec<Test>) -> ExitCode {
         for mut test in tests {
-            eprintln!("{} test `{}`...", "Running".bright_cyan(), test.path);
+            eprintln!("{} test `{}`...", "Running".bright_cyan().bold(), test.path);
 
             match test.run(self) {
                 TestResult::Passed => {
@@ -107,21 +107,33 @@ impl TestCtx {
 
                 TestResult::Failed => {
                     self.failed.insert(test.path.clone());
-                    eprintln!("{}", format!("Test `{}` failed!", test.path).bright_red());
+                    eprintln!(
+                        "{}",
+                        format_args!("Test `{}` failed!", test.path).bright_red().bold()
+                    );
                 }
             };
         }
 
         eprintln!();
 
+        eprintln!(
+            "Test status: {}",
+            if self.failed.is_empty() {
+                "passed".bright_green().bold()
+            } else {
+                "failed".bright_red().bold()
+            },
+        );
+
         let test_count = self.passed.len() + self.failed.len() + self.ignored.len();
         eprintln!(
-            "Results: {passed} ({passed_perc:.2}%), {failed} ({failed_perc:.2}%), and {ignored}",
-            passed = format!("{} passed", self.passed.len()).bright_green(),
+            "Details: {passed} passed ({passed_perc:.2}%), {failed} failed ({failed_perc:.2}%), and {ignored} ignored",
+            passed = self.passed.len().bright_green(),
             passed_perc = self.passed.len() as f64 * 100. / test_count as f64,
-            failed = format!("{} failed", self.failed.len()).bright_red(),
+            failed = self.failed.len().bright_red(),
             failed_perc = self.failed.len() as f64 * 100. / test_count as f64,
-            ignored = format!("{} ignored", self.ignored.len()).bright_black(),
+            ignored = self.ignored.len().white(),
         );
 
         if self.failed.is_empty() {
