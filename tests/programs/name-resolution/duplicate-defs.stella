@@ -11,6 +11,8 @@ extend with #nullary-functions;
 extend with #multiparameter-functions;
 extend with #let-bindings;
 extend with #letrec-bindings;
+extend with #let-many-bindings;
+extend with #letrec-many-bindings;
 
 fn duplicate-outer-def() -> Unit {
   return unit

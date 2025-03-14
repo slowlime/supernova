@@ -1,0 +1,15 @@
+language core;
+
+extend with #let-bindings, #letrec-bindings, #letrec-many-bindings;
+
+fn wrong(x : Nat) -> Nat {
+  //! ERROR(sema::multiple_let_bindings_not_allowed)
+  return let
+    a = 0,
+    b = 0
+   in b
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}

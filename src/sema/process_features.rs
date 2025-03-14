@@ -767,6 +767,38 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                     ));
                 }
 
+                if expr.bindings.len() > 1 {
+                    if expr.rec
+                        && !self
+                            .m
+                            .is_feature_enabled(FeatureKind::MultipleLetrecBindings)
+                    {
+                        result = Err(());
+                        self.diag.emit(make_feature_disabled_error(
+                            SemaDiag::MultipleLetrecBindingsNotAllowed {
+                                location: def.location,
+                                letrec_location: expr
+                                    .let_kw
+                                    .as_ref()
+                                    .map(|token| token.span)
+                                    .into(),
+                            },
+                            FeatureKind::MultipleLetrecBindings,
+                        ));
+                    } else if !expr.rec
+                        && !self.m.is_feature_enabled(FeatureKind::MultipleLetBindings)
+                    {
+                        result = Err(());
+                        self.diag.emit(make_feature_disabled_error(
+                            SemaDiag::MultipleLetBindingsNotAllowed {
+                                location: def.location,
+                                let_location: expr.let_kw.as_ref().map(|token| token.span).into(),
+                            },
+                            FeatureKind::MultipleLetBindings,
+                        ));
+                    }
+                }
+
                 for binding in &expr.bindings {
                     match binding.pat.kind {
                         ast::PatKind::Dummy => {}

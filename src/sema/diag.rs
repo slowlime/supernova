@@ -188,6 +188,18 @@ pub enum SemaDiag {
         letrec_location: Location,
     },
 
+    #[error("multiple bindings in `let` expressions are not allowed")]
+    MultipleLetBindingsNotAllowed {
+        location: Location,
+        let_location: Location,
+    },
+
+    #[error("multiple bindings in `letrec` expressions are not allowed")]
+    MultipleLetrecBindingsNotAllowed {
+        location: Location,
+        letrec_location: Location,
+    },
+
     #[error("`generic` (type abstraction) expressions are not allowed")]
     GenericExprNotAllowed { location: Location },
 
@@ -916,6 +928,26 @@ impl IntoDiagnostic for SemaDiag {
             } => Diagnostic::error()
                 .at(*location)
                 .with_code(code!(sema::letrec_expr_not_allowed))
+                .with_msg(&self)
+                .with_label(Label::primary(*letrec_location))
+                .make(),
+
+            Self::MultipleLetBindingsNotAllowed {
+                location,
+                let_location,
+            } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::multiple_let_bindings_not_allowed))
+                .with_msg(&self)
+                .with_label(Label::primary(*let_location))
+                .make(),
+
+            Self::MultipleLetrecBindingsNotAllowed {
+                location,
+                letrec_location,
+            } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::multiple_letrec_bindings_not_allowed))
                 .with_msg(&self)
                 .with_label(Label::primary(*letrec_location))
                 .make(),

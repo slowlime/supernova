@@ -1,6 +1,6 @@
 language core;
 
-extend with #let-bindings, #multiparameter-functions, #unit-type;
+extend with #let-bindings, #let-many-bindings, #multiparameter-functions, #unit-type;
 
 fn wrong(a : Nat, b : Nat) -> Unit {
   return

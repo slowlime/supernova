@@ -6,6 +6,7 @@ extend with #structural-patterns;
 extend with #tuples;
 extend with #nested-function-declarations;
 extend with #let-bindings;
+extend with #let-many-bindings;
 
 fn undefined-var() -> Unit {
   //! ERROR(sema::undefined_variable)

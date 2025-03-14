@@ -9,8 +9,10 @@ In addition to the core language, the following extensions are also supported:
 - `#comparison-operations`
 - `#fixpoint-combinator`
 - `#let-bindings`
+- `#let-many-bindings`
 - `#let-patterns`
 - `#letrec-bindings`
+- `#letrec-many-bindings`
 - `#lists`
 - `#multiparameter-functions`
 - `#natural-literals`

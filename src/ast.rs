@@ -44,6 +44,8 @@ pub enum Extension {
     ComparisonOperations,
     Sequencing,
     LetPatterns,
+    LetManyBindings,
+    LetrecManyBindings,
 }
 
 #[derive(Debug, Default, Clone)]

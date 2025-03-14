@@ -11,6 +11,7 @@ extend with #unit-type;
 extend with #nullary-functions;
 extend with #multiparameter-functions;
 extend with #letrec-bindings;
+extend with #let-many-bindings;
 
 fn foo() -> {Unit} {
   return {unit}

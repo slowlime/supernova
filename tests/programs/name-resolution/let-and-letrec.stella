@@ -7,6 +7,8 @@ extend with #tuples;
 extend with #multiparameter-functions;
 extend with #structural-patterns;
 extend with #pattern-ascriptions;
+extend with #let-many-bindings;
+extend with #letrec-many-bindings;
 
 fn let-binding-is-not-visible-in-initializer(x : Nat) -> {Nat} {
   return let x = {x} in x

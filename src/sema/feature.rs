@@ -17,7 +17,7 @@ macro_rules! to_option {
     };
 }
 
-macro_rules! define_ext {
+macro_rules! define_features {
     {
         $(
             $name:ident $str:literal $(($($ext:tt)+))? $(=> $($dep:ident),+)?;
@@ -118,7 +118,7 @@ macro_rules! define_ext {
     };
 }
 
-define_ext! {
+define_features! {
     // Syntactic sugar and derived forms.
     StructuralPatterns "structural patterns" (ast::Extension::StructuralPatterns);
     LetBindings "let-bindings" (ast::Extension::LetBindings);
@@ -134,7 +134,10 @@ define_ext! {
     PatternAscriptions "ascription patterns" (ast::Extension::PatternAscriptions);
     LetrecBindings "letrec-bindings" (ast::Extension::LetrecBindings);
     FixpointCombinator "fixpoint combinator" (ast::Extension::FixpointCombinator);
-    LetPatterns "patterns in let expresions" (ast::Extension::LetPatterns);
+    LetPatterns "patterns in let expressions" (ast::Extension::LetPatterns);
+    MultipleLetBindings "multiple bindings in let expressions" (ast::Extension::LetManyBindings);
+    MultipleLetrecBindings "multiple bindings in letrec expressions"
+        (ast::Extension::LetrecManyBindings);
 
     // Simple types.
     TypeAscriptions "type ascriptions" (ast::Extension::TypeAscriptions);
