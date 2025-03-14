@@ -1,0 +1,51 @@
+language core;
+
+extend with #nullary-functions;
+extend with #unit-type;
+extend with #structural-patterns;
+extend with #tuples;
+extend with #nested-function-declarations;
+extend with #let-bindings;
+
+fn undefined-var() -> Unit {
+  //! ERROR(sema::undefined_variable)
+  return x
+}
+
+//! ERROR(sema::undefined_type)
+fn undefined-ty(x : Foo) -> Bar {
+  return x
+}
+
+fn var-in-nested-fn-is-not-visible-in-outer-scope() -> Unit {
+  fn nested() -> Unit {
+    fn inaccessible() -> Unit {
+      return unit
+    }
+
+    return unit
+  }
+
+  //! ERROR(sema::undefined_variable)
+  return inaccessible()
+}
+
+fn successive-let-bindings-are-inaccesible() -> Unit {
+  return let
+    //! ERROR(sema::undefined_variable)
+    a = b,
+    b = 0
+   in a
+}
+
+fn pattern-bindings-are-not-visible-in-other-match-arms() -> Unit {
+  return match {false, unit, 0} {
+    {a, b, 0} => unit
+    //! ERROR(sema::undefined_variable)
+  | {_, _, _} => b
+  }
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}
