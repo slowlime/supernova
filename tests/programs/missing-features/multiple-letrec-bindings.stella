@@ -1,6 +1,6 @@
 language core;
 
-extend with #let-bindings, #letrec-bindings, #let-many-bindings, #pattern-ascriptions;
+extend with #let-bindings, #letrec-bindings, #let-many-bindings, #pattern-ascriptions, #let-patterns;
 
 fn wrong(x : Nat) -> Nat {
   //! ERROR(sema::multiple_letrec_bindings_not_allowed)

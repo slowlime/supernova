@@ -803,7 +803,6 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                     match binding.pat.kind {
                         ast::PatKind::Dummy => {}
                         ast::PatKind::Name(_) => {}
-                        ast::PatKind::Ascription(_) => {}
                         _ if self.m.is_feature_enabled(FeatureKind::LetPatterns) => {}
 
                         _ => {

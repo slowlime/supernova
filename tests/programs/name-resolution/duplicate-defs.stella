@@ -1,8 +1,6 @@
 language core;
 
 extend with #nested-function-declarations;
-extend with #let-bindings;
-extend with #let-patterns;
 extend with #pattern-ascriptions;
 extend with #structural-patterns;
 extend with #tuples;
@@ -13,6 +11,7 @@ extend with #let-bindings;
 extend with #letrec-bindings;
 extend with #let-many-bindings;
 extend with #letrec-many-bindings;
+extend with #let-patterns;
 
 fn duplicate-outer-def() -> Unit {
   return unit
