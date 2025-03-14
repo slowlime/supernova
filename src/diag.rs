@@ -22,6 +22,14 @@ impl Code {
             ..self
         }
     }
+
+    pub fn code(&self) -> &'static str {
+        self.code
+    }
+
+    pub fn stella(&self) -> Option<&'static str> {
+        self.stella
+    }
 }
 
 macro_rules! code {
@@ -196,75 +204,97 @@ impl IntoDiagnostic for Diagnostic {
     }
 }
 
+pub struct ReportOptions {
+    show_stella_codes: bool,
+}
+
+impl ReportOptions {
+    pub const fn new() -> Self {
+        Self {
+            show_stella_codes: false,
+        }
+    }
+}
+
+impl Default for ReportOptions {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+pub fn to_report(diag: &Diagnostic, opts: &ReportOptions) -> Report<'static, Location> {
+    let mut report = Report::build(
+        match diag.level {
+            Level::Error => ReportKind::Error,
+            Level::Warn => ReportKind::Warning,
+        },
+        diag.location,
+    )
+    .with_config(
+        ariadne::Config::new()
+            .with_tab_width(2)
+            .with_index_type(IndexType::Byte),
+    )
+    .with_code(
+        if let Some(stella) = opts.show_stella_codes.then_some(diag.code.stella).flatten() {
+            format!("{} / {stella}", diag.code.code)
+        } else {
+            diag.code.code.to_string()
+        },
+    )
+    .with_message(&diag.msg);
+
+    report.with_notes(&diag.notes);
+
+    let mut colors = ColorGenerator::from_state([5737, 74, 31337], 0.5);
+
+    for label in &diag.labels {
+        let mut report_label = ariadne::Label::new(label.location);
+
+        if let Some(msg) = &label.msg {
+            report_label = report_label.with_message(msg);
+        }
+
+        let color = match label.kind {
+            LabelKind::Primary => match diag.level {
+                Level::Error => Color::BrightRed,
+                Level::Warn => Color::BrightYellow,
+            },
+
+            LabelKind::Secondary => colors.next(),
+        };
+
+        report.add_label(report_label.with_color(color));
+    }
+
+    report.finish()
+}
+
 pub trait DiagCtx {
     fn emit(&mut self, diag: impl IntoDiagnostic);
 }
 
 pub struct StderrDiagCtx<'src> {
     source_map: &'src SourceMap,
-    show_stella_codes: bool,
+    opts: ReportOptions,
 }
 
 impl<'src> StderrDiagCtx<'src> {
     pub fn new(source_map: &'src SourceMap) -> Self {
         Self {
             source_map,
-            show_stella_codes: false,
+            opts: Default::default(),
         }
     }
 
     pub fn set_show_stella_codes(&mut self, value: bool) {
-        self.show_stella_codes = value;
+        self.opts.show_stella_codes = value;
     }
 }
 
 impl DiagCtx for StderrDiagCtx<'_> {
     fn emit(&mut self, diag: impl IntoDiagnostic) {
         let diag = diag.into_diagnostic();
-        let mut report = Report::build(
-            match diag.level {
-                Level::Error => ReportKind::Error,
-                Level::Warn => ReportKind::Warning,
-            },
-            diag.location,
-        )
-        .with_config(
-            ariadne::Config::new()
-                .with_tab_width(2)
-                .with_index_type(IndexType::Byte),
-        )
-        .with_code(
-            if let Some(stella) = self.show_stella_codes.then_some(diag.code.stella).flatten() {
-                format!("{} / {stella}", diag.code.code)
-            } else {
-                diag.code.code.to_string()
-            }
-        )
-        .with_message(diag.msg);
-
-        report.with_notes(diag.notes);
-
-        let mut colors = ColorGenerator::from_state([5737, 74, 31337], 0.5);
-
-        for label in diag.labels {
-            let mut report_label = ariadne::Label::new(label.location);
-
-            if let Some(msg) = label.msg {
-                report_label = report_label.with_message(msg);
-            }
-
-            let color = match label.kind {
-                LabelKind::Primary => match diag.level {
-                    Level::Error => Color::BrightRed,
-                    Level::Warn => Color::BrightYellow,
-                },
-
-                LabelKind::Secondary => colors.next(),
-            };
-
-            report.add_label(report_label.with_color(color));
-        }
-
-        let _ = report.finish().eprint(self.source_map.to_cache());
+        let _ = to_report(&diag, &self.opts).eprint(self.source_map.to_cache());
     }
 }

@@ -7,9 +7,9 @@ use std::process::ExitCode;
 use colored::Colorize;
 use fxhash::FxHashSet;
 use glob::glob;
-use supernova::diag::{DiagCtx, Diagnostic, IntoDiagnostic};
+use supernova::diag::{DiagCtx, Diagnostic, IntoDiagnostic, to_report};
 use supernova::parse::{Cursor, Lexer, Parser};
-use supernova::sema::{self, Module};
+use supernova::sema;
 use supernova::sourcemap::SourceMap;
 
 use self::directive::{Directive, parse_directives};
@@ -37,52 +37,49 @@ struct Test {
     directives: Vec<Directive>,
 }
 
-enum RunStage<'m> {
-    Parsing,
-    Sema(&'m Module<'m>),
-}
-
-struct TestRunData<'m> {
+struct TestRunData {
     diags: Vec<Diagnostic>,
-    stopped_at: RunStage<'m>,
     failed: bool,
 }
 
 impl Test {
-    pub fn run(&mut self, ctx: &TestCtx) -> TestResult {
+    pub fn run(&mut self, _ctx: &TestCtx) -> TestResult {
         let mut source_map = SourceMap::new();
-        let file_id = source_map.add_source(self.path.clone(), self.contents.clone()).id();
+        let file_id = source_map
+            .add_source(self.path.clone(), self.contents.clone())
+            .id();
         let f = source_map.get_by_id(file_id);
         let cursor = Cursor::new(f);
         let lexer = Lexer::new(cursor);
         let parser = Parser::new(lexer);
         let mut diag = TestDiagCtx::default();
         let mut ast = parser.parse();
-        let m;
 
-        let (stopped_at, result) = match ast {
-            Ok(ref mut ast) => {
-                let result;
-                (m, result) = sema::process(ast, &mut diag);
-
-                (RunStage::Sema(&m), result)
-            }
+        let result = match ast {
+            Ok(ref mut ast) => sema::process(ast, &mut diag).1,
 
             Err(e) => {
                 diag.emit(e);
 
-                (RunStage::Parsing, Err(()))
+                Err(())
             }
         };
 
         let run_data = TestRunData {
             diags: diag.diags,
-            stopped_at,
             failed: result.is_err(),
         };
 
         for directive in &self.directives {
             if directive.check(&run_data) == TestResult::Failed {
+                if !run_data.diags.is_empty() {
+                    eprintln!("Reported diagnostics:");
+
+                    for diag in &run_data.diags {
+                        let _ = to_report(diag, &Default::default()).eprint(source_map.to_cache());
+                    }
+                }
+
                 return TestResult::Failed;
             }
         }
@@ -140,7 +137,9 @@ fn load_test(path: impl AsRef<Path>) -> Test {
     let contents = fs::read_to_string(path)
         .map_err(|e| format!("could not read `{}`: {e}", path.display()))
         .unwrap();
-    let directives = parse_directives(&contents);
+    let directives = parse_directives(&contents)
+        .map_err(|e| format!("could not parse directives in `{}`: {e}", path.display()))
+        .unwrap();
 
     Test {
         path: path.display().to_string(),
