@@ -1,0 +1,76 @@
+language core;
+
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #pattern-ascriptions;
+extend with #nested-function-declarations;
+extend with #unit-type;
+
+extend with #natural-literals;
+
+fn check() -> Unit {
+  fn match-all-arms-bool-is-bool() -> Bool {
+    //!~ ERROR
+    return match false { false => true | true => false }
+  }
+
+  fn match-all-arms-nat-is-not-bool() -> Bool {
+    //! ERROR(sema::expr_type_mismatch)
+    return match false { false => 0 | true => 0 }
+  }
+
+  return unit
+}
+
+fn infer() -> Unit {
+  //!~ ERROR
+  return match match 0 { 0 => true | succ(_) => false } { _ as Bool => unit }
+}
+
+fn empty-match() -> Unit {
+  //! ERROR(sema::empty_match)
+  return match 0 {}
+}
+
+fn wrong-pattern-tys() -> Unit {
+  return match 0 {
+    //! ERROR(sema::illegal_pattern_for_ty)
+    true => unit
+    //! ERROR(sema::illegal_pattern_for_ty)
+  | false => unit
+    //! ERROR(sema::illegal_pattern_for_ty)
+  | unit => unit
+  }
+}
+
+fn wrong-arm-body-tys() -> Unit {
+  fn check() -> Unit {
+    return match 0 {
+      //! ERROR(sema::expr_type_mismatch)
+      0 => 1
+      //! ERROR(sema::expr_type_mismatch)
+    | 1 => 0
+      //! ERROR(sema::expr_type_mismatch)
+    | 2 => false
+    }
+  }
+
+  fn infer() -> Unit {
+    return match (
+      match 0 {
+        0 => 1
+        //! ERROR(sema::expr_type_mismatch)
+      | 1 => unit
+        //! ERROR(sema::expr_type_mismatch)
+      | 2 => false
+      }
+    ) { _ => unit }
+  }
+
+  return unit
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}

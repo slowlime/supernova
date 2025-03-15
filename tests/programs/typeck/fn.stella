@@ -75,7 +75,7 @@ fn wrong-ret-ty() -> Unit {
   }
 
   fn infer() -> Unit {
-    //! ERROR(sema::invalid_pattern_for_ty)
+    //! ERROR(sema::illegal_pattern_for_ty)
     return match fn(x : Nat) { return unit } { _ as fn(Nat) -> Bool => unit }
   }
 

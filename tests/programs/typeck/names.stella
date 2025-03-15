@@ -46,7 +46,7 @@ fn name-check(x : Nat) -> Unit {
 
 fn name-infer(x : Nat) -> Unit {
   return match x {
-    //! ERROR(sema::invalid_pattern_for_ty)
+    //! ERROR(sema::illegal_pattern_for_ty)
     _ as Unit => unit
   }
 }

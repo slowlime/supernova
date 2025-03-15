@@ -551,7 +551,7 @@ pub enum SemaDiag {
         pat_location: Location,
     },
 
-    #[error("this match expression must have at least a single match arm")]
+    #[error("this match expression must have at least one match arm")]
     IllegalEmptyMatching { location: Location },
 
     #[error("could not determine the type of an empty list expression")]
@@ -1655,7 +1655,7 @@ impl IntoDiagnostic for SemaDiag {
             } => Diagnostic::error()
                 .at(*location)
                 .with_code(
-                    code!(sema::invalid_pattern_for_ty as "ERROR_UNEXPECTED_PATTERN_FOR_TYPE"),
+                    code!(sema::illegal_pattern_for_ty as "ERROR_UNEXPECTED_PATTERN_FOR_TYPE"),
                 )
                 .with_msg(&self)
                 .with_label(Label::primary(*location))
