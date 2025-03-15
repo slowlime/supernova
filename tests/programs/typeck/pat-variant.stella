@@ -1,0 +1,68 @@
+language core;
+
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #pattern-ascriptions;
+extend with #nested-function-declarations;
+extend with #unit-type;
+
+extend with #letrec-bindings, #let-patterns;
+extend with #variants, #nullary-variant-labels;
+
+fn check(x : <|a : Nat, b : Bool|>) -> Unit {
+  return match x {          //!<~ ERROR
+    <|a = 0|> => unit       //!<~ ERROR
+  | <|a = succ(_)|> => unit //!<~ ERROR
+  | <|b = _|> => unit       //!<~ ERROR
+  }                         //!<~ ERROR
+}
+
+fn ambiguous-variant-pat(x : <|a : Unit|>) -> Unit {
+  //! ERROR(sema::ambiguous_variant_type)
+  return letrec <|a = a|> = x in a
+}
+
+fn illegal-pattern-for-ty() -> Unit {
+  return match 0 {
+    //! ERROR(sema::illegal_pattern_for_ty)
+    <|a|> => unit
+  | _ => unit
+  }
+}
+
+fn no-such-variant-label(x : <|a : Nat|>) -> Unit {
+  return match x {
+    <|b = _|> => unit
+  | _ => unit
+  }
+}
+
+fn wrong-variant-data-pat(x : <|a : Nat|>) -> Unit {
+  return match x {
+    <|a =
+        false //!< ERROR(sema::illegal_pattern_for_ty)
+    |> => unit
+  | _ => unit
+  }
+}
+
+fn unexpected-nullary-variant-pattern(x : <|a : Nat|>) -> Unit {
+  return match x {
+    //! ERROR(sema::unexpected_nullary_variant_pattern)
+    <|a|> => unit
+  | _ => unit
+  }
+}
+
+fn unexpected-non-nullary-variant-pattern(x : <|a|>) -> Unit {
+  return match x {
+    //! ERROR(sema::unexpected_non_nullary_variant_pattern)
+    <|a = 0|> => unit
+  | _ => unit
+  }
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}
