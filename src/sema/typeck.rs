@@ -1858,7 +1858,6 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
 
             let ty = match &self.m.tys[expected_ty_id].kind {
                 TyKind::Tuple(ty) => ty,
-
                 TyKind::Record(ty) if ty.elems.is_empty() => &TyTuple { elems: vec![] },
 
                 TyKind::Record(ty) if expr.elems.is_empty() => {
@@ -2852,16 +2851,37 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 return Ok(());
             }
 
-            let TyKind::Tuple(ty) = &self.m.tys[expected_ty_id].kind else {
-                self.diag.emit(self.augment_error_with_expectation(
-                    SemaDiag::UnexpectedPatternForType {
-                        location: self.m.pats[pat_id].def.location,
-                        expected_ty: self.m.display_ty(expected_ty_id).to_string(),
-                    },
-                    source,
-                ));
+            let ty = match &self.m.tys[expected_ty_id].kind {
+                TyKind::Tuple(ty) => ty,
+                TyKind::Record(ty) if ty.elems.is_empty() => &TyTuple { elems: vec![] },
 
-                return Err(());
+                TyKind::Record(ty) if pat.elems.is_empty() => {
+                    // pretend `{}` is a record pattern (see `typeck_expr_tuple`).
+                    for (name, _) in &ty.elems {
+                        self.diag.emit(self.augment_error_with_expectation(
+                            SemaDiag::MissingRecordFieldInPat {
+                                location: self.m.pats[pat_id].def.location,
+                                name: name.into(),
+                                expected_ty: self.m.display_ty(expected_ty_id).to_string(),
+                            },
+                            source.clone(),
+                        ));
+                    }
+
+                    return Err(());
+                }
+
+                _ => {
+                    self.diag.emit(self.augment_error_with_expectation(
+                        SemaDiag::UnexpectedPatternForType {
+                            location: self.m.pats[pat_id].def.location,
+                            expected_ty: self.m.display_ty(expected_ty_id).to_string(),
+                        },
+                        source,
+                    ));
+
+                    return Err(());
+                }
             };
 
             if pat.elems.len() != ty.elems.len() {
