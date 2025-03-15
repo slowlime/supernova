@@ -1,0 +1,46 @@
+language core;
+
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #pattern-ascriptions;
+extend with #nested-function-declarations;
+extend with #unit-type;
+
+fn check() -> Unit {
+  fn if-with-both-branches-nat-is-nat(x : Bool) -> Nat {
+    //!~ ERROR
+    return if x then 0 else 0
+  }
+
+  return unit
+}
+
+fn infer(x : Bool) -> Unit {
+  //!~ ERROR
+  return match if x then 0 else 0 { _ => unit }
+}
+
+fn wrong-if-cond-ty(x : Nat) -> Unit {
+  return if
+      x //!< ERROR(sema::expr_type_mismatch)
+    then unit
+    else unit
+}
+
+fn wrong-if-ty(x : Bool) -> Unit {
+  //! ERROR(sema::expr_type_mismatch)
+  return if x then 0 else 0
+}
+
+fn wrong-if-branch-tys(x : Bool) -> Unit {
+  return match (
+    if x
+    then 0
+    else false //!< ERROR(sema::expr_type_mismatch)
+  ) { _ => unit }
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}

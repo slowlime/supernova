@@ -42,6 +42,11 @@ fn unexpected-list() -> Unit {
   return [0]
 }
 
+fn wrong-list-ty() -> [Nat] {
+  //! ERROR(sema::expr_type_mismatch)
+  return [false]
+}
+
 fn wrong-elem-tys() -> Unit {
   fn check() -> Unit {
     fn first() -> [Nat] {
