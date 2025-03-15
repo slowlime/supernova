@@ -1,0 +1,57 @@
+language core;
+
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #pattern-ascriptions;
+extend with #nested-function-declarations;
+extend with #unit-type;
+
+extend with #sequencing;
+
+fn check() -> Unit {
+  fn seq-of-3-exprs() -> Nat {
+    //!~ ERROR
+    return unit; unit; 0
+  }
+
+  fn unit-seq() -> Nat {
+    //!~ ERROR
+    return 0;;;
+  }
+
+  fn crazy-seq() -> Nat {
+    //!~ ERROR
+    return unit;;;;; unit;; unit;;;;;;; unit;;; 0;;
+  }
+
+  fn seq-ending-with-bool-is-not-nat() -> Nat {
+    //! ERROR(sema::expr_type_mismatch)
+    return unit; unit; false
+  }
+
+  return unit
+}
+
+fn infer() -> Unit {
+  //!~ ERROR
+  return match (unit; 0;) { _ as Nat => unit }
+}
+
+fn non-unit-in-non-tail-position() -> Nat {
+  fn first() -> Bool {
+    //! ERROR(sema::expr_type_mismatch)
+    return 0; unit; false
+  }
+
+  fn second() -> Bool {
+    //! ERROR(sema::expr_type_mismatch)
+    return unit; 0; false
+  }
+
+  return unit
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}
