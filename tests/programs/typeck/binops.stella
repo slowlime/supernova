@@ -1,0 +1,424 @@
+language core;
+
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #pattern-ascriptions;
+extend with #nested-function-declarations;
+extend with #unit-type;
+
+extend with #natural-literals;
+
+extend with #arithmetic-operations, #comparison-operations;
+
+fn add() -> Unit {
+  fn check() -> Unit {
+    fn result-is-nat() -> Nat {
+      //!~ ERROR
+      return 42 + 24
+    }
+
+    fn result-is-not-bool() -> Bool {
+      //! ERROR(sema::expr_type_mismatch)
+      return 42 + 24
+    }
+
+    return unit
+  }
+
+  fn infer() -> Unit {
+    //!~ ERROR
+    return match 42 + 24 { _ as Nat => unit }
+  }
+
+  fn lhs-must-be-nat() -> Nat {
+    return
+      unit //!< ERROR(sema::expr_type_mismatch)
+        + 24
+  }
+
+  fn rhs-must-be-nat() -> Nat {
+    return 42 +
+        unit //!< ERROR(sema::expr_type_mismatch)
+  }
+
+  return unit
+}
+
+fn sub() -> Unit {
+  fn check() -> Unit {
+    fn result-is-nat() -> Nat {
+      //!~ ERROR
+      return 42 - 24
+    }
+
+    fn result-is-not-bool() -> Bool {
+      //! ERROR(sema::expr_type_mismatch)
+      return 42 - 24
+    }
+
+    return unit
+  }
+
+  fn infer() -> Unit {
+    //!~ ERROR
+    return match 42 - 24 { _ as Nat => unit }
+  }
+
+  fn lhs-must-be-nat() -> Nat {
+    return
+      unit //!< ERROR(sema::expr_type_mismatch)
+        - 24
+  }
+
+  fn rhs-must-be-nat() -> Nat {
+    return 42 -
+        unit //!< ERROR(sema::expr_type_mismatch)
+  }
+
+  return unit
+}
+
+fn mul() -> Unit {
+  fn check() -> Unit {
+    fn result-is-nat() -> Nat {
+      //!~ ERROR
+      return 42 * 24
+    }
+
+    fn result-is-not-bool() -> Bool {
+      //! ERROR(sema::expr_type_mismatch)
+      return 42 * 24
+    }
+
+    return unit
+  }
+
+  fn infer() -> Unit {
+    //!~ ERROR
+    return match 42 * 24 { _ as Nat => unit }
+  }
+
+  fn lhs-must-be-nat() -> Nat {
+    return
+      unit //!< ERROR(sema::expr_type_mismatch)
+        * 24
+  }
+
+  fn rhs-must-be-nat() -> Nat {
+    return 42 *
+        unit //!< ERROR(sema::expr_type_mismatch)
+  }
+
+  return unit
+}
+
+fn div() -> Unit {
+  fn check() -> Unit {
+    fn result-is-nat() -> Nat {
+      //!~ ERROR
+      return 42 / 24
+    }
+
+    fn result-is-not-bool() -> Bool {
+      //! ERROR(sema::expr_type_mismatch)
+      return 42 / 24
+    }
+
+    return unit
+  }
+
+  fn infer() -> Unit {
+    //!~ ERROR
+    return match 42 / 24 { _ as Nat => unit }
+  }
+
+  fn lhs-must-be-nat() -> Nat {
+    return
+      unit //!< ERROR(sema::expr_type_mismatch)
+        / 24
+  }
+
+  fn rhs-must-be-nat() -> Nat {
+    return 42 /
+        unit //!< ERROR(sema::expr_type_mismatch)
+  }
+
+  return unit
+}
+
+fn and-() -> Unit {
+  fn check() -> Unit {
+    fn result-is-bool() -> Bool {
+      //!~ ERROR
+      return true and false
+    }
+
+    fn result-is-not-nat() -> Nat {
+      //! ERROR(sema::expr_type_mismatch)
+      return true and false
+    }
+
+    return unit
+  }
+
+  fn infer() -> Unit {
+    //!~ ERROR
+    return match true and false { _ as Bool => unit }
+  }
+
+  fn lhs-must-be-bool() -> Bool {
+    return
+      unit //!< ERROR(sema::expr_type_mismatch)
+        and true
+  }
+
+  fn rhs-must-be-bool() -> Bool {
+    return true and
+        unit //!< ERROR(sema::expr_type_mismatch)
+  }
+
+  return unit
+}
+
+fn or-() -> Unit {
+  fn check() -> Unit {
+    fn result-is-bool() -> Bool {
+      //!~ ERROR
+      return true or false
+    }
+
+    fn result-is-not-nat() -> Nat {
+      //! ERROR(sema::expr_type_mismatch)
+      return true or false
+    }
+
+    return unit
+  }
+
+  fn infer() -> Unit {
+    //!~ ERROR
+    return match true or false { _ as Bool => unit }
+  }
+
+  fn lhs-must-be-bool() -> Bool {
+    return
+      unit //!< ERROR(sema::expr_type_mismatch)
+        or true
+  }
+
+  fn rhs-must-be-bool() -> Bool {
+    return true or
+        unit //!< ERROR(sema::expr_type_mismatch)
+  }
+
+  return unit
+}
+
+fn lt() -> Unit {
+  fn check() -> Unit {
+    fn result-is-bool() -> Bool {
+      //!~ ERROR
+      return 42 < 24
+    }
+
+    fn result-is-not-nat() -> Nat {
+      //! ERROR(sema::expr_type_mismatch)
+      return 42 < 24
+    }
+
+    return unit
+  }
+
+  fn infer() -> Unit {
+    //!~ ERROR
+    return match 42 < 24 { _ as Bool => unit }
+  }
+
+  fn lhs-must-be-nat() -> Nat {
+    return
+      unit //!< ERROR(sema::expr_type_mismatch)
+        < 24
+  }
+
+  fn rhs-must-be-nat() -> Nat {
+    return 42 <
+        unit //!< ERROR(sema::expr_type_mismatch)
+  }
+
+  return unit
+}
+
+fn le() -> Unit {
+  fn check() -> Unit {
+    fn result-is-bool() -> Bool {
+      //!~ ERROR
+      return 42 <= 24
+    }
+
+    fn result-is-not-nat() -> Nat {
+      //! ERROR(sema::expr_type_mismatch)
+      return 42 <= 24
+    }
+
+    return unit
+  }
+
+  fn infer() -> Unit {
+    //!~ ERROR
+    return match 42 <= 24 { _ as Bool => unit }
+  }
+
+  fn lhs-must-be-nat() -> Nat {
+    return
+      unit //!< ERROR(sema::expr_type_mismatch)
+        <= 24
+  }
+
+  fn rhs-must-be-nat() -> Nat {
+    return 42 <=
+        unit //!< ERROR(sema::expr_type_mismatch)
+  }
+
+  return unit
+}
+
+fn gt() -> Unit {
+  fn check() -> Unit {
+    fn result-is-bool() -> Bool {
+      //!~ ERROR
+      return 42 > 24
+    }
+
+    fn result-is-not-nat() -> Nat {
+      //! ERROR(sema::expr_type_mismatch)
+      return 42 > 24
+    }
+
+    return unit
+  }
+
+  fn infer() -> Unit {
+    //!~ ERROR
+    return match 42 > 24 { _ as Bool => unit }
+  }
+
+  fn lhs-must-be-nat() -> Nat {
+    return
+      unit //!< ERROR(sema::expr_type_mismatch)
+        > 24
+  }
+
+  fn rhs-must-be-nat() -> Nat {
+    return 42 >
+        unit //!< ERROR(sema::expr_type_mismatch)
+  }
+
+  return unit
+}
+
+fn ge() -> Unit {
+  fn check() -> Unit {
+    fn result-is-bool() -> Bool {
+      //!~ ERROR
+      return 42 >= 24
+    }
+
+    fn result-is-not-nat() -> Nat {
+      //! ERROR(sema::expr_type_mismatch)
+      return 42 >= 24
+    }
+
+    return unit
+  }
+
+  fn infer() -> Unit {
+    //!~ ERROR
+    return match 42 >= 24 { _ as Bool => unit }
+  }
+
+  fn lhs-must-be-nat() -> Nat {
+    return
+      unit //!< ERROR(sema::expr_type_mismatch)
+        >= 24
+  }
+
+  fn rhs-must-be-nat() -> Nat {
+    return 42 >=
+        unit //!< ERROR(sema::expr_type_mismatch)
+  }
+
+  return unit
+}
+
+fn eq() -> Unit {
+  fn check() -> Unit {
+    fn result-is-bool() -> Bool {
+      //!~ ERROR
+      return 42 == 24
+    }
+
+    fn result-is-not-nat() -> Nat {
+      //! ERROR(sema::expr_type_mismatch)
+      return 42 == 24
+    }
+
+    return unit
+  }
+
+  fn infer() -> Unit {
+    //!~ ERROR
+    return match 42 == 24 { _ as Bool => unit }
+  }
+
+  fn lhs-must-be-nat() -> Nat {
+    return
+      unit //!< ERROR(sema::expr_type_mismatch)
+        == 24
+  }
+
+  fn rhs-must-be-nat() -> Nat {
+    return 42 ==
+        unit //!< ERROR(sema::expr_type_mismatch)
+  }
+
+  return unit
+}
+
+fn ne() -> Unit {
+  fn check() -> Unit {
+    fn result-is-bool() -> Bool {
+      //!~ ERROR
+      return 42 != 24
+    }
+
+    fn result-is-not-nat() -> Nat {
+      //! ERROR(sema::expr_type_mismatch)
+      return 42 != 24
+    }
+
+    return unit
+  }
+
+  fn infer() -> Unit {
+    //!~ ERROR
+    return match 42 != 24 { _ as Bool => unit }
+  }
+
+  fn lhs-must-be-nat() -> Nat {
+    return
+      unit //!< ERROR(sema::expr_type_mismatch)
+        != 24
+  }
+
+  fn rhs-must-be-nat() -> Nat {
+    return 42 !=
+        unit //!< ERROR(sema::expr_type_mismatch)
+  }
+
+  return unit
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}
