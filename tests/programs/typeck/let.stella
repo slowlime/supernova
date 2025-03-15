@@ -1,0 +1,48 @@
+language core;
+
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #pattern-ascriptions;
+extend with #nested-function-declarations;
+extend with #unit-type;
+
+extend with #pairs;
+
+extend with #let-bindings, #let-patterns, #let-many-bindings;
+
+fn check() -> Unit {
+  fn let-ty-is-its-body-ty() -> Nat {
+    //!~ ERROR
+    return let x = 0 in x
+  }
+
+  return unit
+}
+
+fn infer() -> Unit {
+  //!~ ERROR
+  return match let x = 0 in x { _ as Nat => unit }
+}
+
+fn let-body-typeck-uses-let-ty-expectation() -> Unit {
+  return let
+    x = 0
+   in fn(y : Bool) { return x } //!< ERROR(sema::unexpected_fn)
+}
+
+fn successive-let-bindings-may-change-tys() -> fn(Unit, Nat, Bool) -> Unit {
+  return let //!<~ ERROR
+    f = fn(x : Unit) { return 0 }, //!<~ ERROR
+    f = fn(x : Unit, y : Nat) { return f(x) }, //!<~ ERROR
+    f = fn(x : Unit, y : Nat, z : Bool) { return f(x, y) } //!<~ ERROR
+   in f //!<~ ERROR
+}
+
+fn patterns-know-scrutinee-ty() -> {Bool, Nat} {
+  return let {x, y} = {0, false} in {y, x}
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}

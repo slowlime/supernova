@@ -1,0 +1,57 @@
+language core;
+
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #pattern-ascriptions;
+extend with #nested-function-declarations;
+extend with #unit-type;
+
+extend with #pairs, #natural-literals;
+
+extend with #letrec-bindings, #let-patterns, #letrec-many-bindings;
+
+fn check() -> Unit {
+  fn letrec-ty-is-its-body-ty() -> Nat {
+    //!~ ERROR
+    return letrec x as Nat = 0 in x
+  }
+
+  return unit
+}
+
+fn infer() -> Unit {
+  //!~ ERROR
+  return match letrec x as Nat = 0 in x { _ as Nat => unit }
+}
+
+fn letrec-body-typeck-uses-letrec-ty-expectation() -> Unit {
+  return letrec
+    x as Nat = 0
+   in fn(y : Bool) { return x} //!< ERROR(sema::unexpected_fn)
+}
+
+fn patterns-do-not-know-scrutinee-ty() -> {Bool, Nat} {
+  return letrec
+    //! ERROR(sema::ambiguous_binding_type)
+    {x, y} = {0, false}
+   in {y, x}
+}
+
+fn all-bindings-are-visible-to-initializer-in-letrec() -> Nat {
+  return letrec                                              //!<~ ERROR
+    f as fn(Nat, Nat) -> Nat = fn(x : Nat, y : Nat) {        //!<~ ERROR
+      return match x { 0 => y | succ(n) => g(y, n) }         //!<~ ERROR
+    },                                                       //!<~ ERROR
+    g as fn(Nat, Nat) -> Nat = fn(x : Nat, y : Nat) {        //!<~ ERROR
+      return f(y, add(x, y))                                 //!<~ ERROR
+    },                                                       //!<~ ERROR
+    add as fn(Nat, Nat) -> Nat = fn(x : Nat, y : Nat) {      //!<~ ERROR
+      return match x { 0 => y | succ(n) => add(n, succ(y)) } //!<~ ERROR
+    }                                                        //!<~ ERROR
+   in f(100, 30)                                             //!<~ ERROR
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}
