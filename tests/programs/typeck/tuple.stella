@@ -1,0 +1,103 @@
+language core;
+
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #pattern-ascriptions;
+extend with #nested-function-declarations;
+extend with #unit-type;
+
+extend with #tuples;
+
+fn check() -> Unit {
+  fn empty-tuple-is-empty-tuple() -> {} {
+    //!~ ERROR
+    return {}
+  }
+
+  fn tuple-zero-false-is-nat-bool-tuple() -> {Nat, Bool} {
+    //!~ ERROR
+    return {0, false}
+  }
+
+  return unit
+}
+
+fn infer() -> Unit {
+  fn empty() -> Unit {
+    //!~ ERROR
+    return match {} { _ as {} => unit }
+  }
+
+  fn non-empty() -> Unit {
+    //!~ ERROR
+    return match {0, false, unit} { _ as {Nat, Bool, Unit} => unit }
+  }
+
+  return unit
+}
+
+fn unexpected-tuple() -> Unit {
+  fn empty() -> Unit {
+    //! ERROR(sema::unexpected_tuple)
+    return {}
+  }
+
+  fn non-empty() -> Unit {
+    //! ERROR(sema::unexpected_tuple)
+    return {0, false}
+  }
+
+  return unit
+}
+
+fn tuple-length-mismatch() -> Unit {
+  fn non-empty-expecting-empty() -> {} {
+    //! ERROR(sema::tuple_length_mismatch)
+    return {0}
+  }
+
+  fn empty-expecting-non-empty() -> {Nat, Bool} {
+    //! ERROR(sema::tuple_length_mismatch)
+    return {}
+  }
+
+  fn too-few() -> {Nat, Bool} {
+    //! ERROR(sema::tuple_length_mismatch)
+    return {0}
+  }
+
+  fn too-many() -> {Nat, Bool} {
+    //! ERROR(sema::tuple_length_mismatch)
+    return {0, false, unit}
+  }
+
+  return unit
+}
+
+fn illegal-elem-tys() -> Unit {
+  fn expect(x : {Nat, Bool, Unit}) -> Unit {
+    return unit
+  }
+
+  fn wrong-elem-1() -> Unit {
+    //! ERROR(sema::expr_type_mismatch)
+    return expect({unit, false, unit})
+  }
+
+  fn wrong-elem-2() -> Unit {
+    //! ERROR(sema::expr_type_mismatch)
+    return expect({0, unit, unit})
+  }
+
+  fn wrong-elem-3() -> Unit {
+    //! ERROR(sema::expr_type_mismatch)
+    return expect({0, false, 0})
+  }
+
+  return unit
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}
