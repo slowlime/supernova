@@ -1,0 +1,53 @@
+language core;
+
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #pattern-ascriptions;
+extend with #nested-function-declarations;
+extend with #unit-type;
+
+extend with #fixpoint-combinator;
+
+fn check(x : fn(Nat) -> Nat, y : fn(Bool) -> Bool) -> Unit {
+  fn fix-x-is-nat() -> Nat {
+    //!~ ERROR
+    return fix(x)
+  }
+
+  fn fix-y-is-not-nat() -> Nat {
+    //! ERROR(sema::expr_type_mismatch)
+    return fix(y)
+  }
+
+  return unit
+}
+
+fn infer(x : fn(Nat) -> Nat) -> Unit {
+  //!~ ERROR
+  return match fix(x) { _ as Nat => unit }
+}
+
+fn fix-not-function(x : Nat) -> Unit {
+  //! ERROR(sema::fix_not_function)
+  return fix(x)
+}
+
+fn fix-nullary-function(x : fn() -> Nat) -> Unit {
+  //! ERROR(sema::fix_wrong_function_param_count)
+  return fix(x)
+}
+
+fn fix-multiparameter-function(x : fn(Nat, Bool) -> Nat) -> Nat {
+  //! ERROR(sema::fix_wrong_function_param_count)
+  return fix(x)
+}
+
+fn fix-param-ret-tys-mismatch(x : fn(Nat) -> Bool) -> Bool {
+  //! ERROR(sema::expr_type_mismatch)
+  return fix(x)
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}

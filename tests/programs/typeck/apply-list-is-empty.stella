@@ -1,0 +1,87 @@
+language core;
+
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #pattern-ascriptions;
+extend with #nested-function-declarations;
+extend with #unit-type;
+
+extend with #lists;
+
+fn check() -> Unit {
+  fn list-is-empty-nat-list-is-bool(xs : [Nat]) -> Bool {
+    //!~ ERROR
+    return List::isempty(xs)
+  }
+
+  fn list-is-empty-nat-list-is-not-nat(xs : [Nat]) -> Nat {
+    //! ERROR(sema::expr_type_mismatch)
+    return List::isempty(xs)
+  }
+
+  return unit
+}
+
+fn infer() -> Unit {
+  //!~ ERROR
+  return match List::isempty([0]) { _ as Bool => unit }
+}
+
+fn illegal-args() -> Unit {
+  fn check() -> Unit {
+    fn not-list() -> Bool {
+      //! ERROR(sema::expr_ty_not_list)
+      return List::isempty(false)
+    }
+
+    return unit
+  }
+
+  fn infer() -> Unit {
+    fn not-list() -> Unit {
+      //! ERROR(sema::expr_ty_not_list)
+      return match List::isempty(false) { _ => unit }
+    }
+
+    return unit
+  }
+
+  return unit
+}
+
+fn wrong-arg-count() -> Unit {
+  fn check() -> Unit {
+    fn zero() -> Nat {
+      //! ERROR(sema::wrong_arg_count)
+      return List::isempty()
+    }
+
+    fn two() -> Nat {
+      //! ERROR(sema::wrong_arg_count)
+      return List::isempty([0], [0])
+    }
+
+    return unit
+  }
+
+  fn infer() -> Unit {
+    fn zero() -> Unit {
+      //! ERROR(sema::wrong_arg_count)
+      return match List::isempty() { _ => unit }
+    }
+
+    fn two() -> Unit {
+      //! ERROR(sema::wrong_arg_count)
+      return match List::isempty([0], [0]) { _ => unit }
+    }
+
+    return unit
+  }
+
+  return unit
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}

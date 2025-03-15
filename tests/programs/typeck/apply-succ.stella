@@ -1,0 +1,77 @@
+language core;
+
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #pattern-ascriptions;
+extend with #nested-function-declarations;
+extend with #unit-type;
+
+fn check() -> Unit {
+  fn succ-nat-is-nat(x : Nat) -> Nat {
+    //!~ ERROR
+    return succ(x)
+  }
+
+  fn succ-nat-is-not-bool(x : Nat) -> Bool {
+    //! ERROR(sema::expr_type_mismatch)
+    return succ(x)
+  }
+
+  return unit
+}
+
+fn infer() -> Unit {
+  //!~ ERROR
+  return match succ(0) { _ as Nat => unit }
+}
+
+fn illegal-arg() -> Unit {
+  fn check() -> Nat {
+    //! ERROR(sema::expr_type_mismatch)
+    return succ(false)
+  }
+
+  fn infer() -> Unit {
+    //! ERROR(sema::expr_type_mismatch)
+    return match succ(false) { _ => unit }
+  }
+
+  return unit
+}
+
+fn wrong-arg-count() -> Unit {
+  fn check() -> Unit {
+    fn zero() -> Nat {
+      //! ERROR(sema::wrong_arg_count)
+      return succ()
+    }
+
+    fn two() -> Nat {
+      //! ERROR(sema::wrong_arg_count)
+      return succ(0, 0)
+    }
+
+    return unit
+  }
+
+  fn infer() -> Unit {
+    fn zero() -> Unit {
+      //! ERROR(sema::wrong_arg_count)
+      return match succ() { _ => unit }
+    }
+
+    fn two() -> Unit {
+      //! ERROR(sema::wrong_arg_count)
+      return match succ(0, 0) { _ => unit }
+    }
+
+    return unit
+  }
+
+  return unit
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}

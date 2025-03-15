@@ -1,0 +1,77 @@
+language core;
+
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #pattern-ascriptions;
+extend with #nested-function-declarations;
+extend with #unit-type;
+
+fn check() -> Unit {
+  fn nat-is-zero-nat-is-bool(x : Nat) -> Bool {
+    //!~ ERROR
+    return Nat::iszero(x)
+  }
+
+  fn nat-is-zero-nat-is-not-nat(x : Nat) -> Nat {
+    //! ERROR(sema::expr_type_mismatch)
+    return Nat::iszero(x)
+  }
+
+  return unit
+}
+
+fn infer() -> Unit {
+  //!~ ERROR
+  return match Nat::iszero(0) { _ as Bool => unit }
+}
+
+fn illegal-arg() -> Unit {
+  fn check() -> Bool {
+    //! ERROR(sema::expr_type_mismatch)
+    return Nat::iszero(false)
+  }
+
+  fn infer() -> Unit {
+    //! ERROR(sema::expr_type_mismatch)
+    return match Nat::iszero(false) { _ => unit }
+  }
+
+  return unit
+}
+
+fn wrong-arg-count() -> Unit {
+  fn check() -> Unit {
+    fn zero() -> Bool {
+      //! ERROR(sema::wrong_arg_count)
+      return Nat::iszero()
+    }
+
+    fn two() -> Bool {
+      //! ERROR(sema::wrong_arg_count)
+      return Nat::iszero(0, 0)
+    }
+
+    return unit
+  }
+
+  fn infer() -> Unit {
+    fn zero() -> Unit {
+      //! ERROR(sema::wrong_arg_count)
+      return match Nat::iszero() { _ => unit }
+    }
+
+    fn two() -> Unit {
+      //! ERROR(sema::wrong_arg_count)
+      return match Nat::iszero(0, 0) { _ => unit }
+    }
+
+    return unit
+  }
+
+  return unit
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}

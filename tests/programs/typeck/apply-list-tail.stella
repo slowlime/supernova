@@ -1,0 +1,92 @@
+language core;
+
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #pattern-ascriptions;
+extend with #nested-function-declarations;
+extend with #unit-type;
+
+extend with #lists;
+
+fn check() -> Unit {
+  fn list-tail-bool-list-is-bool-list(xs : [Bool]) -> [Bool] {
+    //!~ ERROR
+    return List::tail(xs)
+  }
+
+  fn list-tail-nat-list-is-not-bool-list(xs : [Nat]) -> [Bool] {
+    //! ERROR(sema::expr_type_mismatch)
+    return List::tail(xs)
+  }
+
+  return unit
+}
+
+fn infer() -> Unit {
+  //!~ ERROR
+  return match List::tail([0]) { _ as [Nat] => unit }
+}
+
+fn illegal-args() -> Unit {
+  fn check() -> Unit {
+    fn wrong-list-type() -> Bool {
+      //! ERROR(sema::expr_type_mismatch)
+      return List::tail([0])
+    }
+
+    fn not-list() -> Bool {
+      //! ERROR(sema::expr_type_mismatch)
+      return List::tail(false)
+    }
+
+    return unit
+  }
+
+  fn infer() -> Unit {
+    fn not-list() -> Bool {
+      //! ERROR(sema::expr_ty_not_list)
+      return List::tail(false)
+    }
+
+    return unit
+  }
+
+  return unit
+}
+
+fn wrong-arg-count() -> Unit {
+  fn check() -> Unit {
+    fn zero() -> [Nat] {
+      //! ERROR(sema::wrong_arg_count)
+      return List::tail()
+    }
+
+    fn two() -> [Nat] {
+      //! ERROR(sema::wrong_arg_count)
+      return List::tail([0], [0])
+    }
+
+    return unit
+  }
+
+  fn infer() -> Unit {
+    fn zero() -> Unit {
+      //! ERROR(sema::wrong_arg_count)
+      return match List::tail() { _ as [Bool] => unit }
+    }
+
+    fn two() -> Unit {
+      //! ERROR(sema::wrong_arg_count)
+      return match List::tail([0], [0]) { _ as [Nat] => unit }
+    }
+
+    return unit
+  }
+
+  return unit
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}

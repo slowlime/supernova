@@ -1,0 +1,104 @@
+language core;
+
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #pattern-ascriptions;
+extend with #nested-function-declarations;
+extend with #unit-type;
+
+extend with #sum-types;
+
+fn check() -> Unit {
+  fn inl-bool-is-bool-sum-nat(x : Bool) -> Bool + Nat {
+    //!~ ERROR
+    return inl(x)
+  }
+
+  fn inl-bool-is-not-nat-sum-bool(x : Bool) -> Nat + Bool {
+    //! ERROR(sema::expr_type_mismatch)
+    return inl(x)
+  }
+
+  fn inr-bool-is-nat-sum-bool(x : Bool) -> Nat + Bool {
+    //!~ ERROR
+    return inr(x)
+  }
+
+  fn inr-bool-is-not-bool-sum-nat(x : Bool) -> Bool + Nat {
+    //! ERROR(sema::expr_type_mismatch)
+    return inr(x)
+  }
+
+  return unit
+}
+
+fn infer() -> Unit {
+  fn inference-is-just-too-powerless() -> Unit {
+    //! ERROR(sema::ambiguous_sum_type)
+    return match inl(false) { _ as Bool + Nat => unit }
+  }
+
+  fn true-ambiguity() -> Unit {
+    //! ERROR(sema::ambiguous_sum_type)
+    return match inl(false) { _ => unit }
+  }
+
+  return unit
+}
+
+fn unexpected-injection() -> Unit {
+  fn illegal-inl() -> Unit {
+    //! ERROR(sema::unexpected_injection)
+    return inl(unit)
+  }
+
+  fn illegal-inr() -> Unit {
+    //! ERROR(sema::unexpected_injection)
+    return inr(unit)
+  }
+
+  return unit
+}
+
+fn illegal-arg() -> Unit {
+  fn illegal-inl() -> Nat + Bool {
+    //! ERROR(sema::expr_type_mismatch)
+    return inl(unit)
+  }
+
+  fn illegal-inr() -> Nat + Bool {
+    //! ERROR(sema::expr_type_mismatch)
+    return inr(unit)
+  }
+
+  return unit
+}
+
+fn wrong-arg-count() -> Unit {
+  fn inl-zero() -> Nat + Bool {
+    //! ERROR(sema::wrong_arg_count)
+    return inl()
+  }
+
+  fn inl-two() -> Nat + Bool {
+    //! ERROR(sema::wrong_arg_count)
+    return inl(0, false)
+  }
+
+  fn inr-zero() -> Nat + Bool {
+    //! ERROR(sema::wrong_arg_count)
+    return inr()
+  }
+
+  fn inr-two() -> Bool + Nat {
+    //! ERROR(sema::wrong_arg_count)
+    return inl(0, false)
+  }
+
+  return unit
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}

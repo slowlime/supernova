@@ -1,0 +1,107 @@
+language core;
+
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #pattern-ascriptions;
+extend with #nested-function-declarations;
+extend with #unit-type;
+
+extend with #lists;
+
+fn check() -> Unit {
+  fn cons-bool-and-bool-list-is-bool-list(x : Bool, xs : [Bool]) -> [Bool] {
+    //!~ ERROR
+    return cons(x, xs)
+  }
+
+  fn cons-nat-and-nat-list-is-not-nat-list(x : Nat, xs : [Nat]) -> [Nat] {
+    //!~ ERROR
+    return cons(x, xs)
+  }
+
+  return unit
+}
+
+fn infer(x : Bool, xs : [Bool]) -> Unit {
+  //!~ ERROR
+  return match cons(x, xs) { _ as [Bool] => unit }
+}
+
+fn unexpected-list(x : Bool, xs : [Bool]) -> Bool {
+  //! ERROR(sema::unexpected_list)
+  return cons(x, xs)
+}
+
+fn illegal-args() -> Unit {
+  fn check() -> Unit {
+    fn illegal-arg-1() -> [Bool] {
+      //! ERROR(sema::expr_type_mismatch)
+      return cons(0, [])
+    }
+
+    fn illegal-arg-2(xs : [Nat]) -> [Bool] {
+      //! ERROR(sema::expr_type_mismatch)
+      return cons(false, xs)
+    }
+
+    return unit
+  }
+
+  fn infer() -> Unit {
+    fn illegal-arg-2() -> Unit {
+      //! ERROR(sema::expr_type_mismatch)
+      return match cons(false, [0]) { _ => unit }
+    }
+
+    return unit
+  }
+
+  return unit
+}
+
+fn wrong-arg-count() -> Unit {
+  fn check() -> Unit {
+    fn zero() -> [Bool] {
+      //! ERROR(sema::wrong_arg_count)
+      return cons()
+    }
+
+    fn one() -> [Bool] {
+      //! ERROR(sema::wrong_arg_count)
+      return cons(false)
+    }
+
+    fn three() -> [Bool] {
+      //! ERROR(sema::wrong_arg_count)
+      return cons(false, [], [false])
+    }
+
+    return unit
+  }
+
+  fn infer() -> Unit {
+    fn zero() -> Unit {
+      //! ERROR(sema::wrong_arg_count)
+      return match cons() { _ as [Bool] => unit }
+    }
+
+    fn one() -> Unit {
+      //! ERROR(sema::wrong_arg_count)
+      return match cons(false) { _ as [Bool] => unit }
+    }
+
+    fn three(xs : [Bool]) -> Bool {
+      //! ERROR(sema::wrong_arg_count)
+      return match cons(false, xs, xs) { _ as [Bool] => unit }
+    }
+
+    return unit
+  }
+
+  return unit
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}

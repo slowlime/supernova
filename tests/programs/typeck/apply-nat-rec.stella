@@ -1,0 +1,156 @@
+language core;
+
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #pattern-ascriptions;
+extend with #nested-function-declarations;
+extend with #unit-type;
+
+fn check() -> Unit {
+  fn nat-rec-unit-is-unit(n : Nat, z : Unit, s : fn(Nat) -> fn(Unit) -> Unit) -> Unit {
+    //!~ ERROR
+    return Nat::rec(n, z, s)
+  }
+
+  fn nat-rec-unit-is-not-bool(n : Nat, z : Unit, s : fn(Nat) -> fn(Unit) -> Unit) -> Bool {
+    //! ERROR(sema::expr_type_mismatch)
+    return Nat::rec(n, z, s)
+  }
+
+  return unit
+}
+
+fn infer() -> Unit {
+  //!~ ERROR
+  return match Nat::rec(0, false, fn(n : Nat) { return fn(z : Bool) { return z } }) { _ => unit }
+}
+
+fn id-bool-succ(n : Nat) -> fn(Bool) -> Bool {
+  return fn(z : Bool) {
+    return z
+  }
+}
+
+fn id-nat-succ(n : Nat) -> fn(Nat) -> Nat {
+  return fn(z : Nat) {
+    return z
+  }
+}
+
+fn illegal-args() -> Unit {
+  fn check() -> Unit {
+    fn illegal-arg-1() -> Bool {
+      return Nat::rec(
+        //! ERROR(sema::expr_type_mismatch)
+        false,
+        true,
+        id-bool-succ
+      )
+    }
+
+    fn illegal-arg-2() -> Bool {
+      return Nat::rec(
+        0,
+        //! ERROR(sema::expr_type_mismatch)
+        0,
+        id-bool-succ
+      )
+    }
+
+    fn illegal-arg-3() -> Bool {
+      return Nat::rec(
+        0,
+        false,
+        //! ERROR(sema::expr_type_mismatch)
+        id-nat-succ
+      )
+    }
+
+    return unit
+  }
+
+  fn infer() -> Unit {
+    fn illegal-arg-1() -> Unit {
+      return match Nat::rec(
+        //! ERROR(sema::expr_type_mismatch)
+        false,
+        false,
+        id-bool-succ
+      ) {
+        _ => unit
+      }
+    }
+
+    fn illegal-arg-3() -> Unit {
+      return match Nat::rec(
+        0,
+        false,
+        //! ERROR(sema::expr_type_mismatch)
+        id-nat-succ
+      ) {
+        _ => unit
+      }
+    }
+
+    return unit
+  }
+
+  return unit
+}
+
+fn wrong-arg-count() -> Unit {
+  fn check() -> Unit {
+    fn zero() -> Bool {
+      //! ERROR(sema::wrong_arg_count)
+      return Nat::rec()
+    }
+
+    fn one() -> Bool {
+      //! ERROR(sema::wrong_arg_count)
+      return Nat::rec(0)
+    }
+
+    fn two() -> Bool {
+      //! ERROR(sema::wrong_arg_count)
+      return Nat::rec(0, false)
+    }
+
+    fn four() -> Bool {
+      //! ERROR(sema::wrong_arg_count)
+      return Nat::rec(0, false, id-bool-succ, id-nat-succ)
+    }
+
+    return unit
+  }
+
+  fn infer() -> Unit {
+    fn zero() -> Unit {
+      //! ERROR(sema::wrong_arg_count)
+      return match Nat::rec() { _ => unit }
+    }
+
+    fn one() -> Unit {
+      //! ERROR(sema::wrong_arg_count)
+      return match Nat::rec(0) { _ => unit }
+    }
+
+    fn two() -> Unit {
+      //! ERROR(sema::wrong_arg_count)
+      return match Nat::rec(0, false) { _ => unit }
+    }
+
+    fn four() -> Unit {
+      //! ERROR(sema::wrong_arg_count)
+      return match Nat::rec(0, false, id-bool-succ, id-nat-succ) { _ => unit }
+    }
+
+    return unit
+  }
+
+  return unit
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}
