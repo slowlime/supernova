@@ -1,0 +1,94 @@
+language core;
+
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #pattern-ascriptions;
+extend with #nested-function-declarations;
+extend with #unit-type;
+extend with #letrec-bindings, #let-patterns, #letrec-many-bindings;
+
+extend with #lists;
+
+fn check(x : [Nat]) -> Unit {
+  return match x {               //!<~ ERROR
+    cons(x, cons(y, ys)) => unit //!<~ ERROR
+  | _ => unit                    //!<~ ERROR
+  }                              //!<~ ERROR
+}
+
+fn infer(x : [Nat]) -> Unit {
+  return letrec            //!<~ ERROR
+    cons(y as Nat, ys) = x //!<~ ERROR
+   in unit                 //!<~ ERROR
+}
+
+fn illegal-pattern-for-ty() -> Unit {
+  return match 0 {
+    //! ERROR(sema::illegal_pattern_for_ty)
+    cons(x, xs) => unit
+  | _ => unit
+  }
+}
+
+fn illegal-args(x : [Nat]) -> Unit {
+  fn check() -> Unit {
+    return match x {
+      cons(
+        unit, //!< ERROR(sema::illegal_pattern_for_ty)
+        _
+      ) => unit
+    | cons(
+        _,
+        unit //!< ERROR(sema::illegal_pattern_for_ty)
+      ) => unit
+    | _ => unit
+    }
+  }
+
+  fn infer() -> Unit {
+    return letrec
+      cons(
+        0,
+        bools as [Bool] //!< ERROR(sema::illegal_pattern_for_ty)
+      ) = x,
+      cons(
+        0,
+        bool as Bool //!< ERROR(sema::illegal_pattern_for_ty)
+      ) = x
+     in unit
+  }
+
+  return unit
+}
+
+fn wrong-arg-count(x : [Nat]) -> Unit {
+  fn check() -> Unit {
+    return match x {
+      //! ERROR(sema::wrong_arg_count)
+      cons() => unit
+    | //! ERROR(sema::wrong_arg_count)
+      cons(x) => unit
+    | //! ERROR(sema::wrong_arg_count)
+      cons(x, y, z) => unit
+    | _ => unit
+    }
+  }
+
+  fn infer() -> Unit {
+    return letrec
+      //! ERROR(sema::wrong_arg_count)
+      cons() = x,
+      //! ERROR(sema::wrong_arg_count)
+      cons(a) = x,
+      //! ERROR(sema::wrong_arg_count)
+      cons(b, c, d) = x
+     in unit
+  }
+
+  return unit
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}
