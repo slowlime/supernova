@@ -1,0 +1,138 @@
+language core;
+
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #pattern-ascriptions;
+extend with #nested-function-declarations;
+extend with #unit-type;
+
+fn id(x : Nat) -> Nat {
+  return x
+}
+
+fn foo(x : Nat, y : Bool, z : Unit) -> Bool {
+  return y
+}
+
+fn check() -> Unit {
+  fn apply-id-to-nat-is-nat(x : Nat) -> Nat {
+    //!~ ERROR
+    return id(x)
+  }
+
+  fn apply-id-to-nat-is-not-bool(x : Nat) -> Bool {
+    //! ERROR(sema::expr_type_mismatch)
+    return id(x)
+  }
+
+  return unit
+}
+
+fn infer() -> Unit {
+  //!~ ERROR
+  return match id(0) { _ as Nat => unit }
+}
+
+fn apply-not-function() -> Unit {
+  //! ERROR(sema::apply_not_function)
+  return false(0)
+}
+
+fn illegal-arg-tys() -> Unit {
+  fn check() -> Unit {
+    fn foo-arg-1() -> Bool {
+      //! ERROR(sema::expr_type_mismatch)
+      return foo(unit, false, unit)
+    }
+
+    fn foo-arg-2() -> Bool {
+      //! ERROR(sema::expr_type_mismatch)
+      return foo(0, unit, unit)
+    }
+
+    fn foo-arg-3() -> Bool {
+      //! ERROR(sema::expr_type_mismatch)
+      return foo(0, false, 0)
+    }
+
+    return unit
+  }
+
+  fn infer() -> Unit {
+    fn foo-arg-1() -> Unit {
+      //! ERROR(sema::expr_type_mismatch)
+      return match foo(unit, false, unit) { _ => unit }
+    }
+
+    fn foo-arg-2() -> Unit {
+      //! ERROR(sema::expr_type_mismatch)
+      return match foo(0, unit, unit) { _ => unit }
+    }
+
+    fn foo-arg-3() -> Bool {
+      //! ERROR(sema::expr_type_mismatch)
+      return match foo(0, false, 0) { _ => unit }
+    }
+
+    return unit
+  }
+
+  return unit
+}
+
+fn wrong-arg-count() -> Unit {
+  fn check() -> Unit {
+    fn foo-zero() -> Bool {
+      //! ERROR(sema::wrong_arg_count)
+      return foo()
+    }
+
+    fn foo-one() -> Bool {
+      //! ERROR(sema::wrong_arg_count)
+      return foo(0)
+    }
+
+    fn foo-two() -> Bool {
+      //! ERROR(sema::wrong_arg_count)
+      return foo(0, false)
+    }
+
+    fn foo-four() -> Bool {
+      //! ERROR(sema::wrong_arg_count)
+      return foo(0, false, unit, 0)
+    }
+
+    return unit
+  }
+
+  fn infer() -> Unit {
+    fn foo-zero() -> Unit {
+      //! ERROR(sema::wrong_arg_count)
+      return match foo() { _ => unit }
+    }
+
+    fn foo-one() -> Unit {
+      //! ERROR(sema::wrong_arg_count)
+      return match foo(0) { _ => unit }
+    }
+
+    fn foo-two() -> Unit {
+      //! ERROR(sema::wrong_arg_count)
+      return match foo(0, false) { _ => unit }
+    }
+
+    fn foo-four() -> Unit {
+      //! ERROR(sema::wrong_arg_count)
+      return match foo(0, false, unit, 0) { _ => unit }
+    }
+
+    return unit
+  }
+
+  return unit
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}
