@@ -1084,12 +1084,12 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 let mut report = self.make_expr_ty_error(expr_id, ty_id, expected_ty_id, source);
 
                 if self.m.bindings[binding_id].location.has_span() {
-                    report.add_label(Label::secondary(self.m.bindings[binding_id].location).with_msg(
-                        format!(
+                    report.add_label(
+                        Label::secondary(self.m.bindings[binding_id].location).with_msg(format!(
                             "the binding `{}` is defined here",
                             self.m.bindings[binding_id].name,
-                        ),
-                    ));
+                        )),
+                    );
                 }
 
                 self.diag.emit(report);

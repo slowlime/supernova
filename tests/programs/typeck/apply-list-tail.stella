@@ -36,7 +36,7 @@ fn illegal-args() -> Unit {
     }
 
     fn not-list() -> Bool {
-      //! ERROR(sema::expr_type_mismatch)
+      //! ERROR(sema::expr_ty_not_list)
       return List::tail(false)
     }
 
