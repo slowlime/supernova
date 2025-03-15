@@ -6,8 +6,8 @@ extend with #structural-patterns;
 extend with #pattern-ascriptions;
 extend with #nested-function-declarations;
 extend with #unit-type;
-
 extend with #letrec-bindings, #let-patterns;
+
 extend with #variants, #nullary-variant-labels;
 
 fn check(x : <|a : Nat, b : Bool|>) -> Unit {

@@ -1,0 +1,64 @@
+language core;
+
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #pattern-ascriptions;
+extend with #nested-function-declarations;
+extend with #unit-type;
+extend with #letrec-bindings, #let-patterns, #letrec-many-bindings;
+
+extend with #sum-types;
+
+fn check(x : Nat + Bool) -> Unit {
+  return match x {  //!<~ ERROR
+    inl(_) => unit  //!<~ ERROR
+  | inr(_) => unit  //!<~ ERROR
+  }                 //!<~ ERROR
+}
+
+fn ambiguous-sum-type(x : Nat + Bool) -> Unit {
+  return letrec
+    inl(a) = x, //!< ERROR(sema::ambiguous_sum_type)
+    inr(b) = x  //!< ERROR(sema::ambiguous_sum_type)
+   in unit
+}
+
+fn illegal-pattern-for-ty() -> Unit {
+  return match 0 {
+    //! ERROR(sema::illegal_pattern_for_ty)
+    inl(_) => unit
+    //! ERROR(sema::illegal_pattern_for_ty)
+  | inr(_) => unit
+  | _ => unit
+  }
+}
+
+fn illegal-arg(x : Nat + Bool) -> Unit {
+  return match x {
+    inl(
+      unit //!< ERROR(sema::illegal_pattern_for_ty)
+    ) => unit
+  | inr(
+      unit //!< ERROR(sema::illegal_pattern_for_ty)
+    ) => unit
+  | _ => unit
+  }
+}
+
+fn wrong-arg-count(x : Nat + Bool) -> Unit {
+  return match x {
+    //! ERROR(sema::wrong_arg_count)
+    inl() => unit
+  | //! ERROR(sema::wrong_arg_count)
+    inr() => unit
+  | //! ERROR(sema::wrong_arg_count)
+    inl(x, y) => unit
+  | //! ERROR(sema::wrong_arg_count)
+    inr(x, y) => unit
+  }
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}
