@@ -5,8 +5,8 @@ This is a simple type checker for a subset of the Stella language.
 
 In addition to the core language, the following extensions are also supported:
 
-- `#arithmetic-operations`
-- `#comparison-operations`
+- `#arithmetic-operators`
+- `#comparison-operators`
 - `#fixpoint-combinator`
 - `#let-bindings`
 - `#let-many-bindings`
@@ -14,6 +14,7 @@ In addition to the core language, the following extensions are also supported:
 - `#letrec-bindings`
 - `#letrec-many-bindings`
 - `#lists`
+- `#logical-operators`
 - `#multiparameter-functions`
 - `#natural-literals`
 - `#nested-function-declarations`

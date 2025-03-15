@@ -125,8 +125,9 @@ define_features! {
     NestedFunctionDeclarations "nested function declarations"
         (ast::Extension::NestedFunctionDeclarations);
     NaturalLiterals "natural literals" (ast::Extension::NaturalLiterals);
-    ArithmeticOperations "arithmetic operations" (ast::Extension::ArithmeticOperations);
-    ComparisonOperations "comparison operations" (ast::Extension::ComparisonOperations);
+    ArithmeticOperators "arithmetic operators" (ast::Extension::ArithmeticOperators);
+    ComparisonOperators "comparison operators" (ast::Extension::ComparisonOperators);
+    LogicalOperators "logical operators" (ast::Extension::LogicalOperators);
     NullaryFunctions "nullary functions" (ast::Extension::NullaryFunctions);
     MultiparameterFunctions "multi-parameter functions" (ast::Extension::MultiparameterFunctions);
     CurriedMultiparameterFunctions "automatic currying";

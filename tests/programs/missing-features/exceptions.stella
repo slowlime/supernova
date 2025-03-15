@@ -9,7 +9,7 @@ fn wrong-throws(x : Nat) -> Bool throws Bool {
     //! ERROR(sema::throw_expr_not_allowed)
     throw(false)
   } catch {
-    x => not(true)
+    x => true
   }
 }
 

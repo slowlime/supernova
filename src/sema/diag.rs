@@ -224,6 +224,12 @@ pub enum SemaDiag {
         op_location: Location,
     },
 
+    #[error("logical operators are not allowed")]
+    LogicOpNotAllowed {
+        location: Location,
+        op_location: Location,
+    },
+
     #[error("assignment expressions are not allowed")]
     AssignExprNotAllowed {
         location: Location,
@@ -992,6 +998,16 @@ impl IntoDiagnostic for SemaDiag {
             } => Diagnostic::error()
                 .at(*op_location)
                 .with_code(code!(sema::cmp_op_not_allowed))
+                .with_msg(&self)
+                .with_label(Label::primary(*op_location))
+                .make(),
+
+            Self::LogicOpNotAllowed {
+                location: _,
+                op_location,
+            } => Diagnostic::error()
+                .at(*op_location)
+                .with_code(code!(sema::logic_op_not_allowed))
                 .with_msg(&self)
                 .with_label(Label::primary(*op_location))
                 .make(),

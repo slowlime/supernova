@@ -644,7 +644,19 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                     }
 
                     ast::Builtin::Succ => {}
-                    ast::Builtin::Not => {}
+
+                    ast::Builtin::Not => {
+                        if !self.m.is_feature_enabled(FeatureKind::LogicalOperators) {
+                            result = Err(());
+                            self.diag.emit(make_feature_disabled_error(
+                                SemaDiag::ApplyExprNotAllowed {
+                                    location: def.location,
+                                },
+                                FeatureKind::LogicalOperators,
+                            ));
+                        }
+                    }
+
                     ast::Builtin::NatPred => {}
                     ast::Builtin::NatIsZero => {}
                     ast::Builtin::NatRec => {}
@@ -859,19 +871,30 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
 
             ast::ExprKind::Binary(expr) => match expr.op {
                 ast::BinOp::Add | ast::BinOp::Sub | ast::BinOp::Mul | ast::BinOp::Div => {
-                    if !self.m.is_feature_enabled(FeatureKind::ArithmeticOperations) {
+                    if !self.m.is_feature_enabled(FeatureKind::ArithmeticOperators) {
                         result = Err(());
                         self.diag.emit(make_feature_disabled_error(
                             SemaDiag::ArithOpNotAllowed {
                                 location: def.location,
                                 op_location: expr.token.as_ref().map(|token| token.span).into(),
                             },
-                            FeatureKind::ArithmeticOperations,
+                            FeatureKind::ArithmeticOperators,
                         ));
                     }
                 }
 
-                ast::BinOp::And | ast::BinOp::Or => {}
+                ast::BinOp::And | ast::BinOp::Or => {
+                    if !self.m.is_feature_enabled(FeatureKind::LogicalOperators) {
+                        result = Err(());
+                        self.diag.emit(make_feature_disabled_error(
+                            SemaDiag::LogicOpNotAllowed {
+                                location: def.location,
+                                op_location: expr.token.as_ref().map(|token| token.span).into(),
+                            },
+                            FeatureKind::LogicalOperators,
+                        ));
+                    }
+                }
 
                 ast::BinOp::Lt
                 | ast::BinOp::Le
@@ -879,14 +902,14 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 | ast::BinOp::Ge
                 | ast::BinOp::Eq
                 | ast::BinOp::Ne => {
-                    if !self.m.is_feature_enabled(FeatureKind::ComparisonOperations) {
+                    if !self.m.is_feature_enabled(FeatureKind::ComparisonOperators) {
                         result = Err(());
                         self.diag.emit(make_feature_disabled_error(
                             SemaDiag::ComparisonOpNotAllowed {
                                 location: def.location,
                                 op_location: expr.token.as_ref().map(|token| token.span).into(),
                             },
-                            FeatureKind::ComparisonOperations,
+                            FeatureKind::ComparisonOperators,
                         ));
                     }
                 }

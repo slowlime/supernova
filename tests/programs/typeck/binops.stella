@@ -9,7 +9,7 @@ extend with #unit-type;
 
 extend with #natural-literals;
 
-extend with #arithmetic-operations, #comparison-operations;
+extend with #arithmetic-operators, #comparison-operators, #logical-operators;
 
 fn add() -> Unit {
   fn check() -> Unit {

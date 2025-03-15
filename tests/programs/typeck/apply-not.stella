@@ -7,6 +7,8 @@ extend with #pattern-ascriptions;
 extend with #nested-function-declarations;
 extend with #unit-type;
 
+extend with #logical-operators;
+
 fn check() -> Unit {
   fn not-bool-is-bool(x : Bool) -> Bool {
     //!~ ERROR

@@ -2,7 +2,7 @@ language core;
 
 extend with #let-bindings, #let-many-bindings, #multiparameter-functions, #unit-type;
 
-fn wrong(a : Nat, b : Nat) -> Unit {
+fn wrong(a : Nat, b : Nat, x : Bool, y : Bool) -> Unit {
   return
         //! ERROR(sema::arith_op_not_allowed)
     let _ = a + b,
@@ -23,6 +23,12 @@ fn wrong(a : Nat, b : Nat) -> Unit {
         //! ERROR(sema::cmp_op_not_allowed)
         _ = a == b,
         //! ERROR(sema::cmp_op_not_allowed)
-        _ = a != b
+        _ = a != b,
+        //! ERROR(sema::logic_op_not_allowed)
+        _ = x and y,
+        //! ERROR(sema::logic_op_not_allowed)
+        _ = x or y,
+        //! ERROR(sema::apply_expr_not_allowed)
+        _ = not(x)
      in unit
 }
