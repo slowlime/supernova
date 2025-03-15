@@ -1,0 +1,84 @@
+language core;
+
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #pattern-ascriptions;
+extend with #nested-function-declarations;
+extend with #unit-type;
+
+extend with #records;
+
+fn check() -> Unit {
+  fn record-a-b() -> {a : Nat, b : Bool} {
+    //!~ ERROR
+    return {a = 0, b = false}
+  }
+
+  return unit
+}
+
+fn infer() -> Unit {
+  //!~ ERROR
+  return match {a = 0, b = false} { _ as {a : Nat, b : Bool} => unit }
+}
+
+fn unexpected-record() -> Unit {
+  //! ERROR(sema::unexpected_record)
+  return {a = false, b = 0}
+}
+
+fn missing-record-field() -> Unit {
+  fn empty() -> {a : Nat, b : Bool} {
+    //! ERROR(sema::missing_record_field)
+    return {}
+  }
+
+  fn non-empty() -> {a : Nat, b : Bool} {
+    //! ERROR(sema::missing_record_field)
+    return {a = 0}
+  }
+
+  return unit
+}
+
+fn unexpected-record-field() -> Unit {
+  fn empty() -> {} {
+    //! ERROR(sema::unexpected_record_field)
+    return {a = 0}
+  }
+
+  fn non-empty() -> {a : Nat, b : Bool} {
+    //! ERROR(sema::unexpected_record_field)
+    return {a = 0, b = false, c = unit}
+  }
+
+  return unit
+}
+
+fn illegal-record-field-tys() -> Unit {
+  fn expect(x : {a : Nat, b : Bool, c : Unit}) -> Unit {
+    return unit
+  }
+
+  fn wrong-a() -> Unit {
+    //! ERROR(sema::expr_type_mismatch)
+    return expect({a = unit, b = false, c = unit})
+  }
+
+  fn wrong-b() -> Unit {
+    //! ERROR(sema::expr_type_mismatch)
+    return expect({a = 0, b = unit, c = unit})
+  }
+
+  fn wrong-c() -> Unit {
+    //! ERROR(sema::expr_type_mismatch)
+    return expect({a = 0, b = false, c = 0})
+  }
+
+  return unit
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}

@@ -1564,7 +1564,10 @@ impl IntoDiagnostic for SemaDiag {
                 expr_location,
             } => Diagnostic::error()
                 .at(*location)
-                .with_code(code!(sema::unexpected_data_for_nullary_label))
+                .with_code(code!(
+                    sema::unexpected_data_for_nullary_label
+                    as "ERROR_DATA_FOR_NULLARY_LABEL"
+                ))
                 .with_msg(&self)
                 .with_label(Label::primary(*location))
                 .with_label(Label::secondary(*expr_location).with_msg("in this variant expression"))
@@ -1577,7 +1580,10 @@ impl IntoDiagnostic for SemaDiag {
                 pat_location,
             } => Diagnostic::error()
                 .at(*location)
-                .with_code(code!(sema::unexpected_non_nullary_variant_pattern))
+                .with_code(code!(
+                    sema::unexpected_non_nullary_variant_pattern
+                    as "ERROR_UNEXPECTED_NON_NULLARY_VARIANT_PATTERN"
+                ))
                 .with_msg(&self)
                 .with_label(Label::primary(*location))
                 .with_label(Label::secondary(*pat_location).with_msg("in this variant pattern"))
@@ -1590,7 +1596,10 @@ impl IntoDiagnostic for SemaDiag {
                 expr_location,
             } => Diagnostic::error()
                 .at(*location)
-                .with_code(code!(sema::missing_data_for_label))
+                .with_code(code!(
+                    sema::missing_data_for_label
+                    as "ERROR_MISSING_DATA_FOR_LABEL"
+                ))
                 .with_msg(&self)
                 .with_label(Label::primary(*location))
                 .with_label(Label::secondary(*expr_location).with_msg(format!(
@@ -1605,7 +1614,10 @@ impl IntoDiagnostic for SemaDiag {
                 pat_location,
             } => Diagnostic::error()
                 .at(*location)
-                .with_code(code!(sema::unexpected_nullary_variant_pattern))
+                .with_code(code!(
+                    sema::unexpected_nullary_variant_pattern
+                    as "ERROR_UNEXPECTED_NULLARY_VARIANT_PATTERN"
+                ))
                 .with_msg(&self)
                 .with_label(Label::primary(*location))
                 .with_label(

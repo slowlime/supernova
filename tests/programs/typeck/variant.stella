@@ -1,0 +1,58 @@
+language core;
+
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #pattern-ascriptions;
+extend with #nested-function-declarations;
+extend with #unit-type;
+
+extend with #variants, #nullary-variant-labels;
+
+fn check() -> Unit {
+  fn regular() -> <|a : Unit, b : Nat|> {
+    //!~ ERROR
+    return <|a = unit|>
+  }
+
+  fn nullary() -> <|a, b : Nat, c|> {
+    //!~ ERROR
+    return <|c|>
+  }
+
+  return unit
+}
+
+fn infer() -> Unit {
+  //! ERROR(sema::ambiguous_variant_type)
+  return match <|a = true|> { _ as <|a : Bool, b : Nat|> => unit }
+}
+
+fn unexpected-variant() -> Unit {
+  //! ERROR(sema::unexpected_variant)
+  return <|a|>
+}
+
+fn no-such-variant-label() -> <|a : Bool, b|> {
+  //! ERROR(sema::no_such_variant_label)
+  return <|c = unit|>
+}
+
+fn wrong-variant-data-ty() -> <|a : Nat, b : Bool|> {
+  //! ERROR(sema::expr_type_mismatch)
+  return <|b = 0|>
+}
+
+fn unexpected-data-for-nullary-label() -> <|a : Nat, b|> {
+  //! ERROR(sema::unexpected_data_for_nullary_label)
+  return <|b = 0|>
+}
+
+fn missing-data-for-label() -> <|a, b : Bool|> {
+  //! ERROR(sema::missing_data_for_label)
+  return <|b|>
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}
