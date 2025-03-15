@@ -1,0 +1,91 @@
+language core;
+
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #pattern-ascriptions;
+extend with #nested-function-declarations;
+extend with #unit-type;
+extend with #letrec-bindings, #let-patterns, #letrec-many-bindings;
+
+extend with #tuples;
+
+fn check() -> Unit {
+  fn empty(x : {}) -> Unit {
+    //!~ ERROR
+    return match x { {} => unit }
+  }
+
+  fn non-empty(x : {Nat, Bool}) -> Unit {
+    //!~ ERROR
+    return match x { {x, y} => unit }
+  }
+
+  return unit
+}
+
+fn infer() -> Unit {
+  fn empty(x : {}) -> Unit {
+    //!~ ERROR
+    return letrec {} = x in unit
+  }
+
+  fn non-empty(x : {Nat, Bool}) -> Unit {
+    //!~ ERROR
+    return letrec {a as Nat, b as Bool} = x in unit
+  }
+
+  return unit
+}
+
+fn illegal-pattern-for-ty() -> Unit {
+  return match 0 {
+    //! ERROR(sema::illegal_pattern_for_ty)
+    {} => unit
+  | //! ERROR(sema::illegal_pattern_for_ty)
+    {x, y} => unit
+  | _ => unit
+  }
+}
+
+fn illegal-elem-tys(x : {Nat, Bool}) -> Unit {
+  return match x {
+    {
+      unit, //!< ERROR(sema::illegal_pattern_for_ty)
+      _
+    } => unit
+  | {
+      _,
+      unit //!< ERROR(sema::illegal_pattern_for_ty)
+    } => unit
+  | _ => unit
+  }
+}
+
+fn tuple-length-mismatch() -> Unit {
+  fn empty() -> Unit {
+    return match {} {
+      //! ERROR(sema::tuple_length_mismatch)
+      {x} => unit
+    | _ => unit
+    }
+  }
+
+  fn non-empty() -> Unit {
+    return match {0, false} {
+      //! ERROR(sema::tuple_length_mismatch)
+      {} => unit
+    | //! ERROR(sema::tuple_length_mismatch)
+      {x} => unit
+    | //! ERROR(sema::tuple_length_mismatch)
+      {x, y, z} => unit
+    | _ => unit
+    }
+  }
+
+  return unit
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}
