@@ -25,7 +25,7 @@ impl Directive {
 pub struct DirectiveDiag {
     level: Level,
     line: usize,
-    diag_start: Range<usize>,
+    diag_line: Option<(usize, Range<usize>)>,
     code: Option<String>,
 }
 
@@ -34,7 +34,7 @@ static DIRECTIVE_DIAG_REGEX: LazyLock<Regex> = LazyLock::new(|| {
 });
 
 impl DirectiveDiag {
-    fn parse(directive: &str, line: usize, next_line_range: Range<usize>) -> Self {
+    fn parse(directive: &str, line: usize, diag_line: Option<(usize, Range<usize>)>) -> Self {
         let captures = DIRECTIVE_DIAG_REGEX.captures(directive).unwrap();
         let level = match captures.name("level").unwrap().as_str() {
             "ERROR" => Level::Error,
@@ -46,7 +46,7 @@ impl DirectiveDiag {
         Self {
             level,
             line,
-            diag_start: next_line_range,
+            diag_line,
             code,
         }
     }
@@ -54,10 +54,13 @@ impl DirectiveDiag {
     pub fn check(&self, run_data: &TestRunData) -> TestResult {
         if run_data.diags.iter().any(|diag| {
             diag.level == self.level
-                && diag
-                    .location
-                    .span()
-                    .is_some_and(|span| self.diag_start.contains(&span.start()))
+                && match &self.diag_line {
+                    Some((_, diag_start)) => diag
+                        .location
+                        .span()
+                        .is_some_and(|span| diag_start.contains(&span.start())),
+                    None => diag.location.is_builtin(),
+                }
                 && self
                     .code
                     .as_ref()
@@ -130,21 +133,36 @@ pub fn parse_directives(s: &str) -> Result<Vec<Directive>, String> {
         let Some((_, directive)) = line.split_once("//!") else {
             continue;
         };
-        let directive = directive.trim();
 
+        let (directive, selected_line_idx) = if let Some(d) = directive.strip_prefix('<') {
+            (d, Some(idx))
+        } else if let Some(d) = directive.strip_prefix('^') {
+            (d, Some(idx.saturating_sub(1)))
+        } else if let Some(d) = directive.strip_prefix('#') {
+            (d, None)
+        } else {
+            (directive, Some(idx + 1))
+        };
+
+        let directive = directive.trim();
         let matches = DIRECTIVE_REGEX.matches(directive);
 
         if !matches.matched_any() {
             return Err(format!("unrecognized directive at line {}", idx + 1));
         }
 
-        let directive = if matches.matched(0) {
-            let next_line_range = lines
-                .get(idx + 1)
-                .map(|(r, _)| r.clone())
-                .unwrap_or(s.len()..s.len());
+        let selected_line = selected_line_idx.map(|selected_line_idx| {
+            (
+                selected_line_idx + 1,
+                lines
+                    .get(selected_line_idx)
+                    .map(|(r, _)| r.clone())
+                    .unwrap_or(s.len()..s.len()),
+            )
+        });
 
-            DirectiveDiag::parse(directive, idx + 1, next_line_range).into()
+        let directive = if matches.matched(0) {
+            DirectiveDiag::parse(directive, idx + 1, selected_line).into()
         } else if matches.matched(1) {
             DirectivePass::parse(directive).into()
         } else {
