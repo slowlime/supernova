@@ -1856,17 +1856,40 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 return self.typeck_expr_tuple(expr_id, expr, None);
             }
 
-            let TyKind::Tuple(ty) = &self.m.tys[expected_ty_id].kind else {
-                self.diag.emit(self.augment_error_with_expectation(
-                    SemaDiag::UnexpectedTuple {
-                        location: self.m.exprs[expr_id].def.location,
-                        expected_ty: self.m.display_ty(expected_ty_id).to_string(),
-                    },
-                    source,
-                ));
-                self.typeck_expr_tuple(expr_id, expr, None)?;
+            let ty = match &self.m.tys[expected_ty_id].kind {
+                TyKind::Tuple(ty) => ty,
 
-                return Err(());
+                TyKind::Record(ty) if ty.elems.is_empty() => &TyTuple { elems: vec![] },
+
+                TyKind::Record(ty) if expr.elems.is_empty() => {
+                    // since `{}` is nominally a tuple, if we expect a non-empty record, we report
+                    // all of its fields as missing, pretending that `{}` is actually a record.
+                    for (name, _) in &ty.elems {
+                        self.diag.emit(self.augment_error_with_expectation(
+                            SemaDiag::MissingRecordFieldInExpr {
+                                location: self.m.exprs[expr_id].def.location,
+                                name: name.into(),
+                                expected_ty: self.m.display_ty(expected_ty_id).to_string(),
+                            },
+                            source.clone(),
+                        ));
+                    }
+
+                    return Err(());
+                }
+
+                _ => {
+                    self.diag.emit(self.augment_error_with_expectation(
+                        SemaDiag::UnexpectedTuple {
+                            location: self.m.exprs[expr_id].def.location,
+                            expected_ty: self.m.display_ty(expected_ty_id).to_string(),
+                        },
+                        source,
+                    ));
+                    self.typeck_expr_tuple(expr_id, expr, None)?;
+
+                    return Err(());
+                }
             };
 
             if expr.elems.len() != ty.elems.len() {
