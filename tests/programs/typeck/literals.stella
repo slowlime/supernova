@@ -1,0 +1,93 @@
+language core;
+
+extend with #nullary-functions, #structural-patterns, #pattern-ascriptions, #nested-function-declarations, #unit-type;
+extend with #natural-literals;
+
+fn unit-check() -> Unit {
+  fn unit-is-unit() -> Unit {
+    //!~ ERROR
+    return unit
+  }
+
+  fn bool-is-not-unit() -> Unit {
+    //! ERROR(sema::expr_type_mismatch)
+    return false
+  }
+
+  return unit
+}
+
+fn unit-infer() -> Unit {
+  //!~ ERROR
+  return match unit { _ as Unit => unit }
+}
+
+fn bool-check() -> Unit {
+  fn true-is-bool() -> Bool {
+    //!~ ERROR
+    return true
+  }
+
+  fn false-is-bool() -> Bool {
+    //!~ ERROR
+    return false
+  }
+
+  fn unit-is-not-bool() -> Bool {
+    //! ERROR(sema::expr_type_mismatch)
+    return unit
+  }
+
+  return unit
+}
+
+fn bool-infer() -> Unit {
+  fn true-infers-bool() -> Unit {
+    //!~ ERROR
+    return match true { _ as Bool => unit }
+  }
+
+  fn false-infers-bool() -> Unit {
+    //!~ ERROR
+    return match true { _ as Bool => unit }
+  }
+
+  return unit
+}
+
+fn nat-check() -> Unit {
+  fn zero-is-nat() -> Nat {
+    //!~ ERROR
+    return 0
+  }
+
+  fn forty-two-is-nat() -> Nat {
+    //!~ ERROR
+    return 42
+  }
+
+  fn unit-is-not-nat() -> Nat {
+    //! ERROR(sema::expr_type_mismatch)
+    return unit
+  }
+
+  return unit
+}
+
+fn nat-infer() -> Unit {
+  fn zero-infers-nat() -> Unit {
+    //!~ ERROR
+    return match 0 { _ as Nat => unit }
+  }
+
+  fn forty-two-infers-nat() -> Unit {
+    //!~ ERROR
+    return match 42 { _ as Nat => unit }
+  }
+
+  return unit
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}

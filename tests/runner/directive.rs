@@ -23,6 +23,7 @@ impl Directive {
 }
 
 pub struct DirectiveDiag {
+    invert: bool,
     level: Level,
     line: usize,
     diag_line: Option<(usize, Range<usize>)>,
@@ -30,11 +31,16 @@ pub struct DirectiveDiag {
 }
 
 static DIRECTIVE_DIAG_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"^(?<level>ERROR|WARN)\((?<code>[[:word:]]+::[[:word:]]+)\)$"#).unwrap()
+    Regex::new(r#"^(?<level>ERROR|WARN)(?:\((?<code>[[:word:]]+::[[:word:]]+)\))?$"#).unwrap()
 });
 
 impl DirectiveDiag {
-    fn parse(directive: &str, line: usize, diag_line: Option<(usize, Range<usize>)>) -> Self {
+    fn parse(
+        directive: &str,
+        invert: bool,
+        line: usize,
+        diag_line: Option<(usize, Range<usize>)>,
+    ) -> Self {
         let captures = DIRECTIVE_DIAG_REGEX.captures(directive).unwrap();
         let level = match captures.name("level").unwrap().as_str() {
             "ERROR" => Level::Error,
@@ -44,6 +50,7 @@ impl DirectiveDiag {
         let code = captures.name("code").map(|m| m.as_str().into());
 
         Self {
+            invert,
             level,
             line,
             diag_line,
@@ -52,7 +59,7 @@ impl DirectiveDiag {
     }
 
     pub fn check(&self, run_data: &TestRunData) -> TestResult {
-        if run_data.diags.iter().any(|diag| {
+        let found = run_data.diags.iter().any(|diag| {
             diag.level == self.level
                 && match &self.diag_line {
                     Some((_, diag_start)) => diag
@@ -65,35 +72,58 @@ impl DirectiveDiag {
                     .code
                     .as_ref()
                     .is_none_or(|code| diag.code.code() == code)
-        }) {
-            TestResult::Passed
-        } else {
-            eprintln!(
-                "Could not find a diagnostic matching the directive at line {}",
-                self.line,
-            );
+        });
 
-            TestResult::Failed
+        match (found, self.invert) {
+            (true, false) | (false, true) => TestResult::Passed,
+
+            (true, true) => {
+                eprintln!(
+                    "Found an unexpected disgnostic matching the directive at line {}",
+                    self.line
+                );
+
+                TestResult::Failed
+            }
+
+            (false, false) => {
+                eprintln!(
+                    "Found no diagnostic matching the directive at line {}",
+                    self.line,
+                );
+
+                TestResult::Failed
+            }
         }
     }
 }
 
-pub struct DirectivePass;
+pub struct DirectivePass {
+    invert: bool,
+}
 
 static DIRECTIVE_PASS_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#"^PASS$"#).unwrap());
 
 impl DirectivePass {
-    pub fn parse(_directive: &str) -> Self {
-        Self
+    pub fn parse(_directive: &str, invert: bool) -> Self {
+        Self { invert }
     }
 
     pub fn check(&self, run_data: &TestRunData) -> TestResult {
-        if run_data.failed {
-            eprintln!("The file failed unexpectedly!");
+        match (run_data.failed, self.invert) {
+            (false, false) | (true, true) => TestResult::Passed,
 
-            TestResult::Failed
-        } else {
-            TestResult::Passed
+            (true, false) => {
+                eprintln!("The file failed unexpectedly");
+
+                TestResult::Failed
+            }
+
+            (false, true) => {
+                eprintln!("The file passed unexpectedly");
+
+                TestResult::Failed
+            }
         }
     }
 }
@@ -144,6 +174,12 @@ pub fn parse_directives(s: &str) -> Result<Vec<Directive>, String> {
             (directive, Some(idx + 1))
         };
 
+        let (directive, invert) = if let Some(d) = directive.strip_prefix('~') {
+            (d, true)
+        } else {
+            (directive, false)
+        };
+
         let directive = directive.trim();
         let matches = DIRECTIVE_REGEX.matches(directive);
 
@@ -162,9 +198,9 @@ pub fn parse_directives(s: &str) -> Result<Vec<Directive>, String> {
         });
 
         let directive = if matches.matched(0) {
-            DirectiveDiag::parse(directive, idx + 1, selected_line).into()
+            DirectiveDiag::parse(directive, invert, idx + 1, selected_line).into()
         } else if matches.matched(1) {
-            DirectivePass::parse(directive).into()
+            DirectivePass::parse(directive, invert).into()
         } else {
             unreachable!();
         };
