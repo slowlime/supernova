@@ -1201,7 +1201,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                         FeatureKind::Pairs,
                     )
                     .with_note(format!(
-                        "alternately, you can enable tuples of arbitrary sizes with the {} extension",
+                        "alternately, you can enable tuples of arbitrary sizes with the #{} extension",
                         FeatureKind::Tuples.extension().unwrap(),
                     )),
                 );
