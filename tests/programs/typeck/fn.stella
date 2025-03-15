@@ -1,0 +1,87 @@
+language core;
+
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #pattern-ascriptions;
+extend with #nested-function-declarations;
+extend with #unit-type;
+
+fn check() -> Unit {
+  fn fn-nat-to-bool-is-fn-nat-to-bool() -> fn(Nat) -> Bool {
+    //!~ ERROR
+    return fn(x : Nat) { return false }
+  }
+
+  fn fn-nat-to-bool-is-not-fn-unit-to-nat() -> fn(Unit) -> Nat {
+    //! ERROR
+    return fn(x : Unit) { return false }
+  }
+
+  return unit
+}
+
+fn infer() -> Unit {
+  //!~ ERROR
+  return match fn(x : Nat) { return fn(y : Bool) { return unit } } { _ as fn(Nat) -> fn(Bool) -> Unit => unit }
+}
+
+fn unexpected-fn() -> Unit {
+  //! ERROR(sema::unexpected_fn)
+  return fn(x : Nat) { return x }
+}
+
+fn wrong-param-count() -> Unit {
+  fn too-few() -> fn(Nat) -> Unit {
+    //! ERROR(sema::wrong_fn_param_count)
+    return fn() { return unit }
+  }
+
+  fn too-many() -> fn(Nat) -> Unit {
+    //! ERROR(sema::wrong_fn_param_count)
+    return fn(x : Nat, y : Bool) { return unit }
+  }
+
+  return unit
+}
+
+fn param-ty-mismatch() -> Unit {
+  fn expect(f : fn(Nat, Bool, Unit) -> Unit) -> Unit {
+    return unit
+  }
+
+  fn wrong-param-1() -> Unit {
+    //! ERROR(sema::param_ty_mismatch)
+    return expect(fn(x : Unit, y : Bool, z : Unit) { return unit })
+  }
+
+  fn wrong-param-2() -> Unit {
+    //! ERROR(sema::param_ty_mismatch)
+    return expect(fn(x : Nat, y : Unit, z : Unit) { return unit })
+  }
+
+  fn wrong-param-3() -> Unit {
+    //! ERROR(sema::param_ty_mismatch)
+    return expect(fn(x : Nat, y : Bool, z : Nat) { return unit })
+  }
+
+  return unit
+}
+
+fn wrong-ret-ty() -> Unit {
+  fn check() -> fn(Nat) -> Bool {
+    //! ERROR(sema::expr_type_mismatch)
+    return fn(x : Nat) { return unit }
+  }
+
+  fn infer() -> Unit {
+    //! ERROR(sema::invalid_pattern_for_ty)
+    return match fn(x : Nat) { return unit } { _ as fn(Nat) -> Bool => unit }
+  }
+
+  return unit
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}

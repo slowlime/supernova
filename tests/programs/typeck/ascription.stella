@@ -1,0 +1,34 @@
+language core;
+
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #pattern-ascriptions;
+extend with #nested-function-declarations;
+extend with #unit-type;
+
+extend with #lists, #type-ascriptions;
+
+fn bool-is-bool(x : Bool) -> Bool {
+  //!~ ERROR
+  return x as Bool
+}
+
+fn nat-is-not-bool(x : Nat) -> Bool {
+  //! ERROR(sema::expr_type_mismatch)
+  return x as Bool
+}
+
+fn provides-expected-type-to-inner-expr() -> Unit {
+  //!~ ERROR
+  return match [] as [Bool] { _ => unit }
+}
+
+fn ascribed-type-must-match-expected(x : Nat) -> Bool {
+  //! ERROR(sema::expr_type_mismatch)
+  return x as Nat
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}
