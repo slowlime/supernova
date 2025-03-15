@@ -1,0 +1,84 @@
+language core;
+
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #pattern-ascriptions;
+extend with #nested-function-declarations;
+extend with #unit-type;
+extend with #letrec-bindings, #let-patterns, #letrec-many-bindings;
+
+extend with #records;
+
+fn check(x : {a : Nat, b : Bool}) -> Unit {
+  //!~ ERROR
+  return match x { {a = x, b = y} => unit }
+}
+
+fn infer(r : {a : Nat, b : Bool}) -> Unit {
+  //!~ ERROR
+  return letrec {a = x as Nat, b = y as Bool} = r in unit
+}
+
+fn illegal-pattern-for-ty() -> Unit {
+  return match 0 {
+    //! ERROR(sema::illegal_pattern_for_ty)
+    {} => unit
+  | //! ERROR(sema::illegal_pattern_for_ty)
+    {a = x, b = y} => unit
+  | _ => unit
+  }
+}
+
+fn illegal-elem-tys(x : {a : Nat, b : Bool}) -> Unit {
+  return match x {
+    {
+      a =
+        unit, //!< ERROR(sema::illegal_pattern_for_ty)
+      b = _
+    } => unit
+  | {
+      a = _,
+      b =
+        unit //!< ERROR(sema::illegal_pattern_for_ty)
+    } => unit
+  | _ => unit
+  }
+}
+
+fn missing-record-pat-fields(x : {a : Nat, b : Bool}) -> Unit {
+  return match x {
+    //! ERROR(sema::missing_record_field)
+    {} => unit
+  | //! ERROR(sema::missing_record_field)
+    {a = _} => unit
+  | _ => unit
+  }
+}
+
+fn unexpected-record-pat-fields() -> Unit {
+  fn empty(x : {}) -> Unit {
+    return match x {
+      //! ERROR(sema::unexpected_record_field)
+      {a = _} => unit
+    | _ => unit
+    }
+  }
+
+  fn non-empty(x : {a : Nat, b : Bool}) -> Unit {
+    return match x {
+      {
+        a = x,
+        b = y,
+        c = z //!< ERROR(sema::unexpected_record_field)
+      } => unit
+    | _ => unit
+    }
+  }
+
+  return unit
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}
