@@ -1,0 +1,56 @@
+language core;
+
+extend with #nullary-functions, #structural-patterns, #pattern-ascriptions, #nested-function-declarations, #unit-type;
+
+fn decl-names() -> Unit {
+  fn test-unit() -> Unit {
+    return unit
+  }
+
+  fn can-refer-to-decls() -> fn() -> Unit {
+    //!~ ERROR
+    return decl-names
+  }
+
+  fn can-refer-to-sibling-decls() -> fn() -> Unit {
+    //!~ ERROR
+    return test-unit
+  }
+
+  return unit
+}
+
+fn decl-fn-param-names(x : Nat) -> Unit {
+  //!~ ERROR
+  return match x { _ as Nat => unit }
+}
+
+fn expr-fn-param-names() -> Unit {
+  return (fn(x : Nat) {
+    //!~ ERROR
+    return match x { _ as Nat => unit }
+  })(0)
+}
+
+fn pat-names() -> Unit {
+  return match 0 {
+    //!~ ERROR
+    x => match x { _ as Nat => unit }
+  }
+}
+
+fn name-check(x : Nat) -> Unit {
+  //! ERROR(sema::expr_type_mismatch)
+  return x
+}
+
+fn name-infer(x : Nat) -> Unit {
+  return match x {
+    //! ERROR(sema::invalid_pattern_for_ty)
+    _ as Unit => unit
+  }
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}

@@ -1,0 +1,24 @@
+//! PASS
+language core;
+
+extend with #nested-function-declarations;
+
+fn can-refer-to-later-decl(x : Nat) -> Nat {
+  return main(x)
+}
+
+fn nested-decls(x : Nat) -> Nat {
+  fn can-refer-to-later-sibling-nested-decl(x : Nat) -> Nat {
+    return test(true)
+  }
+
+  fn test(z : Bool) -> Nat {
+    return 0
+  }
+
+  return x
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}
