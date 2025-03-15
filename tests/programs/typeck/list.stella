@@ -1,0 +1,101 @@
+language core;
+
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #pattern-ascriptions;
+extend with #nested-function-declarations;
+extend with #unit-type;
+
+extend with #lists;
+
+fn check() -> Unit {
+  fn empty() -> [Bool] {
+    //!~ ERROR
+    return []
+  }
+
+  fn list-nat() -> [Nat] {
+    //!~ ERROR
+    return [0, 0, 0]
+  }
+
+  return unit
+}
+
+fn infer() -> Unit {
+  fn empty() -> Unit {
+    //! ERROR(sema::ambiguous_list_type)
+    return match [] { _ as [Nat] => unit }
+  }
+
+  fn non-empty() -> Unit {
+    //!~ ERROR
+    return match [0] { _ as [Nat] => unit }
+  }
+
+  return unit
+}
+
+fn unexpected-list() -> Unit {
+  //! ERROR(sema::unexpected_list)
+  return [0]
+}
+
+fn wrong-elem-tys() -> Unit {
+  fn check() -> Unit {
+    fn first() -> [Nat] {
+      //! ERROR(sema::expr_type_mismatch)
+      return [unit, 0, 0]
+    }
+
+    fn second() -> [Nat] {
+      //! ERROR(sema::expr_type_mismatch)
+      return [0, unit, 0]
+    }
+
+    fn third() -> [Nat] {
+      //! ERROR(sema::expr_type_mismatch)
+      return [0, 0, unit]
+    }
+
+    return unit
+  }
+
+  fn infer() -> Unit {
+    fn first() -> Unit {
+      return match [
+        unit,
+        //! ERROR(sema::expr_type_mismatch)
+        0,
+        0
+      ] {_ => unit }
+    }
+
+    fn second() -> Unit {
+      return match [
+        0,
+        //! ERROR(sema::expr_type_mismatch)
+        unit,
+        0
+      ] {_ => unit }
+    }
+
+    fn third() -> Unit {
+      return match [
+        0,
+        0,
+        //! ERROR(sema::expr_type_mismatch)
+        unit
+      ] {_ => unit }
+    }
+
+    return unit
+  }
+
+  return unit
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}
