@@ -1,0 +1,133 @@
+language core;
+
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #pattern-ascriptions;
+extend with #nested-function-declarations;
+extend with #unit-type;
+
+extend with #records, #tuples;
+
+fn field-tuple-check(x : {Nat, Bool}) -> Unit {
+  fn field-1-is-nat() -> Nat {
+    //!~ ERROR
+    return x.1
+  }
+
+  fn field-2-is-bool() -> Bool {
+    //!~ ERROR
+    return x.2
+  }
+
+  fn field-1-is-not-bool() -> Bool {
+    //! ERROR(sema::expr_type_mismatch)
+    return x.1
+  }
+
+  fn field-2-is-not-nat() -> Nat {
+    //! ERROR(sema::expr_type_mismatch)
+    return x.2
+  }
+
+  return unit
+}
+
+fn field-tuple-infer(x : {Nat, Bool}) -> Unit {
+  fn field-1-infers-nat() -> Unit {
+    //!~ ERROR
+    return match x.1 { _ as Nat => unit }
+  }
+
+  fn field-2-infers-bool() -> Unit {
+    //!~ ERROR
+    return match x.2 { _ as Bool => unit }
+  }
+
+  return unit
+}
+
+fn field-record-check(x : {a : Nat, b : Bool}) -> Unit {
+  fn field-a-is-nat() -> Nat {
+    //!~ ERROR
+    return x.a
+  }
+
+  fn field-b-is-bool() -> Bool {
+    //!~ ERROR
+    return x.b
+  }
+
+  fn field-a-is-not-bool() -> Bool {
+    //! ERROR(sema::expr_type_mismatch)
+    return x.a
+  }
+
+  fn field-b-is-not-nat() -> Nat {
+    //! ERROR(sema::expr_type_mismatch)
+    return x.b
+  }
+
+  return unit
+}
+
+fn field-record-infer(x : {a : Nat, b : Bool}) -> Unit {
+  fn field-a-infers-nat() -> Unit {
+    //!~ ERROR
+    return match x.a { _ as Nat => unit }
+  }
+
+  fn field-b-infers-bool() -> Unit {
+    //!~ ERROR
+    return match x.b { _ as Bool => unit }
+  }
+
+  return unit
+}
+
+fn indexing-non-tuple-ty(x : Bool) -> Unit {
+  //! ERROR(sema::indexing_non_tuple_ty)
+  return x.1
+}
+
+fn no-such-element(empty : {}, triple : {Bool, Nat, Unit}) -> Unit {
+  fn zero-is-illegal() -> Unit {
+    //! ERROR(sema::no_such_element)
+    return empty.0
+  }
+
+  fn oob-empty() -> Unit {
+    //! ERROR(sema::no_such_element)
+    return empty.1
+  }
+
+  fn oob-triple() -> Unit {
+    //! ERROR(sema::no_such_element)
+    return triple.4
+  }
+
+  return unit
+}
+
+fn extracting-field-of-non-record-ty(x : Bool) -> Unit {
+  //! ERROR(sema::extracting_field_of_non_record_ty)
+  return x.foo
+}
+
+fn no-such-field(empty : {}, r : {a : Bool, b : Nat}) -> Unit {
+  fn empty-proj() -> Unit {
+    //! ERROR(sema::no_such_field)
+    return empty.foo
+  }
+
+  fn non-empty-proj() -> Unit {
+    //! ERROR(sema::no_such_field)
+    return r.foo
+  }
+
+  return unit
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}
