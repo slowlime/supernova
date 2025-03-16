@@ -1,0 +1,8 @@
+language core;
+
+extend with #multiparameter-functions;
+
+//! ERROR(sema::wrong_main_param_count)
+fn main(a : Nat, b : Bool) -> Nat {
+  return 0
+}

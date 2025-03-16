@@ -1,0 +1,8 @@
+language core;
+
+extend with #nullary-functions;
+
+//! ERROR(sema::wrong_main_param_count)
+fn main() -> Nat {
+  return 0
+}
