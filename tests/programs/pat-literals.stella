@@ -1,0 +1,95 @@
+language core;
+
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #pattern-ascriptions;
+extend with #nested-function-declarations;
+extend with #unit-type;
+extend with #letrec-bindings, #let-patterns, #letrec-many-bindings;
+
+extend with #natural-literals;
+
+fn unit-check() -> Unit {
+  fn unit-matches-unit(x : Unit) -> Unit {
+    //!~ ERROR
+    return match x { unit => unit }
+  }
+
+  fn unit-does-not-match-bool(x : Bool) -> Unit {
+    //! ERROR(sema::illegal_pattern_for_ty)
+    return match x { unit => unit }
+  }
+
+  return unit
+}
+
+fn unit-infer() -> Unit {
+  //!~ ERROR
+  return letrec unit = unit in unit
+}
+
+fn bool-check() -> Unit {
+  fn true-and-false-match-bool(x : Bool) -> Unit {
+    return match x { //!<~ ERROR
+      true => unit   //!<~ ERROR
+    | false => unit  //!<~ ERROR
+    }                //!<~ ERROR
+  }
+
+  fn neither-true-nor-false-match-unit(x : Unit) -> Unit {
+    return match x {
+      //! ERROR(sema::illegal_pattern_for_ty)
+      true => unit
+    | //! ERROR(sema::illegal_pattern_for_ty)
+      false => unit
+    | _ => unit
+    }
+  }
+
+  return unit
+}
+
+fn bool-infer() -> Unit {
+  return letrec   //!<~ ERROR
+    true = true,  //!<~ ERROR
+    false = false //!<~ ERROR
+   in unit        //!<~ ERROR
+}
+
+fn nat-check() -> Unit {
+  fn nat-matches-nat(x : Nat) -> Unit {
+    return match x { //!<~ ERROR
+      0 => unit      //!<~ ERROR
+    | 1 => unit      //!<~ ERROR
+    | 42 => unit     //!<~ ERROR
+    | _ => unit      //!<~ ERROR
+    }                //!<~ ERROR
+  }
+
+  fn nat-does-not-match-unit(x : Unit) -> Unit {
+    return match x {
+      //! ERROR(sema::illegal_pattern_for_ty)
+      0 => unit
+    | //! ERROR(sema::illegal_pattern_for_ty)
+      1 => unit
+    | //! ERROR(sema::illegal_pattern_for_ty)
+      42 => unit
+    | _ => unit
+    }
+  }
+
+  return unit
+}
+
+fn nat-infer() -> Unit {
+  return letrec //!<~ ERROR
+    0 = 0,      //!<~ ERROR
+    1 = 1,      //!<~ ERROR
+    42 = 42     //!<~ ERROR
+   in unit      //!<~ ERROR
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}
