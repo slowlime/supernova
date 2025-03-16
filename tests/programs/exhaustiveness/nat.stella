@@ -1,0 +1,78 @@
+language core;
+
+extend with #nullary-functions;
+extend with #nested-function-declarations;
+extend with #structural-patterns;
+extend with #unit-type;
+
+fn test(x : Nat) -> Unit {
+  fn exhaustive() -> Unit {
+    fn no-constructors() -> Unit {
+      //!~ ERROR
+      return match x { _ => unit }
+    }
+
+    fn some-constructors() -> Unit {
+      //!~ ERROR
+      return match x {
+        1 => unit
+      | succ(3) => unit
+      | succ(0) => unit
+      | 42 => unit
+      | succ(succ(succ(_))) => unit
+      | _ => unit
+      }
+    }
+
+    fn all-constructors() -> Unit {
+      //!~ ERROR
+      return match x {
+        0 => unit
+      | 1 => unit
+      | 2 => unit
+      | 3 => unit
+      | succ(succ(succ(succ(_)))) => unit
+      }
+    }
+
+    return unit
+  }
+
+  fn missing-zero() -> Unit {
+    //! ERROR(sema::match_non_exhaustive)
+    return match x {
+      1 => unit
+    | succ(succ(_)) => unit
+    }
+  }
+
+  fn missing-three() -> Unit {
+    //! ERROR(sema::match_non_exhaustive)
+    return match x {
+      0 => unit
+    | 1 => unit
+    | succ(1) => unit
+    | succ(succ(2)) => unit
+    | 42 => unit
+    | succ(succ(succ(succ(_)))) => unit
+    }
+  }
+
+  fn nested-non-exhaustive() -> Unit {
+    //! ERROR(sema::match_non_exhaustive)
+    return match x {
+      0 => unit
+    | succ(succ(succ(3))) => unit
+    | succ(succ(succ(succ(succ(_))))) => unit
+    | succ(succ(succ(0))) => unit
+    | 1 => unit
+    | succ(0) => unit
+    }
+  }
+
+  return unit
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}
