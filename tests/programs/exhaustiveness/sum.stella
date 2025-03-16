@@ -1,0 +1,70 @@
+language core;
+
+extend with #nullary-functions;
+extend with #nested-function-declarations;
+extend with #structural-patterns;
+extend with #unit-type;
+
+extend with #sum-types;
+
+fn test(x : (Nat + (Bool + Unit)) + (Unit + Nat)) -> Unit {
+  fn exhaustive() -> Unit {
+    fn no-constructors() -> Unit {
+      //!~ ERROR
+      return match x { _ => unit }
+    }
+
+    fn some-constructors() -> Unit {
+      //!~ ERROR
+      return match x {
+        inl(inr(_)) => unit
+      | _ => unit
+      }
+    }
+
+    fn all-constructors() -> Unit {
+      //!~ ERROR
+      return match x {
+        inl(inr(inr(unit))) => unit
+      | inl(inr(inl(false))) => unit
+      | inl(inr(inl(_))) => unit
+      | inl(inl(_)) => unit
+      | inr(_) => unit
+      }
+    }
+
+    return unit
+  }
+
+  fn missing-inl() -> Unit {
+    //! ERROR(sema::match_non_exhaustive)
+    return match x {
+      inr(inl(unit)) => unit
+    | inr(inr(_)) => unit
+    }
+  }
+
+  fn missing-inr() -> Unit {
+    //! ERROR(sema::match_non_exhaustive)
+    return match x {
+      inl(inl(_)) => unit
+    | inl(inr(inl(_))) => unit
+    | inl(inr(_)) => unit
+    }
+  }
+
+  fn nested-non-exhaustive() -> Unit {
+    //! ERROR(sema::match_non_exhaustive)
+    return match x {
+      inl(inl(_)) => unit
+    | inl(inr(inl(_))) => unit
+    | inr(_) => unit
+    }
+  }
+
+  return unit
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}
