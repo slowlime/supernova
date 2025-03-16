@@ -1,0 +1,41 @@
+language core;
+
+extend with #nullary-functions;
+extend with #structural-patterns;
+extend with #unit-type;
+extend with #let-bindings;
+extend with #letrec-bindings;
+extend with #let-patterns;
+extend with #pattern-ascriptions;
+extend with #tuples;
+extend with #sum-types;
+extend with #variants;
+
+fn let-irrefutable(x : {Nat + Bool, Unit}) -> Unit {
+  //!~ ERROR
+  return let {_, unit} = x in unit
+}
+
+fn letrec-irrefutable(x : {Nat + Bool, Unit}) -> Unit {
+  //!~ ERROR
+  return letrec {_ as Nat + Bool, unit} = x in unit
+}
+
+fn let-variant-irrefutable(x : <|a : Unit|>) -> Unit {
+  //!~ ERROR
+  return let <|a = unit|> = x in unit
+}
+
+fn let-non-irrefutable(x : {Nat + Bool, Unit}) -> Unit {
+  //! ERROR(sema::match_non_exhaustive)
+  return let {inl(x), y} = x in unit
+}
+
+fn letrec-non-irrefutable(x : {Nat + Bool, Unit}) -> Unit {
+  //! ERROR(sema::match_non_exhaustive)
+  return letrec {inl(a) as Nat + Bool, b as Unit} = x in unit
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}

@@ -1,0 +1,42 @@
+language core;
+
+extend with #nullary-functions;
+extend with #nested-function-declarations;
+extend with #structural-patterns;
+extend with #unit-type;
+
+extend with #pattern-ascriptions;
+extend with #pairs;
+
+fn test(x : {Bool, Unit}) -> Unit {
+  fn exhaustive() -> Unit {
+    fn no-constructors() -> Unit {
+      //!~ ERROR
+      return match x { _ as {Bool, Unit} => unit }
+    }
+
+    fn all-constructors() -> Unit {
+      //!~ ERROR
+      return match x {
+        {false as Bool, y as Unit} => unit
+      | {true as Bool, y as Unit} => unit
+      }
+    }
+
+    return unit
+  }
+
+  fn nested-non-exhaustive() -> Unit {
+    //! ERROR(sema::match_non_exhaustive)
+    return match x {
+      {false, y} as {Bool, Unit} => unit
+    | {false, unit as Unit as Unit} => unit
+    }
+  }
+
+  return unit
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}
