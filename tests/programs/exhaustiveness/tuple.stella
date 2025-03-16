@@ -1,0 +1,57 @@
+language core;
+
+extend with #nullary-functions;
+extend with #nested-function-declarations;
+extend with #structural-patterns;
+extend with #unit-type;
+
+extend with #tuples;
+
+fn test(empty : {}, triple : {Nat, Bool, Unit}) -> Unit {
+  fn exhaustive() -> Unit {
+    fn empty-no-constructors() -> Unit {
+      //!~ ERROR
+      return match empty { _ => unit }
+    }
+
+    fn empty-all-constructors() -> Unit {
+      //!~ ERROR
+      return match empty { {} => unit }
+    }
+
+    fn triple-no-constructors() -> Unit {
+      //!~ ERROR
+      return match triple { _ => unit }
+    }
+
+    fn triple-some-constructors() -> Unit {
+      //!~ ERROR
+      return match triple {
+        {0, false, unit} => unit
+      | {_, true, unit} => unit
+      | _ => unit
+      }
+    }
+
+    fn triple-all-constructors() -> Unit {
+      //!~ ERROR
+      return match triple {
+        {0, false, unit} => unit
+      | {succ(x), false, unit} => unit
+      | {x, true, unit} => unit
+      }
+    }
+
+    return unit
+  }
+
+  fn nested-non-exhaustive() -> Unit {
+    //!~ ERROR
+    return match triple {
+      {0, false, unit} => unit
+    | {_, true, unit} => unit
+    }
+  }
+
+  return unit
+}

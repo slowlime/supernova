@@ -1,0 +1,51 @@
+language core;
+
+extend with #nullary-functions;
+extend with #nested-function-declarations;
+extend with #structural-patterns;
+extend with #unit-type;
+
+extend with #records;
+
+fn test(x : {a : Nat, b : Bool}) -> Unit {
+  fn exhaustive() -> Unit {
+    fn no-constructors() -> Unit {
+      //!~ ERROR
+      return match x { _ => unit }
+    }
+
+    fn some-constructors() -> Unit {
+      //!~ ERROR
+      return match x {
+        {a = 0, b = false} => unit
+      | {a = _, b = true} => unit
+      | _ => unit
+      }
+    }
+
+    fn all-constructors() -> Unit {
+      //!~ ERROR
+      return match x {
+        {a = 0, b = false} => unit
+      | {a = succ(x), b = false} => unit
+      | {a = x, b = true} => unit
+      }
+    }
+
+    return unit
+  }
+
+  fn nested-non-exhaustive() -> Unit {
+    //! ERROR(sema::match_non_exhaustive)
+    return match x {
+      {a = 0, b = false} => unit
+    | {a = _, b = true} => unit
+    }
+  }
+
+  return unit
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}
