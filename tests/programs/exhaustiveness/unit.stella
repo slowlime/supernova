@@ -1,0 +1,28 @@
+language core;
+
+extend with #nullary-functions;
+extend with #nested-function-declarations;
+extend with #structural-patterns;
+extend with #unit-type;
+
+fn test(x : Unit) -> Unit {
+  fn exhaustive() -> Unit {
+    fn no-constructors() -> Unit {
+      //!~ ERROR
+      return match x { _ => unit }
+    }
+
+    fn all-constructors() -> Unit {
+      //!~ ERROR
+      return match x { unit => unit }
+    }
+
+    return unit
+  }
+
+  return unit
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}
