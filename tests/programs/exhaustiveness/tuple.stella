@@ -1,6 +1,7 @@
 language core;
 
 extend with #nullary-functions;
+extend with #multiparameter-functions;
 extend with #nested-function-declarations;
 extend with #structural-patterns;
 extend with #unit-type;
@@ -46,7 +47,7 @@ fn test(empty : {}, triple : {Nat, Bool, Unit}) -> Unit {
   }
 
   fn nested-non-exhaustive() -> Unit {
-    //!~ ERROR
+    //! ERROR(sema::match_non_exhaustive)
     return match triple {
       {0, false, unit} => unit
     | {_, true, unit} => unit
@@ -54,4 +55,8 @@ fn test(empty : {}, triple : {Nat, Bool, Unit}) -> Unit {
   }
 
   return unit
+}
+
+fn main(x : Nat) -> Nat {
+  return x
 }

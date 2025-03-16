@@ -7,6 +7,6 @@ fn wrong(x : &Nat) -> Nat {
     //! ERROR(sema::new_expr_not_allowed)
     *new(x)
     //! ERROR(sema::assign_expr_not_allowed)
-    := 42
+    := 0
   )
 }
