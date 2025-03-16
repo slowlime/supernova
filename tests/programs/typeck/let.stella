@@ -31,7 +31,7 @@ fn let-body-typeck-uses-let-ty-expectation() -> Unit {
    in fn(y : Bool) { return x } //!< ERROR(sema::unexpected_fn)
 }
 
-fn successive-let-bindings-may-change-tys() -> fn(Unit, Nat, Bool) -> Unit {
+fn successive-let-bindings-may-change-tys() -> fn(Unit, Nat, Bool) -> Nat {
   return let //!<~ ERROR
     f = fn(x : Unit) { return 0 }, //!<~ ERROR
     f = fn(x : Unit, y : Nat) { return f(x) }, //!<~ ERROR
