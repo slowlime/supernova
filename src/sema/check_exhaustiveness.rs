@@ -703,7 +703,7 @@ impl<'ast, D: DiagCtx> DefaultVisitor<'ast, 'ast> for Walker<'ast, '_, '_, D> {
                     .check_exhaustiveness(&pat_ids, self.pass.m.exprs[e.expr.id].ty_id)
                 {
                     self.result = Err(());
-                    self.pass.diag.emit(SemaDiag::NonExhaustiveMatchPatterns {
+                    self.pass.diag.emit(SemaDiag::MatchNonExhaustive {
                         location: expr.location,
                         scrutinee_location: e.expr.location,
                         witness: witness.display(self.pass.m).to_string(),
@@ -718,7 +718,7 @@ impl<'ast, D: DiagCtx> DefaultVisitor<'ast, 'ast> for Walker<'ast, '_, '_, D> {
                         self.pass.m.pats[binding.pat.id].ty_id,
                     ) {
                         self.result = Err(());
-                        self.pass.diag.emit(SemaDiag::NonIrrefutableLetPattern {
+                        self.pass.diag.emit(SemaDiag::NonIrrefutableLetPat {
                             location: binding.pat.location,
                             witness: witness.display(self.pass.m).to_string(),
                         });

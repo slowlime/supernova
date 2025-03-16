@@ -40,13 +40,13 @@ fn pat-names() -> Unit {
 }
 
 fn name-check(x : Nat) -> Unit {
-  //! ERROR(sema::expr_type_mismatch)
+  //! ERROR(sema::expr_ty_mismatch)
   return x
 }
 
 fn name-infer(x : Nat) -> Unit {
   return match x {
-    //! ERROR(sema::illegal_pattern_for_ty)
+    //! ERROR(sema::illegal_pat_for_ty)
     _ as Unit => unit
   }
 }

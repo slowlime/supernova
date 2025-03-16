@@ -4,16 +4,16 @@ extend with #let-bindings, #unit-type, #tuples, #sum-types;
 
 fn wrong(x : {Nat}) -> Unit {
   return
-    //! ERROR(sema::general_pattern_not_allowed)
+    //! ERROR(sema::general_pat_not_allowed)
     let {x} = x in
     match x {
-    //! ERROR(sema::nested_pattern_not_allowed)
+    //! ERROR(sema::nested_pat_not_allowed)
       inl(inr(_)) => unit
-    //! ERROR(sema::structural_pattern_not_allowed)
+    //! ERROR(sema::structural_pat_not_allowed)
     | [x] => unit
-    //! ERROR(sema::structural_pattern_not_allowed)
+    //! ERROR(sema::structural_pat_not_allowed)
     | {} => unit
-    //! ERROR(sema::structural_pattern_not_allowed)
+    //! ERROR(sema::structural_pat_not_allowed)
     | {foo = x} => unit
     }
 }

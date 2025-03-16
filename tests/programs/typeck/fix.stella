@@ -16,7 +16,7 @@ fn check(x : fn(Nat) -> Nat, y : fn(Bool) -> Bool) -> Unit {
   }
 
   fn fix-y-is-not-nat() -> Nat {
-    //! ERROR(sema::expr_type_mismatch)
+    //! ERROR(sema::expr_ty_mismatch)
     return fix(y)
   }
 
@@ -29,22 +29,22 @@ fn infer(x : fn(Nat) -> Nat) -> Unit {
 }
 
 fn fix-not-function(x : Nat) -> Unit {
-  //! ERROR(sema::fix_not_function)
+  //! ERROR(sema::fix_not_fn)
   return fix(x)
 }
 
 fn fix-nullary-function(x : fn() -> Nat) -> Unit {
-  //! ERROR(sema::fix_wrong_function_param_count)
+  //! ERROR(sema::fix_wrong_fn_param_count)
   return fix(x)
 }
 
 fn fix-multiparameter-function(x : fn(Nat, Bool) -> Nat) -> Nat {
-  //! ERROR(sema::fix_wrong_function_param_count)
+  //! ERROR(sema::fix_wrong_fn_param_count)
   return fix(x)
 }
 
 fn fix-param-ret-tys-mismatch(x : fn(Nat) -> Bool) -> Bool {
-  //! ERROR(sema::expr_type_mismatch)
+  //! ERROR(sema::expr_ty_mismatch)
   return fix(x)
 }
 

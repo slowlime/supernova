@@ -1,6 +1,6 @@
 language core;
 
-//! ERROR(sema::multiple_function_params)
+//! ERROR(sema::multiple_fn_params)
 fn wrong(a : Nat, b : Nat) -> Nat {
   return a
 }

@@ -295,7 +295,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         if decl.params.len() == 1 {
             Ok(())
         } else {
-            self.diag.emit(SemaDiag::IncorrectArityOfMain {
+            self.diag.emit(SemaDiag::WrongMainParamCount {
                 location: decl.binding.location(),
                 actual: decl.params.len(),
             });
@@ -790,7 +790,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         source: ExpectationSource,
     ) -> Diagnostic {
         self.augment_error_with_expectation(
-            SemaDiag::UnexpectedTypeForExpression {
+            SemaDiag::ExprTyMismatch {
                 location: self.m.exprs[expr_id].def.location,
                 expected_ty: self.m.display_ty(expected_ty_id).to_string(),
                 actual_ty: self.m.display_ty(ty_id).to_string(),
@@ -1187,7 +1187,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         let ty_id = match &expr.field {
             ast::ExprFieldName::Name(name) => {
                 if self.are_tys_equivalent(base_ty_id, self.m.well_known_tys.empty_tuple) {
-                    self.diag.emit(SemaDiag::UnexpectedFieldAccess {
+                    self.diag.emit(SemaDiag::NoSuchField {
                         location: self.m.exprs[expr_id].def.location,
                         field: name.as_str().into(),
                         record_ty: self.m.display_ty(base_ty_id).to_string(),
@@ -1211,7 +1211,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 };
 
                 let Some(&idx) = ty.fields.get(name.as_str()) else {
-                    self.diag.emit(SemaDiag::UnexpectedFieldAccess {
+                    self.diag.emit(SemaDiag::NoSuchField {
                         location: self.m.exprs[expr_id].def.location,
                         field: name.as_str().into(),
                         record_ty: self.m.display_ty(base_ty_id).to_string(),
@@ -1241,7 +1241,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                     Some(&elem_ty_id) => elem_ty_id,
 
                     None => {
-                        self.diag.emit(SemaDiag::TupleIndexOutOfBounds {
+                        self.diag.emit(SemaDiag::NoSuchElement {
                             location: self.m.exprs[expr_id].def.location,
                             idx,
                             tuple_len: ty.elems.len(),
@@ -1284,7 +1284,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         }
 
         let TyKind::Fn(inner_ty) = &self.m.tys[inner_ty_id].kind else {
-            self.diag.emit(SemaDiag::FixNotFunction {
+            self.diag.emit(SemaDiag::FixNotFn {
                 location: self.m.exprs[expr_id].def.location,
                 actual_ty: self.m.display_ty(inner_ty_id).to_string(),
                 inner_location: expr.expr.location,
@@ -1294,7 +1294,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         };
 
         if inner_ty.params.len() != 1 {
-            self.diag.emit(SemaDiag::FixWrongFunctionParamCount {
+            self.diag.emit(SemaDiag::FixWrongFnParamCount {
                 location: self.m.exprs[expr_id].def.location,
                 actual_ty: self.m.display_ty(inner_ty_id).to_string(),
                 inner_location: expr.expr.location,
@@ -1347,7 +1347,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             ast::Callee::Builtin { kw: _, builtin } => match builtin {
                 ast::Builtin::Inl | ast::Builtin::Inr => {
                     let Some((expected_ty_id, source)) = expected_ty else {
-                        self.diag.emit(SemaDiag::AmbiguousSumTypeInExpr {
+                        self.diag.emit(SemaDiag::AmbiguousSumTyInExpr {
                             location: self.m.exprs[expr_id].def.location,
                         });
 
@@ -1699,7 +1699,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 }
 
                 let TyKind::Fn(callee_ty) = &self.m.tys[callee_ty_id].kind else {
-                    self.diag.emit(SemaDiag::ApplyNotFunction {
+                    self.diag.emit(SemaDiag::ApplyNotFn {
                         location: self.m.exprs[expr_id].def.location,
                         actual_ty: self.m.display_ty(callee_ty_id).to_string(),
                         callee_location: callee.location,
@@ -1770,7 +1770,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         expected: usize,
     ) -> Result {
         if arg_count != expected {
-            self.diag.emit(SemaDiag::IncorrectNumberOfArgumentsInExpr {
+            self.diag.emit(SemaDiag::WrongArgCountInExpr {
                 location: self.m.exprs[expr_id].def.location,
                 expected,
                 actual: arg_count,
@@ -1829,7 +1829,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
 
             let TyKind::Fn(ty) = &self.m.tys[expected_ty_id].kind else {
                 self.diag.emit(self.augment_error_with_expectation(
-                    SemaDiag::UnexpectedLambda {
+                    SemaDiag::UnexpectedFn {
                         location: self.m.exprs[expr_id].def.location,
                         expected_ty: self.m.display_ty(expected_ty_id).to_string(),
                     },
@@ -1843,7 +1843,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
 
             if ty.params.len() != expr.params.len() {
                 self.diag.emit(self.augment_error_with_expectation(
-                    SemaDiag::UnexpectedNumberOfParametersInLambda {
+                    SemaDiag::WrongFnParamCount {
                         location: self.m.exprs[expr_id].def.location,
                         actual: expr.params.len(),
                         expected: ty.params.len(),
@@ -1866,7 +1866,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
 
                 if !self.ty_conforms_to(expected_param_ty_id, param_ty_id) {
                     self.diag.emit(self.augment_error_with_expectation(
-                        SemaDiag::UnexpectedTypeForParameter {
+                        SemaDiag::ParamTyMismatch {
                             location: param.binding.location(),
                             name: param.binding.name.as_str().into(),
                             expected_ty: self.m.display_ty(expected_param_ty_id).to_string(),
@@ -1961,7 +1961,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
 
             if expr.elems.len() != ty.elems.len() {
                 self.diag.emit(self.augment_error_with_expectation(
-                    SemaDiag::UnexpectedTupleLengthInExpr {
+                    SemaDiag::WrongTupleLengthInExpr {
                         location: self.m.exprs[expr_id].def.location,
                         actual: expr.elems.len(),
                         expected: ty.elems.len(),
@@ -2069,7 +2069,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             for name in provided_fields.difference(&required_fields).copied() {
                 result = Err(());
                 self.diag.emit(self.augment_error_with_expectation(
-                    SemaDiag::UnexpectedRecordFieldInExpr {
+                    SemaDiag::NoSuchRecordFieldInExpr {
                         location: provided_fields_by_name[name].name.location(),
                         name: name.into(),
                         expected_ty: self.m.display_ty(expected_ty_id).to_string(),
@@ -2140,7 +2140,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         expected_ty: Option<ExpectedTy>,
     ) -> Result {
         let Some((expected_ty_id, source)) = expected_ty else {
-            self.diag.emit(SemaDiag::AmbiguousVariantExprType {
+            self.diag.emit(SemaDiag::AmbiguousVariantTyInExpr {
                 location: self.m.exprs[expr_id].def.location,
             });
 
@@ -2165,7 +2165,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
 
         let Some(&idx) = ty.labels.get(expr.label.as_str()) else {
             self.diag.emit(self.augment_error_with_expectation(
-                SemaDiag::UnexpectedVariantLabelInExpr {
+                SemaDiag::NoSuchVariantLabelInExpr {
                     location: expr.label.location(),
                     name: expr.label.as_str().into(),
                     expected_ty: self.m.display_ty(expected_ty_id).to_string(),
@@ -2238,7 +2238,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
 
         // all types are inhabited, so there must be at least one branch.
         if expr.arms.is_empty() {
-            self.diag.emit(SemaDiag::IllegalEmptyMatching {
+            self.diag.emit(SemaDiag::EmptyMatch {
                 location: self.m.exprs[expr_id].def.location,
             });
 
@@ -2653,7 +2653,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         expected_ty: Option<ExpectedTy>,
     ) -> Result {
         let Some((expected_ty_id, source)) = expected_ty else {
-            self.diag.emit(SemaDiag::AmbiguousVariantPatType {
+            self.diag.emit(SemaDiag::AmbiguousVariantTyInPat {
                 location: self.m.pats[pat_id].def.location,
             });
 
@@ -2666,7 +2666,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
 
         let TyKind::Variant(ty) = &self.m.tys[expected_ty_id].kind else {
             self.diag.emit(self.augment_error_with_expectation(
-                SemaDiag::UnexpectedPatternForType {
+                SemaDiag::IllegalPatForTy {
                     location: self.m.pats[pat_id].def.location,
                     expected_ty: self.m.display_ty(expected_ty_id).to_string(),
                 },
@@ -2678,7 +2678,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
 
         let Some(&idx) = ty.labels.get(pat.label.as_str()) else {
             self.diag.emit(self.augment_error_with_expectation(
-                SemaDiag::UnexpectedVariantLabelInPat {
+                SemaDiag::NoSuchVariantLabelInPat {
                     location: pat.label.location(),
                     name: pat.label.as_str().into(),
                     expected_ty: self.m.display_ty(expected_ty_id).to_string(),
@@ -2710,7 +2710,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
 
             (Some(_), None) => {
                 self.diag.emit(self.augment_error_with_expectation(
-                    SemaDiag::UnexpectedNonNullaryVariantPattern {
+                    SemaDiag::UnexpectedNonNullaryVariantPat {
                         location: pat.label.location(),
                         name: pat.label.as_str().into(),
                         expected_ty: self.m.display_ty(expected_ty_id).to_string(),
@@ -2724,7 +2724,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
 
             (None, Some(_)) => {
                 self.diag.emit(self.augment_error_with_expectation(
-                    SemaDiag::UnexpectedNullaryVariantPattern {
+                    SemaDiag::UnexpectedNullaryVariantPat {
                         location: pat.label.location(),
                         name: pat.label.as_str().into(),
                         expected_ty: self.m.display_ty(expected_ty_id).to_string(),
@@ -2751,7 +2751,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         match pat.cons {
             ast::Cons::Inl | ast::Cons::Inr => {
                 let Some((expected_ty_id, source)) = expected_ty else {
-                    self.diag.emit(SemaDiag::AmbiguousSumTypeInPat {
+                    self.diag.emit(SemaDiag::AmbiguousSumTyInPat {
                         location: self.m.pats[pat_id].def.location,
                     });
 
@@ -2764,7 +2764,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
 
                 let TyKind::Sum(lhs_ty_id, rhs_ty_id) = self.m.tys[expected_ty_id].kind else {
                     self.diag.emit(self.augment_error_with_expectation(
-                        SemaDiag::UnexpectedPatternForType {
+                        SemaDiag::IllegalPatForTy {
                             location: self.m.pats[pat_id].def.location,
                             expected_ty: self.m.display_ty(expected_ty_id).to_string(),
                         },
@@ -2807,7 +2807,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
 
                     let TyKind::List(elem_ty_id) = self.m.tys[expected_ty_id].kind else {
                         self.diag.emit(self.augment_error_with_expectation(
-                            SemaDiag::UnexpectedPatternForType {
+                            SemaDiag::IllegalPatForTy {
                                 location: self.m.pats[pat_id].def.location,
                                 expected_ty: self.m.display_ty(expected_ty_id).to_string(),
                             },
@@ -2860,7 +2860,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 if let Some((expected_ty_id, source)) = expected_ty {
                     if !self.ty_conforms_to(self.m.well_known_tys.nat, expected_ty_id) {
                         self.diag.emit(self.augment_error_with_expectation(
-                            SemaDiag::UnexpectedPatternForType {
+                            SemaDiag::IllegalPatForTy {
                                 location: self.m.pats[pat_id].def.location,
                                 expected_ty: self.m.display_ty(expected_ty_id).to_string(),
                             },
@@ -2896,7 +2896,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         expected: usize,
     ) -> Result {
         if arg_count != expected {
-            self.diag.emit(SemaDiag::IncorrectNumberOfArgumentsInPat {
+            self.diag.emit(SemaDiag::WrongArgCountInPat {
                 location: self.m.pats[pat_id].def.location,
                 expected,
                 actual: arg_count,
@@ -2941,7 +2941,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
 
                 _ => {
                     self.diag.emit(self.augment_error_with_expectation(
-                        SemaDiag::UnexpectedPatternForType {
+                        SemaDiag::IllegalPatForTy {
                             location: self.m.pats[pat_id].def.location,
                             expected_ty: self.m.display_ty(expected_ty_id).to_string(),
                         },
@@ -2954,7 +2954,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
 
             if pat.elems.len() != ty.elems.len() {
                 self.diag.emit(self.augment_error_with_expectation(
-                    SemaDiag::UnexpectedTupleLengthInPat {
+                    SemaDiag::WrongTupleLengthInPat {
                         location: self.m.pats[pat_id].def.location,
                         actual: pat.elems.len(),
                         expected: ty.elems.len(),
@@ -3017,7 +3017,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
 
                 _ => {
                     self.diag.emit(self.augment_error_with_expectation(
-                        SemaDiag::UnexpectedPatternForType {
+                        SemaDiag::IllegalPatForTy {
                             location: self.m.pats[pat_id].def.location,
                             expected_ty: self.m.display_ty(expected_ty_id).to_string(),
                         },
@@ -3060,7 +3060,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             for name in provided_fields.difference(&required_fields).copied() {
                 result = Err(());
                 self.diag.emit(self.augment_error_with_expectation(
-                    SemaDiag::UnexpectedRecordFieldInPat {
+                    SemaDiag::NoSuchRecordFieldInPat {
                         location: provided_fields_by_name[name].name.location(),
                         name: name.into(),
                         expected_ty: self.m.display_ty(expected_ty_id).to_string(),
@@ -3135,7 +3135,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             } else {
                 let TyKind::List(ty_id) = self.m.tys[expected_ty_id].kind else {
                     self.diag.emit(self.augment_error_with_expectation(
-                        SemaDiag::UnexpectedPatternForType {
+                        SemaDiag::IllegalPatForTy {
                             location: self.m.pats[pat_id].def.location,
                             expected_ty: self.m.display_ty(expected_ty_id).to_string(),
                         },
@@ -3199,7 +3199,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         if let Some((expected_ty_id, source)) = expected_ty {
             if !self.ty_conforms_to(self.m.well_known_tys.bool, expected_ty_id) {
                 self.diag.emit(self.augment_error_with_expectation(
-                    SemaDiag::UnexpectedPatternForType {
+                    SemaDiag::IllegalPatForTy {
                         location: self.m.pats[pat_id].def.location,
                         expected_ty: self.m.display_ty(expected_ty_id).to_string(),
                     },
@@ -3224,7 +3224,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         if let Some((expected_ty_id, source)) = expected_ty {
             if !self.ty_conforms_to(self.m.well_known_tys.unit, expected_ty_id) {
                 self.diag.emit(self.augment_error_with_expectation(
-                    SemaDiag::UnexpectedPatternForType {
+                    SemaDiag::IllegalPatForTy {
                         location: self.m.pats[pat_id].def.location,
                         expected_ty: self.m.display_ty(expected_ty_id).to_string(),
                     },
@@ -3249,7 +3249,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         if let Some((expected_ty_id, source)) = expected_ty {
             if !self.ty_conforms_to(self.m.well_known_tys.nat, expected_ty_id) {
                 self.diag.emit(self.augment_error_with_expectation(
-                    SemaDiag::UnexpectedPatternForType {
+                    SemaDiag::IllegalPatForTy {
                         location: self.m.pats[pat_id].def.location,
                         expected_ty: self.m.display_ty(expected_ty_id).to_string(),
                     },
@@ -3272,7 +3272,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         expected_ty: Option<ExpectedTy>,
     ) -> Result {
         let Some((expected_ty_id, _source)) = expected_ty else {
-            self.diag.emit(SemaDiag::AmbiguousBindingPatType {
+            self.diag.emit(SemaDiag::AmbiguousBindingPatTy {
                 location: self.m.pats[pat_id].def.location,
             });
 
@@ -3297,7 +3297,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         if let Some((expected_ty_id, source)) = expected_ty {
             if !self.ty_conforms_to(ty_id, expected_ty_id) {
                 self.diag.emit(self.augment_error_with_expectation(
-                    SemaDiag::UnexpectedPatternForType {
+                    SemaDiag::IllegalPatForTy {
                         location: self.m.pats[pat_id].def.location,
                         expected_ty: self.m.display_ty(expected_ty_id).to_string(),
                     },

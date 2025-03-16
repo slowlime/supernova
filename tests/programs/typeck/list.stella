@@ -25,7 +25,7 @@ fn check() -> Unit {
 
 fn infer() -> Unit {
   fn empty() -> Unit {
-    //! ERROR(sema::ambiguous_list_type)
+    //! ERROR(sema::ambiguous_list_ty)
     return match [] { _ as [Nat] => unit }
   }
 
@@ -43,24 +43,24 @@ fn unexpected-list() -> Unit {
 }
 
 fn wrong-list-ty() -> [Nat] {
-  //! ERROR(sema::expr_type_mismatch)
+  //! ERROR(sema::expr_ty_mismatch)
   return [false]
 }
 
 fn wrong-elem-tys() -> Unit {
   fn check() -> Unit {
     fn first() -> [Nat] {
-      //! ERROR(sema::expr_type_mismatch)
+      //! ERROR(sema::expr_ty_mismatch)
       return [unit, 0, 0]
     }
 
     fn second() -> [Nat] {
-      //! ERROR(sema::expr_type_mismatch)
+      //! ERROR(sema::expr_ty_mismatch)
       return [0, unit, 0]
     }
 
     fn third() -> [Nat] {
-      //! ERROR(sema::expr_type_mismatch)
+      //! ERROR(sema::expr_ty_mismatch)
       return [0, 0, unit]
     }
 
@@ -71,7 +71,7 @@ fn wrong-elem-tys() -> Unit {
     fn first() -> Unit {
       return match [
         unit,
-        //! ERROR(sema::expr_type_mismatch)
+        //! ERROR(sema::expr_ty_mismatch)
         0,
         0
       ] {_ => unit }
@@ -80,7 +80,7 @@ fn wrong-elem-tys() -> Unit {
     fn second() -> Unit {
       return match [
         0,
-        //! ERROR(sema::expr_type_mismatch)
+        //! ERROR(sema::expr_ty_mismatch)
         unit,
         0
       ] {_ => unit }
@@ -90,7 +90,7 @@ fn wrong-elem-tys() -> Unit {
       return match [
         0,
         0,
-        //! ERROR(sema::expr_type_mismatch)
+        //! ERROR(sema::expr_ty_mismatch)
         unit
       ] {_ => unit }
     }

@@ -19,7 +19,7 @@ fn add() -> Unit {
     }
 
     fn result-is-not-bool() -> Bool {
-      //! ERROR(sema::expr_type_mismatch)
+      //! ERROR(sema::expr_ty_mismatch)
       return 42 + 24
     }
 
@@ -33,13 +33,13 @@ fn add() -> Unit {
 
   fn lhs-must-be-nat() -> Nat {
     return
-      unit //!< ERROR(sema::expr_type_mismatch)
+      unit //!< ERROR(sema::expr_ty_mismatch)
         + 24
   }
 
   fn rhs-must-be-nat() -> Nat {
     return 42 +
-        unit //!< ERROR(sema::expr_type_mismatch)
+        unit //!< ERROR(sema::expr_ty_mismatch)
   }
 
   return unit
@@ -53,7 +53,7 @@ fn sub() -> Unit {
     }
 
     fn result-is-not-bool() -> Bool {
-      //! ERROR(sema::expr_type_mismatch)
+      //! ERROR(sema::expr_ty_mismatch)
       return 42 - 24
     }
 
@@ -67,13 +67,13 @@ fn sub() -> Unit {
 
   fn lhs-must-be-nat() -> Nat {
     return
-      unit //!< ERROR(sema::expr_type_mismatch)
+      unit //!< ERROR(sema::expr_ty_mismatch)
         - 24
   }
 
   fn rhs-must-be-nat() -> Nat {
     return 42 -
-        unit //!< ERROR(sema::expr_type_mismatch)
+        unit //!< ERROR(sema::expr_ty_mismatch)
   }
 
   return unit
@@ -87,7 +87,7 @@ fn mul() -> Unit {
     }
 
     fn result-is-not-bool() -> Bool {
-      //! ERROR(sema::expr_type_mismatch)
+      //! ERROR(sema::expr_ty_mismatch)
       return 42 * 24
     }
 
@@ -101,13 +101,13 @@ fn mul() -> Unit {
 
   fn lhs-must-be-nat() -> Nat {
     return
-      unit //!< ERROR(sema::expr_type_mismatch)
+      unit //!< ERROR(sema::expr_ty_mismatch)
         * 24
   }
 
   fn rhs-must-be-nat() -> Nat {
     return 42 *
-        unit //!< ERROR(sema::expr_type_mismatch)
+        unit //!< ERROR(sema::expr_ty_mismatch)
   }
 
   return unit
@@ -121,7 +121,7 @@ fn div() -> Unit {
     }
 
     fn result-is-not-bool() -> Bool {
-      //! ERROR(sema::expr_type_mismatch)
+      //! ERROR(sema::expr_ty_mismatch)
       return 42 / 24
     }
 
@@ -135,13 +135,13 @@ fn div() -> Unit {
 
   fn lhs-must-be-nat() -> Nat {
     return
-      unit //!< ERROR(sema::expr_type_mismatch)
+      unit //!< ERROR(sema::expr_ty_mismatch)
         / 24
   }
 
   fn rhs-must-be-nat() -> Nat {
     return 42 /
-        unit //!< ERROR(sema::expr_type_mismatch)
+        unit //!< ERROR(sema::expr_ty_mismatch)
   }
 
   return unit
@@ -155,7 +155,7 @@ fn and-() -> Unit {
     }
 
     fn result-is-not-nat() -> Nat {
-      //! ERROR(sema::expr_type_mismatch)
+      //! ERROR(sema::expr_ty_mismatch)
       return true and false
     }
 
@@ -169,13 +169,13 @@ fn and-() -> Unit {
 
   fn lhs-must-be-bool() -> Bool {
     return
-      unit //!< ERROR(sema::expr_type_mismatch)
+      unit //!< ERROR(sema::expr_ty_mismatch)
         and true
   }
 
   fn rhs-must-be-bool() -> Bool {
     return true and
-        unit //!< ERROR(sema::expr_type_mismatch)
+        unit //!< ERROR(sema::expr_ty_mismatch)
   }
 
   return unit
@@ -189,7 +189,7 @@ fn or-() -> Unit {
     }
 
     fn result-is-not-nat() -> Nat {
-      //! ERROR(sema::expr_type_mismatch)
+      //! ERROR(sema::expr_ty_mismatch)
       return true or false
     }
 
@@ -203,13 +203,13 @@ fn or-() -> Unit {
 
   fn lhs-must-be-bool() -> Bool {
     return
-      unit //!< ERROR(sema::expr_type_mismatch)
+      unit //!< ERROR(sema::expr_ty_mismatch)
         or true
   }
 
   fn rhs-must-be-bool() -> Bool {
     return true or
-        unit //!< ERROR(sema::expr_type_mismatch)
+        unit //!< ERROR(sema::expr_ty_mismatch)
   }
 
   return unit
@@ -223,7 +223,7 @@ fn lt() -> Unit {
     }
 
     fn result-is-not-nat() -> Nat {
-      //! ERROR(sema::expr_type_mismatch)
+      //! ERROR(sema::expr_ty_mismatch)
       return 42 < 24
     }
 
@@ -237,13 +237,13 @@ fn lt() -> Unit {
 
   fn lhs-must-be-nat() -> Nat {
     return
-      unit //!< ERROR(sema::expr_type_mismatch)
+      unit //!< ERROR(sema::expr_ty_mismatch)
         < 24
   }
 
   fn rhs-must-be-nat() -> Nat {
     return 42 <
-        unit //!< ERROR(sema::expr_type_mismatch)
+        unit //!< ERROR(sema::expr_ty_mismatch)
   }
 
   return unit
@@ -257,7 +257,7 @@ fn le() -> Unit {
     }
 
     fn result-is-not-nat() -> Nat {
-      //! ERROR(sema::expr_type_mismatch)
+      //! ERROR(sema::expr_ty_mismatch)
       return 42 <= 24
     }
 
@@ -271,13 +271,13 @@ fn le() -> Unit {
 
   fn lhs-must-be-nat() -> Nat {
     return
-      unit //!< ERROR(sema::expr_type_mismatch)
+      unit //!< ERROR(sema::expr_ty_mismatch)
         <= 24
   }
 
   fn rhs-must-be-nat() -> Nat {
     return 42 <=
-        unit //!< ERROR(sema::expr_type_mismatch)
+        unit //!< ERROR(sema::expr_ty_mismatch)
   }
 
   return unit
@@ -291,7 +291,7 @@ fn gt() -> Unit {
     }
 
     fn result-is-not-nat() -> Nat {
-      //! ERROR(sema::expr_type_mismatch)
+      //! ERROR(sema::expr_ty_mismatch)
       return 42 > 24
     }
 
@@ -305,13 +305,13 @@ fn gt() -> Unit {
 
   fn lhs-must-be-nat() -> Nat {
     return
-      unit //!< ERROR(sema::expr_type_mismatch)
+      unit //!< ERROR(sema::expr_ty_mismatch)
         > 24
   }
 
   fn rhs-must-be-nat() -> Nat {
     return 42 >
-        unit //!< ERROR(sema::expr_type_mismatch)
+        unit //!< ERROR(sema::expr_ty_mismatch)
   }
 
   return unit
@@ -325,7 +325,7 @@ fn ge() -> Unit {
     }
 
     fn result-is-not-nat() -> Nat {
-      //! ERROR(sema::expr_type_mismatch)
+      //! ERROR(sema::expr_ty_mismatch)
       return 42 >= 24
     }
 
@@ -339,13 +339,13 @@ fn ge() -> Unit {
 
   fn lhs-must-be-nat() -> Nat {
     return
-      unit //!< ERROR(sema::expr_type_mismatch)
+      unit //!< ERROR(sema::expr_ty_mismatch)
         >= 24
   }
 
   fn rhs-must-be-nat() -> Nat {
     return 42 >=
-        unit //!< ERROR(sema::expr_type_mismatch)
+        unit //!< ERROR(sema::expr_ty_mismatch)
   }
 
   return unit
@@ -359,7 +359,7 @@ fn eq() -> Unit {
     }
 
     fn result-is-not-nat() -> Nat {
-      //! ERROR(sema::expr_type_mismatch)
+      //! ERROR(sema::expr_ty_mismatch)
       return 42 == 24
     }
 
@@ -373,13 +373,13 @@ fn eq() -> Unit {
 
   fn lhs-must-be-nat() -> Nat {
     return
-      unit //!< ERROR(sema::expr_type_mismatch)
+      unit //!< ERROR(sema::expr_ty_mismatch)
         == 24
   }
 
   fn rhs-must-be-nat() -> Nat {
     return 42 ==
-        unit //!< ERROR(sema::expr_type_mismatch)
+        unit //!< ERROR(sema::expr_ty_mismatch)
   }
 
   return unit
@@ -393,7 +393,7 @@ fn ne() -> Unit {
     }
 
     fn result-is-not-nat() -> Nat {
-      //! ERROR(sema::expr_type_mismatch)
+      //! ERROR(sema::expr_ty_mismatch)
       return 42 != 24
     }
 
@@ -407,13 +407,13 @@ fn ne() -> Unit {
 
   fn lhs-must-be-nat() -> Nat {
     return
-      unit //!< ERROR(sema::expr_type_mismatch)
+      unit //!< ERROR(sema::expr_ty_mismatch)
         != 24
   }
 
   fn rhs-must-be-nat() -> Nat {
     return 42 !=
-        unit //!< ERROR(sema::expr_type_mismatch)
+        unit //!< ERROR(sema::expr_ty_mismatch)
   }
 
   return unit

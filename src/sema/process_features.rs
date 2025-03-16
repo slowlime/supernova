@@ -161,7 +161,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 {
                     result = Err(());
                     self.diag.emit(make_feature_disabled_error(
-                        SemaDiag::FunctionHasTypeParams {
+                        SemaDiag::FnHasTypeParams {
                             location: decl.fn_kw.as_ref().map(|token| token.span).into(),
                             generic_kw_location: decl
                                 .generic_kw
@@ -176,7 +176,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 if decl.ret.is_none() && !self.m.is_feature_enabled(FeatureKind::TypeInference) {
                     result = Err(());
                     self.diag.emit(make_feature_disabled_error(
-                        SemaDiag::TypeInferenceNotAvailable {
+                        SemaDiag::TyInferenceNotAvailable {
                             location: decl.fn_kw.as_ref().map(|token| token.span).into(),
                         },
                         FeatureKind::TypeInference,
@@ -188,7 +188,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 {
                     result = Err(());
                     self.diag.emit(make_feature_disabled_error(
-                        SemaDiag::FunctionHasThrows {
+                        SemaDiag::FnHasThrows {
                             location: decl.fn_kw.as_ref().map(|token| token.span).into(),
                             throws_kw_location: decl
                                 .throws_kw
@@ -208,7 +208,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                         | ast::DeclKind::ExceptionType(_)
                         | ast::DeclKind::ExceptionVariant(_) => {
                             result = Err(());
-                            self.diag.emit(SemaDiag::IllegalNestedDecl {
+                            self.diag.emit(SemaDiag::NestedDeclNotAllowed {
                                 location: subdecl.location,
                                 func_name_location: decl.binding.location(),
                             });
@@ -221,7 +221,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                             {
                                 result = Err(());
                                 self.diag.emit(make_feature_disabled_error(
-                                    SemaDiag::IllegalNestedDecl {
+                                    SemaDiag::NestedDeclNotAllowed {
                                         location: subdecl.location,
                                         func_name_location: decl.binding.location(),
                                     },
@@ -236,7 +236,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             ast::DeclKind::TypeAlias(_) => {
                 result = Err(());
                 self.diag.emit(make_feature_disabled_error(
-                    SemaDiag::TypeAliasNotAllowed {
+                    SemaDiag::TyAliasNotAllowed {
                         location: def.location,
                     },
                     FeatureKind::TypeAliases,
@@ -246,7 +246,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             ast::DeclKind::ExceptionType(_) => {
                 result = Err(());
                 self.diag.emit(make_feature_disabled_error(
-                    SemaDiag::ExceptionTypeDeclNotAllowed {
+                    SemaDiag::ExceptionTyDeclNotAllowed {
                         location: def.location,
                     },
                     FeatureKind::ExceptionTypeDeclaration,
@@ -291,7 +291,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 if !self.m.is_feature_enabled(FeatureKind::References) {
                     result = Err(());
                     self.diag.emit(make_feature_disabled_error(
-                        SemaDiag::ReferenceTypeNotAllowed {
+                        SemaDiag::ReferenceTyNotAllowed {
                             location: def.location,
                         },
                         FeatureKind::References,
@@ -303,7 +303,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 if !self.m.is_feature_enabled(FeatureKind::SumTypes) {
                     result = Err(());
                     self.diag.emit(make_feature_disabled_error(
-                        SemaDiag::SumTypeNotAllowed {
+                        SemaDiag::SumTyNotAllowed {
                             location: def.location,
                             plus_location: ty_expr
                                 .plus_token
@@ -326,7 +326,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 if !ty_expr.synthetic && !self.m.is_feature_enabled(FeatureKind::UniversalTypes) {
                     result = Err(());
                     self.diag.emit(make_feature_disabled_error(
-                        SemaDiag::UniversalTypeNotAllowed {
+                        SemaDiag::UniversalTyNotAllowed {
                             location: def.location,
                         },
                         FeatureKind::UniversalTypes,
@@ -338,7 +338,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 if !self.m.is_feature_enabled(FeatureKind::RecursiveTypes) {
                     result = Err(());
                     self.diag.emit(make_feature_disabled_error(
-                        SemaDiag::RecursiveTypeNotAllowed {
+                        SemaDiag::RecursiveTyNotAllowed {
                             location: def.location,
                         },
                         FeatureKind::RecursiveTypes,
@@ -397,7 +397,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 if !self.m.is_feature_enabled(FeatureKind::UnitType) {
                     result = Err(());
                     self.diag.emit(make_feature_disabled_error(
-                        SemaDiag::UnitTypeNotAllowed {
+                        SemaDiag::UnitTyNotAllowed {
                             location: def.location,
                         },
                         FeatureKind::UnitType,
@@ -409,7 +409,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 if !self.m.is_feature_enabled(FeatureKind::TopType) {
                     result = Err(());
                     self.diag.emit(make_feature_disabled_error(
-                        SemaDiag::TopTypeNotAllowed {
+                        SemaDiag::TopTyNotAllowed {
                             location: def.location,
                         },
                         FeatureKind::TopType,
@@ -421,7 +421,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 if !self.m.is_feature_enabled(FeatureKind::BottomType) {
                     result = Err(());
                     self.diag.emit(make_feature_disabled_error(
-                        SemaDiag::BotTypeNotAllowed {
+                        SemaDiag::BotTyNotAllowed {
                             location: def.location,
                         },
                         FeatureKind::BottomType,
@@ -433,7 +433,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 if !self.m.is_feature_enabled(FeatureKind::TypeInference) {
                     result = Err(());
                     self.diag.emit(make_feature_disabled_error(
-                        SemaDiag::TypeInferenceNotAvailable {
+                        SemaDiag::TyInferenceNotAvailable {
                             location: def.location,
                         },
                         FeatureKind::TypeInference,
@@ -470,7 +470,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 if !self.m.is_feature_enabled(FeatureKind::UnitType) {
                     result = Err(());
                     self.diag.emit(make_feature_disabled_error(
-                        SemaDiag::UnitTypeNotAllowed {
+                        SemaDiag::UnitTyNotAllowed {
                             location: def.location,
                         },
                         FeatureKind::UnitType,
@@ -820,7 +820,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                         _ => {
                             result = Err(());
                             self.diag.emit(make_feature_disabled_error(
-                                SemaDiag::GeneralPatternNotAllowed {
+                                SemaDiag::GeneralPatNotAllowed {
                                     location: binding.pat.location,
                                 },
                                 FeatureKind::LetPatterns,
@@ -905,7 +905,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                     if !self.m.is_feature_enabled(FeatureKind::ComparisonOperators) {
                         result = Err(());
                         self.diag.emit(make_feature_disabled_error(
-                            SemaDiag::ComparisonOpNotAllowed {
+                            SemaDiag::CmpOpNotAllowed {
                                 location: def.location,
                                 op_location: expr.token.as_ref().map(|token| token.span).into(),
                             },
@@ -991,7 +991,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 {
                     result = Err(());
                     self.diag.emit(make_feature_disabled_error(
-                        SemaDiag::StructuralPatternNotAllowed {
+                        SemaDiag::StructuralPatNotAllowed {
                             location: def.location,
                         },
                         FeatureKind::StructuralPatterns,
@@ -1002,7 +1002,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                             if !self.m.is_feature_enabled(FeatureKind::SumTypes) {
                                 result = Err(());
                                 self.diag.emit(make_feature_disabled_error(
-                                    SemaDiag::InjectionPatternNotAllowed {
+                                    SemaDiag::InjectionPatNotAllowed {
                                         location: def.location,
                                     },
                                     FeatureKind::SumTypes,
@@ -1037,7 +1037,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 if !self.m.is_feature_enabled(FeatureKind::StructuralPatterns) {
                     result = Err(());
                     self.diag.emit(make_feature_disabled_error(
-                        SemaDiag::StructuralPatternNotAllowed {
+                        SemaDiag::StructuralPatNotAllowed {
                             location: def.location,
                         },
                         FeatureKind::StructuralPatterns,
@@ -1057,7 +1057,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 if !self.m.is_feature_enabled(FeatureKind::StructuralPatterns) {
                     result = Err(());
                     self.diag.emit(make_feature_disabled_error(
-                        SemaDiag::StructuralPatternNotAllowed {
+                        SemaDiag::StructuralPatNotAllowed {
                             location: def.location,
                         },
                         FeatureKind::StructuralPatterns,
@@ -1077,7 +1077,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 if !self.m.is_feature_enabled(FeatureKind::StructuralPatterns) {
                     result = Err(());
                     self.diag.emit(make_feature_disabled_error(
-                        SemaDiag::StructuralPatternNotAllowed {
+                        SemaDiag::StructuralPatNotAllowed {
                             location: def.location,
                         },
                         FeatureKind::StructuralPatterns,
@@ -1101,7 +1101,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 if !self.m.is_feature_enabled(FeatureKind::StructuralPatterns) {
                     result = Err(());
                     self.diag.emit(make_feature_disabled_error(
-                        SemaDiag::StructuralPatternNotAllowed {
+                        SemaDiag::StructuralPatNotAllowed {
                             location: def.location,
                         },
                         FeatureKind::StructuralPatterns,
@@ -1113,7 +1113,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 if !self.m.is_feature_enabled(FeatureKind::StructuralPatterns) {
                     result = Err(());
                     self.diag.emit(make_feature_disabled_error(
-                        SemaDiag::StructuralPatternNotAllowed {
+                        SemaDiag::StructuralPatNotAllowed {
                             location: def.location,
                         },
                         FeatureKind::StructuralPatterns,
@@ -1121,7 +1121,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 } else if !self.m.is_feature_enabled(FeatureKind::UnitType) {
                     result = Err(());
                     self.diag.emit(make_feature_disabled_error(
-                        SemaDiag::UnitTypeNotAllowed {
+                        SemaDiag::UnitTyNotAllowed {
                             location: def.location,
                         },
                         FeatureKind::UnitType,
@@ -1133,7 +1133,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 if !self.m.is_feature_enabled(FeatureKind::StructuralPatterns) {
                     result = Err(());
                     self.diag.emit(make_feature_disabled_error(
-                        SemaDiag::StructuralPatternNotAllowed {
+                        SemaDiag::StructuralPatNotAllowed {
                             location: def.location,
                         },
                         FeatureKind::StructuralPatterns,
@@ -1147,7 +1147,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 if !self.m.is_feature_enabled(FeatureKind::PatternAscriptions) {
                     result = Err(());
                     self.diag.emit(make_feature_disabled_error(
-                        SemaDiag::AscriptionPatternNotAllowed {
+                        SemaDiag::AscriptionPatNotAllowed {
                             location: def.location,
                         },
                         FeatureKind::PatternAscriptions,
@@ -1161,7 +1161,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 if !self.m.is_feature_enabled(FeatureKind::CastPatterns) {
                     result = Err(());
                     self.diag.emit(make_feature_disabled_error(
-                        SemaDiag::CastPatternNotAllowed {
+                        SemaDiag::CastPatNotAllowed {
                             location: def.location,
                         },
                         FeatureKind::CastPatterns,
@@ -1179,7 +1179,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         match count {
             0 if !self.m.is_feature_enabled(FeatureKind::NullaryFunctions) => {
                 self.diag.emit(make_feature_disabled_error(
-                    SemaDiag::NoFunctionParams { location },
+                    SemaDiag::NoFnParams { location },
                     FeatureKind::NullaryFunctions,
                 ));
 
@@ -1191,7 +1191,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 .is_feature_enabled(FeatureKind::MultiparameterFunctions) =>
             {
                 self.diag.emit(make_feature_disabled_error(
-                    SemaDiag::MultipleFunctionParams { location },
+                    SemaDiag::MultipleFnParams { location },
                     FeatureKind::MultiparameterFunctions,
                 ));
 
@@ -1285,7 +1285,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
 
             _ => {
                 self.diag.emit(make_feature_disabled_error(
-                    SemaDiag::NestedPatternNotAllowed {
+                    SemaDiag::NestedPatNotAllowed {
                         location: pat.location,
                     },
                     FeatureKind::StructuralPatterns,

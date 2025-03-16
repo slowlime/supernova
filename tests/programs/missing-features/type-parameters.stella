@@ -1,6 +1,6 @@
 language core;
 
-//! ERROR(sema::function_has_type_params)
+//! ERROR(sema::fn_has_ty_params)
 generic fn wrong-generic-decl[T](x : T) -> T {
   return x
 }

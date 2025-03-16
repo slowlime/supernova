@@ -33,7 +33,7 @@ fn letrec-body-typeck-uses-letrec-ty-expectation() -> Unit {
 
 fn patterns-do-not-know-scrutinee-ty() -> {Bool, Nat} {
   return letrec
-    //! ERROR(sema::ambiguous_binding_type)
+    //! ERROR(sema::ambiguous_binding_ty)
     {x, y} = {0, false}
    in {y, x}
 }

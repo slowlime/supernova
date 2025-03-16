@@ -16,7 +16,7 @@ fn check() -> Unit {
   }
 
   fn match-all-arms-nat-is-not-bool() -> Bool {
-    //! ERROR(sema::expr_type_mismatch)
+    //! ERROR(sema::expr_ty_mismatch)
     return match false { false => 0 | true => 0 }
   }
 
@@ -35,11 +35,11 @@ fn empty-match() -> Unit {
 
 fn wrong-pattern-tys() -> Unit {
   return match 0 {
-    //! ERROR(sema::illegal_pattern_for_ty)
+    //! ERROR(sema::illegal_pat_for_ty)
     true => unit
-    //! ERROR(sema::illegal_pattern_for_ty)
+    //! ERROR(sema::illegal_pat_for_ty)
   | false => unit
-    //! ERROR(sema::illegal_pattern_for_ty)
+    //! ERROR(sema::illegal_pat_for_ty)
   | unit => unit
   }
 }
@@ -47,11 +47,11 @@ fn wrong-pattern-tys() -> Unit {
 fn wrong-arm-body-tys() -> Unit {
   fn check() -> Unit {
     return match 0 {
-      //! ERROR(sema::expr_type_mismatch)
+      //! ERROR(sema::expr_ty_mismatch)
       0 => 1
-      //! ERROR(sema::expr_type_mismatch)
+      //! ERROR(sema::expr_ty_mismatch)
     | 1 => 0
-      //! ERROR(sema::expr_type_mismatch)
+      //! ERROR(sema::expr_ty_mismatch)
     | 2 => false
     }
   }
@@ -60,9 +60,9 @@ fn wrong-arm-body-tys() -> Unit {
     return match (
       match 0 {
         0 => 1
-        //! ERROR(sema::expr_type_mismatch)
+        //! ERROR(sema::expr_ty_mismatch)
       | 1 => unit
-        //! ERROR(sema::expr_type_mismatch)
+        //! ERROR(sema::expr_ty_mismatch)
       | 2 => false
       }
     ) { _ => unit }

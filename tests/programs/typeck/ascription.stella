@@ -15,7 +15,7 @@ fn bool-is-bool(x : Bool) -> Bool {
 }
 
 fn nat-is-not-bool(x : Nat) -> Bool {
-  //! ERROR(sema::expr_type_mismatch)
+  //! ERROR(sema::expr_ty_mismatch)
   return x as Bool
 }
 
@@ -25,7 +25,7 @@ fn provides-expected-type-to-inner-expr() -> Unit {
 }
 
 fn ascribed-type-must-match-expected(x : Nat) -> Bool {
-  //! ERROR(sema::expr_type_mismatch)
+  //! ERROR(sema::expr_ty_mismatch)
   return x as Nat
 }
 

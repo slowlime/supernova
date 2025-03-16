@@ -3,20 +3,20 @@ language core;
 extend with #multiparameter-functions, #structural-patterns;
 
 fn wrong(
-  //! ERROR(sema::unit_type_not_allowed)
+  //! ERROR(sema::unit_ty_not_allowed)
   x : Unit,
-  //! ERROR(sema::top_type_not_allowed)
+  //! ERROR(sema::top_ty_not_allowed)
   y : Top,
-  //! ERROR(sema::bot_type_not_allowed)
+  //! ERROR(sema::bot_ty_not_allowed)
   z : Bot,
-  //! ERROR(sema::type_inference_not_available)
+  //! ERROR(sema::ty_inference_not_available)
   w : auto
 )
-//! ERROR(sema::unit_type_not_allowed)
+//! ERROR(sema::unit_ty_not_allowed)
 -> Unit
 {
   return match x {
-    //! ERROR(sema::unit_type_not_allowed)
+    //! ERROR(sema::unit_ty_not_allowed)
     unit => x
   }
 }

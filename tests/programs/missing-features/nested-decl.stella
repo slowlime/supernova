@@ -1,7 +1,7 @@
 language core;
 
 fn main(x : Nat) -> Nat {
-  //! ERROR(sema::illegal_nested_decl)
+  //! ERROR(sema::nested_decl_not_allowed)
   fn wrong(y : Nat) -> Nat {
     return x
   }

@@ -40,9 +40,9 @@ fn infer() -> Unit {
 
 fn illegal-pattern-for-ty() -> Unit {
   return match 0 {
-    //! ERROR(sema::illegal_pattern_for_ty)
+    //! ERROR(sema::illegal_pat_for_ty)
     {} => unit
-  | //! ERROR(sema::illegal_pattern_for_ty)
+  | //! ERROR(sema::illegal_pat_for_ty)
     {x, y} => unit
   | _ => unit
   }
@@ -51,21 +51,21 @@ fn illegal-pattern-for-ty() -> Unit {
 fn illegal-elem-tys(x : {Nat, Bool}) -> Unit {
   return match x {
     {
-      unit, //!< ERROR(sema::illegal_pattern_for_ty)
+      unit, //!< ERROR(sema::illegal_pat_for_ty)
       _
     } => unit
   | {
       _,
-      unit //!< ERROR(sema::illegal_pattern_for_ty)
+      unit //!< ERROR(sema::illegal_pat_for_ty)
     } => unit
   | _ => unit
   }
 }
 
-fn tuple-length-mismatch() -> Unit {
+fn wrong-tuple-len() -> Unit {
   fn empty() -> Unit {
     return match {} {
-      //! ERROR(sema::tuple_length_mismatch)
+      //! ERROR(sema::wrong_tuple_len)
       {x} => unit
     | _ => unit
     }
@@ -73,11 +73,11 @@ fn tuple-length-mismatch() -> Unit {
 
   fn non-empty() -> Unit {
     return match {0, false} {
-      //! ERROR(sema::tuple_length_mismatch)
+      //! ERROR(sema::wrong_tuple_len)
       {} => unit
-    | //! ERROR(sema::tuple_length_mismatch)
+    | //! ERROR(sema::wrong_tuple_len)
       {x} => unit
-    | //! ERROR(sema::tuple_length_mismatch)
+    | //! ERROR(sema::wrong_tuple_len)
       {x, y, z} => unit
     | _ => unit
     }

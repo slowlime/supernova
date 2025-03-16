@@ -1,6 +1,6 @@
 language core;
 
-//! ERROR(sema::universal_type_not_allowed)
+//! ERROR(sema::universal_ty_not_allowed)
 fn wrong(x : forall T. fn(T) -> T) -> Nat {
   return 0
 }

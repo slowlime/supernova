@@ -8,20 +8,17 @@ use crate::util::format_iter;
 use super::feature::{EnableReason, FeatureKind};
 
 const ERROR_UNEXPECTED_TUPLE_LENGTH: Code =
-    code!(sema::tuple_length_mismatch as "ERROR_UNEXPECTED_TUPLE_LENGTH");
+    code!(sema::wrong_tuple_len as "ERROR_UNEXPECTED_TUPLE_LENGTH");
 const ERROR_UNEXPECTED_RECORD_FIELDS: Code =
-    code!(sema::unexpected_record_field as "ERROR_UNEXPECTED_RECORD_FIELDS");
+    code!(sema::no_such_record_field as "ERROR_UNEXPECTED_RECORD_FIELDS");
 const ERROR_MISSING_RECORD_FIELDS: Code =
     code!(sema::missing_record_field as "ERROR_MISSING_RECORD_FIELDS");
 const ERROR_UNEXPECTED_VARIANT_LABEL: Code =
     code!(sema::no_such_variant_label as "ERROR_UNEXPECTED_VARIANT_LABEL");
-const ERROR_AMBIGUOUS_SUM_TYPE: Code =
-    code!(sema::ambiguous_sum_type as "ERROR_AMBIGUOUS_SUM_TYPE");
+const ERROR_AMBIGUOUS_SUM_TYPE: Code = code!(sema::ambiguous_sum_ty as "ERROR_AMBIGUOUS_SUM_TYPE");
 const ERROR_AMBIGUOUS_VARIANT_TYPE: Code =
-    code!(sema::ambiguous_variant_type as "ERROR_AMBIGUOUS_VARIANT_TYPE");
-const ERROR_AMBIGUOUS_LIST_TYPE: Code = code!(sema::ambiguous_list_type as "ERROR_AMBIGUOUS_LIST");
-const ERROR_NON_EXHAUSTIVE_MATCH_PATTERNS: Code =
-    code!(sema::match_non_exhaustive as "ERROR_NON_EXHAUSTIVE_MATCH_PATTERNS");
+    code!(sema::ambiguous_variant_ty as "ERROR_AMBIGUOUS_VARIANT_TYPE");
+const ERROR_AMBIGUOUS_LIST_TYPE: Code = code!(sema::ambiguous_list_ty as "ERROR_AMBIGUOUS_LIST");
 const ERROR_INCORRECT_NUMBER_OF_ARGUMENTS: Code =
     code!(sema::wrong_arg_count as "ERROR_INCORRECT_NUMBER_OF_ARGUMENTS");
 
@@ -48,52 +45,52 @@ pub enum SemaDiag {
     },
 
     #[error("the function must have parameters")]
-    NoFunctionParams { location: Location },
+    NoFnParams { location: Location },
 
     #[error("the function cannot have multiple parameters")]
-    MultipleFunctionParams { location: Location },
+    MultipleFnParams { location: Location },
 
     #[error("the function cannot have type parameters")]
-    FunctionHasTypeParams {
+    FnHasTypeParams {
         location: Location,
         generic_kw_location: Location,
     },
 
     #[error("the function cannot have exception specifiers")]
-    FunctionHasThrows {
+    FnHasThrows {
         location: Location,
         throws_kw_location: Location,
     },
 
     #[error("this declaration cannot be nested within a function")]
-    IllegalNestedDecl {
+    NestedDeclNotAllowed {
         location: Location,
         func_name_location: Location,
     },
 
     #[error("type aliases are not allowed")]
-    TypeAliasNotAllowed { location: Location },
+    TyAliasNotAllowed { location: Location },
 
     #[error("exception type declarations are not allowed")]
-    ExceptionTypeDeclNotAllowed { location: Location },
+    ExceptionTyDeclNotAllowed { location: Location },
 
     #[error("exception variant declarations are not allowed")]
     ExceptionVariantDeclNotAllowed { location: Location },
 
     #[error("reference types are not allowed")]
-    ReferenceTypeNotAllowed { location: Location },
+    ReferenceTyNotAllowed { location: Location },
 
     #[error("sum types are not allowed")]
-    SumTypeNotAllowed {
+    SumTyNotAllowed {
         location: Location,
         plus_location: Location,
     },
 
     #[error("universal types are not allowed")]
-    UniversalTypeNotAllowed { location: Location },
+    UniversalTyNotAllowed { location: Location },
 
     #[error("recursive types (μ-types) are not allowed")]
-    RecursiveTypeNotAllowed { location: Location },
+    RecursiveTyNotAllowed { location: Location },
 
     #[error("empty tuples/records are not allowed")]
     EmptyTupleNotAllowed { location: Location },
@@ -120,16 +117,16 @@ pub enum SemaDiag {
     },
 
     #[error("unit types are not allowed")]
-    UnitTypeNotAllowed { location: Location },
+    UnitTyNotAllowed { location: Location },
 
     #[error("the top type is not allowed")]
-    TopTypeNotAllowed { location: Location },
+    TopTyNotAllowed { location: Location },
 
     #[error("the botom type is not allowed")]
-    BotTypeNotAllowed { location: Location },
+    BotTyNotAllowed { location: Location },
 
     #[error("explicit type inference is not available")]
-    TypeInferenceNotAvailable { location: Location },
+    TyInferenceNotAvailable { location: Location },
 
     #[error("natural literals are not allowed")]
     NaturalLiteralNotAllowed { location: Location },
@@ -219,7 +216,7 @@ pub enum SemaDiag {
     },
 
     #[error("comparison operators are not allowed")]
-    ComparisonOpNotAllowed {
+    CmpOpNotAllowed {
         location: Location,
         op_location: Location,
     },
@@ -237,46 +234,46 @@ pub enum SemaDiag {
     },
 
     #[error("nested patterns are not allowed")]
-    NestedPatternNotAllowed { location: Location },
+    NestedPatNotAllowed { location: Location },
 
     #[error("general patterns are not allowed")]
-    GeneralPatternNotAllowed { location: Location },
+    GeneralPatNotAllowed { location: Location },
 
     #[error("structural patterns are not allowed")]
-    StructuralPatternNotAllowed { location: Location },
+    StructuralPatNotAllowed { location: Location },
 
     #[error("injection patterns are not allowed")]
-    InjectionPatternNotAllowed { location: Location },
+    InjectionPatNotAllowed { location: Location },
 
     #[error("ascription patterns are not allowed")]
-    AscriptionPatternNotAllowed { location: Location },
+    AscriptionPatNotAllowed { location: Location },
 
     #[error("cast patterns are not allowed")]
-    CastPatternNotAllowed { location: Location },
+    CastPatNotAllowed { location: Location },
 
     #[error("the field `{name}` is declared multiple times in the same record type")]
-    DuplicateRecordTypeFields {
+    DuplicateRecordTyField {
         name: String,
         location: Location,
         prev_location: Location,
     },
 
     #[error("the label `{name}` is declared multiple times in the same variant type")]
-    DuplicateVariantTypeFields {
+    DuplicateVariantTyField {
         name: String,
         location: Location,
         prev_location: Location,
     },
 
     #[error("the field `{name}` is initialized multiple times in the same record")]
-    DuplicateRecordFields {
+    DuplicateRecordField {
         name: String,
         location: Location,
         prev_location: Location,
     },
 
     #[error("the field `{name}` is matched multiple times in the same record pattern")]
-    DuplicateRecordPatternFields {
+    DuplicateRecordPatField {
         name: String,
         location: Location,
         prev_location: Location,
@@ -286,10 +283,10 @@ pub enum SemaDiag {
     UndefinedTy { name: String, location: Location },
 
     #[error("the variable `{name}` is undefined")]
-    UndefinedVariable { name: String, location: Location },
+    UndefinedVar { name: String, location: Location },
 
     #[error("the variable `{name}` is defined multiple times")]
-    DuplicateVariableDef {
+    DuplicateVarDef {
         name: String,
         location: Location,
         prev_location: Location,
@@ -306,14 +303,14 @@ pub enum SemaDiag {
     MissingMain,
 
     #[error("the expression has a wrong type: expected `{expected_ty}`, got `{actual_ty}`")]
-    UnexpectedTypeForExpression {
+    ExprTyMismatch {
         location: Location,
         expected_ty: String,
         actual_ty: String,
     },
 
     #[error("the record has no field `{field}`")]
-    UnexpectedFieldAccess {
+    NoSuchField {
         location: Location,
         field: String,
         record_ty: String,
@@ -339,7 +336,7 @@ pub enum SemaDiag {
     },
 
     #[error("the tuple has no element `{idx}`")]
-    TupleIndexOutOfBounds {
+    NoSuchElement {
         location: Location,
         idx: usize,
         tuple_len: usize,
@@ -349,28 +346,28 @@ pub enum SemaDiag {
     },
 
     #[error("the fixpoint combinator can only be applied to functions")]
-    FixNotFunction {
+    FixNotFn {
         location: Location,
         actual_ty: String,
         inner_location: Location,
     },
 
     #[error("the fixpoint combinator requires a function of a single argument")]
-    FixWrongFunctionParamCount {
+    FixWrongFnParamCount {
         location: Location,
         actual_ty: String,
         inner_location: Location,
     },
 
     #[error("the expression has a wrong number of arguments: expected {expected}, got {actual}")]
-    IncorrectNumberOfArgumentsInExpr {
+    WrongArgCountInExpr {
         location: Location,
         expected: usize,
         actual: usize,
     },
 
     #[error("the pattern has a wrong number of arguments: expected {expected}, got {actual}")]
-    IncorrectNumberOfArgumentsInPat {
+    WrongArgCountInPat {
         location: Location,
         expected: usize,
         actual: usize,
@@ -383,10 +380,10 @@ pub enum SemaDiag {
     },
 
     #[error("could not determine the type of a sum type injection expression")]
-    AmbiguousSumTypeInExpr { location: Location },
+    AmbiguousSumTyInExpr { location: Location },
 
     #[error("could not determine the type of a sum type injection pattern")]
-    AmbiguousSumTypeInPat { location: Location },
+    AmbiguousSumTyInPat { location: Location },
 
     #[error("the expression has a wrong type: expected `{expected_ty}`, got a list type")]
     UnexpectedList {
@@ -401,14 +398,14 @@ pub enum SemaDiag {
     },
 
     #[error("cannot apply arguments to an expression of a non-function type `{actual_ty}`")]
-    ApplyNotFunction {
+    ApplyNotFn {
         location: Location,
         actual_ty: String,
         callee_location: Location,
     },
 
     #[error("the expression has a wrong type: expected `{expected_ty}`, got a function type")]
-    UnexpectedLambda {
+    UnexpectedFn {
         location: Location,
         expected_ty: String,
     },
@@ -416,7 +413,7 @@ pub enum SemaDiag {
     #[error(
         "the parameter count in this anonymous function ({actual}) does not match the expected count ({expected})"
     )]
-    UnexpectedNumberOfParametersInLambda {
+    WrongFnParamCount {
         location: Location,
         actual: usize,
         expected: usize,
@@ -425,7 +422,7 @@ pub enum SemaDiag {
     #[error(
         "the parameter `{name}` has an unexpected type: expected `{expected_ty}`, got `{actual_ty}`"
     )]
-    UnexpectedTypeForParameter {
+    ParamTyMismatch {
         location: Location,
         name: String,
         expected_ty: String,
@@ -442,7 +439,7 @@ pub enum SemaDiag {
     #[error(
         "the number of elements in the tuple expression ({actual}) does not match the expected count ({expected})"
     )]
-    UnexpectedTupleLengthInExpr {
+    WrongTupleLengthInExpr {
         location: Location,
         actual: usize,
         expected: usize,
@@ -451,7 +448,7 @@ pub enum SemaDiag {
     #[error(
         "the number of elements in the tuple pattern ({actual}) does not match the expected count ({expected})"
     )]
-    UnexpectedTupleLengthInPat {
+    WrongTupleLengthInPat {
         location: Location,
         actual: usize,
         expected: usize,
@@ -464,7 +461,7 @@ pub enum SemaDiag {
     },
 
     #[error("the field `{name}` is not present in the expected type `{expected_ty}`")]
-    UnexpectedRecordFieldInExpr {
+    NoSuchRecordFieldInExpr {
         location: Location,
         name: String,
         expected_ty: String,
@@ -472,7 +469,7 @@ pub enum SemaDiag {
     },
 
     #[error("the field `{name}` is not present in the expected type `{expected_ty}`")]
-    UnexpectedRecordFieldInPat {
+    NoSuchRecordFieldInPat {
         location: Location,
         name: String,
         expected_ty: String,
@@ -494,10 +491,10 @@ pub enum SemaDiag {
     },
 
     #[error("could not determine the type of a variant expression")]
-    AmbiguousVariantExprType { location: Location },
+    AmbiguousVariantTyInExpr { location: Location },
 
     #[error("could not determine the type of a variant pattern")]
-    AmbiguousVariantPatType { location: Location },
+    AmbiguousVariantTyInPat { location: Location },
 
     #[error("the expression has a wrong type: expected `{expected_ty}`, got a variant type")]
     UnexpectedVariant {
@@ -506,7 +503,7 @@ pub enum SemaDiag {
     },
 
     #[error("the label `{name}` is not present in the expected type `{expected_ty}`")]
-    UnexpectedVariantLabelInExpr {
+    NoSuchVariantLabelInExpr {
         location: Location,
         name: String,
         expected_ty: String,
@@ -514,7 +511,7 @@ pub enum SemaDiag {
     },
 
     #[error("the label `{name}` is not present in the expected type `{expected_ty}`")]
-    UnexpectedVariantLabelInPat {
+    NoSuchVariantLabelInPat {
         location: Location,
         name: String,
         expected_ty: String,
@@ -534,7 +531,7 @@ pub enum SemaDiag {
     #[error(
         "the label `{name}` does not have associated data in the expected type `{expected_ty}`"
     )]
-    UnexpectedNonNullaryVariantPattern {
+    UnexpectedNonNullaryVariantPat {
         location: Location,
         name: String,
         expected_ty: String,
@@ -550,7 +547,7 @@ pub enum SemaDiag {
     },
 
     #[error("the label `{name}` must have associated data")]
-    UnexpectedNullaryVariantPattern {
+    UnexpectedNullaryVariantPat {
         location: Location,
         name: String,
         expected_ty: String,
@@ -558,7 +555,7 @@ pub enum SemaDiag {
     },
 
     #[error("this match expression must have at least one match arm")]
-    IllegalEmptyMatching { location: Location },
+    EmptyMatch { location: Location },
 
     #[error("could not determine the type of an empty list expression")]
     AmbiguousEmptyListExprTy { location: Location },
@@ -567,26 +564,26 @@ pub enum SemaDiag {
     AmbiguousEmptyListPatTy { location: Location },
 
     #[error("this pattern cannot be used with values of the type `{expected_ty}`")]
-    UnexpectedPatternForType {
+    IllegalPatForTy {
         location: Location,
         expected_ty: String,
     },
 
     #[error("could not determine the type of a binding pattern")]
-    AmbiguousBindingPatType { location: Location },
+    AmbiguousBindingPatTy { location: Location },
 
     #[error("the match arms are non-exhaustive")]
-    NonExhaustiveMatchPatterns {
+    MatchNonExhaustive {
         location: Location,
         scrutinee_location: Location,
         witness: String,
     },
 
     #[error("the pattern is not irrefutable")]
-    NonIrrefutableLetPattern { location: Location, witness: String },
+    NonIrrefutableLetPat { location: Location, witness: String },
 
     #[error("expected the `main` function to have one parameter, got {actual}")]
-    IncorrectArityOfMain { location: Location, actual: usize },
+    WrongMainParamCount { location: Location, actual: usize },
 }
 
 impl IntoDiagnostic for SemaDiag {
@@ -634,46 +631,46 @@ impl IntoDiagnostic for SemaDiag {
                 diag
             }
 
-            Self::NoFunctionParams { location } => Diagnostic::error()
+            Self::NoFnParams { location } => Diagnostic::error()
                 .at(*location)
-                .with_code(code!(sema::no_function_params))
+                .with_code(code!(sema::no_fn_params))
                 .with_msg(&self)
                 .with_label(Label::primary(*location))
                 .make(),
 
-            Self::MultipleFunctionParams { location } => Diagnostic::error()
+            Self::MultipleFnParams { location } => Diagnostic::error()
                 .at(*location)
-                .with_code(code!(sema::multiple_function_params))
+                .with_code(code!(sema::multiple_fn_params))
                 .with_msg(&self)
                 .with_label(Label::primary(*location))
                 .make(),
 
-            Self::FunctionHasTypeParams {
+            Self::FnHasTypeParams {
                 location,
                 generic_kw_location,
             } => Diagnostic::error()
                 .at(*location)
-                .with_code(code!(sema::function_has_type_params))
+                .with_code(code!(sema::fn_has_ty_params))
                 .with_msg(&self)
                 .with_label(Label::primary(*generic_kw_location))
                 .make(),
 
-            Self::FunctionHasThrows {
+            Self::FnHasThrows {
                 location,
                 throws_kw_location,
             } => Diagnostic::error()
                 .at(*location)
-                .with_code(code!(sema::function_has_throws))
+                .with_code(code!(sema::fn_has_throws))
                 .with_msg(&self)
                 .with_label(Label::primary(*throws_kw_location))
                 .make(),
 
-            Self::IllegalNestedDecl {
+            Self::NestedDeclNotAllowed {
                 location,
                 func_name_location,
             } => Diagnostic::error()
                 .at(*location)
-                .with_code(code!(sema::illegal_nested_decl))
+                .with_code(code!(sema::nested_decl_not_allowed))
                 .with_msg(&self)
                 .with_label(Label::primary(*location))
                 .with_label(
@@ -681,16 +678,16 @@ impl IntoDiagnostic for SemaDiag {
                 )
                 .make(),
 
-            Self::TypeAliasNotAllowed { location } => Diagnostic::error()
+            Self::TyAliasNotAllowed { location } => Diagnostic::error()
                 .at(*location)
-                .with_code(code!(sema::type_alias_not_allowed))
+                .with_code(code!(sema::ty_alias_not_allowed))
                 .with_msg(&self)
                 .with_label(Label::primary(*location))
                 .make(),
 
-            Self::ExceptionTypeDeclNotAllowed { location } => Diagnostic::error()
+            Self::ExceptionTyDeclNotAllowed { location } => Diagnostic::error()
                 .at(*location)
-                .with_code(code!(sema::exception_type_decl_not_allowed))
+                .with_code(code!(sema::exception_ty_decl_not_allowed))
                 .with_msg(&self)
                 .with_label(Label::primary(*location))
                 .make(),
@@ -702,33 +699,33 @@ impl IntoDiagnostic for SemaDiag {
                 .with_label(Label::primary(*location))
                 .make(),
 
-            Self::ReferenceTypeNotAllowed { location } => Diagnostic::error()
+            Self::ReferenceTyNotAllowed { location } => Diagnostic::error()
                 .at(*location)
-                .with_code(code!(sema::reference_type_not_allowed))
+                .with_code(code!(sema::reference_ty_not_allowed))
                 .with_msg(&self)
                 .with_label(Label::primary(*location))
                 .make(),
 
-            Self::SumTypeNotAllowed {
+            Self::SumTyNotAllowed {
                 location,
                 plus_location,
             } => Diagnostic::error()
                 .at(*location)
-                .with_code(code!(sema::sum_type_not_allowed))
+                .with_code(code!(sema::sum_ty_not_allowed))
                 .with_msg(&self)
                 .with_label(Label::primary(*plus_location))
                 .make(),
 
-            Self::UniversalTypeNotAllowed { location } => Diagnostic::error()
+            Self::UniversalTyNotAllowed { location } => Diagnostic::error()
                 .at(*location)
-                .with_code(code!(sema::universal_type_not_allowed))
+                .with_code(code!(sema::universal_ty_not_allowed))
                 .with_msg(&self)
                 .with_label(Label::primary(*location))
                 .make(),
 
-            Self::RecursiveTypeNotAllowed { location } => Diagnostic::error()
+            Self::RecursiveTyNotAllowed { location } => Diagnostic::error()
                 .at(*location)
-                .with_code(code!(sema::recursive_type_not_allowed))
+                .with_code(code!(sema::recursive_ty_not_allowed))
                 .with_msg(&self)
                 .with_label(Label::primary(*location))
                 .make(),
@@ -786,30 +783,30 @@ impl IntoDiagnostic for SemaDiag {
                 .with_label(Label::primary(*location))
                 .make(),
 
-            Self::UnitTypeNotAllowed { location } => Diagnostic::error()
+            Self::UnitTyNotAllowed { location } => Diagnostic::error()
                 .at(*location)
-                .with_code(code!(sema::unit_type_not_allowed))
+                .with_code(code!(sema::unit_ty_not_allowed))
                 .with_msg(&self)
                 .with_label(Label::primary(*location))
                 .make(),
 
-            Self::TopTypeNotAllowed { location } => Diagnostic::error()
+            Self::TopTyNotAllowed { location } => Diagnostic::error()
                 .at(*location)
-                .with_code(code!(sema::top_type_not_allowed))
+                .with_code(code!(sema::top_ty_not_allowed))
                 .with_msg(&self)
                 .with_label(Label::primary(*location))
                 .make(),
 
-            Self::BotTypeNotAllowed { location } => Diagnostic::error()
+            Self::BotTyNotAllowed { location } => Diagnostic::error()
                 .at(*location)
-                .with_code(code!(sema::bot_type_not_allowed))
+                .with_code(code!(sema::bot_ty_not_allowed))
                 .with_msg(&self)
                 .with_label(Label::primary(*location))
                 .make(),
 
-            Self::TypeInferenceNotAvailable { location } => Diagnostic::error()
+            Self::TyInferenceNotAvailable { location } => Diagnostic::error()
                 .at(*location)
-                .with_code(code!(sema::type_inference_not_available))
+                .with_code(code!(sema::ty_inference_not_available))
                 .with_msg(&self)
                 .with_label(Label::primary(*location))
                 .make(),
@@ -992,7 +989,7 @@ impl IntoDiagnostic for SemaDiag {
                 .with_label(Label::primary(*op_location))
                 .make(),
 
-            Self::ComparisonOpNotAllowed {
+            Self::CmpOpNotAllowed {
                 location: _,
                 op_location,
             } => Diagnostic::error()
@@ -1022,56 +1019,56 @@ impl IntoDiagnostic for SemaDiag {
                 .with_label(Label::primary(*colon_eq_location))
                 .make(),
 
-            Self::NestedPatternNotAllowed { location } => Diagnostic::error()
+            Self::NestedPatNotAllowed { location } => Diagnostic::error()
                 .at(*location)
-                .with_code(code!(sema::nested_pattern_not_allowed))
+                .with_code(code!(sema::nested_pat_not_allowed))
                 .with_msg(&self)
                 .with_label(Label::primary(*location))
                 .make(),
 
-            Self::GeneralPatternNotAllowed { location } => Diagnostic::error()
+            Self::GeneralPatNotAllowed { location } => Diagnostic::error()
                 .at(*location)
-                .with_code(code!(sema::general_pattern_not_allowed))
+                .with_code(code!(sema::general_pat_not_allowed))
                 .with_msg(&self)
                 .with_label(Label::primary(*location))
                 .make(),
 
-            Self::StructuralPatternNotAllowed { location } => Diagnostic::error()
+            Self::StructuralPatNotAllowed { location } => Diagnostic::error()
                 .at(*location)
-                .with_code(code!(sema::structural_pattern_not_allowed))
+                .with_code(code!(sema::structural_pat_not_allowed))
                 .with_msg(&self)
                 .with_label(Label::primary(*location))
                 .make(),
 
-            Self::InjectionPatternNotAllowed { location } => Diagnostic::error()
+            Self::InjectionPatNotAllowed { location } => Diagnostic::error()
                 .at(*location)
-                .with_code(code!(sema::injection_pattern_not_allowed))
+                .with_code(code!(sema::injection_pat_not_allowed))
                 .with_msg(&self)
                 .with_label(Label::primary(*location))
                 .make(),
 
-            Self::AscriptionPatternNotAllowed { location } => Diagnostic::error()
+            Self::AscriptionPatNotAllowed { location } => Diagnostic::error()
                 .at(*location)
-                .with_code(code!(sema::ascription_pattern_not_allowed))
+                .with_code(code!(sema::ascription_pat_not_allowed))
                 .with_msg(&self)
                 .with_label(Label::primary(*location))
                 .make(),
 
-            Self::CastPatternNotAllowed { location } => Diagnostic::error()
+            Self::CastPatNotAllowed { location } => Diagnostic::error()
                 .at(*location)
-                .with_code(code!(sema::cast_pattern_not_allowed))
+                .with_code(code!(sema::cast_pat_not_allowed))
                 .with_msg(&self)
                 .with_label(Label::primary(*location))
                 .make(),
 
-            Self::DuplicateRecordTypeFields {
+            Self::DuplicateRecordTyField {
                 name: _,
                 location,
                 prev_location,
             } => Diagnostic::error()
                 .at(*location)
                 .with_code(code!(
-                    sema::duplicate_record_type_fields
+                    sema::duplicate_record_ty_field
                     as "ERROR_DUPLICATE_RECORD_TYPE_FIELDS"
                 ))
                 .with_msg(&self)
@@ -1082,14 +1079,14 @@ impl IntoDiagnostic for SemaDiag {
                 )
                 .make(),
 
-            Self::DuplicateVariantTypeFields {
+            Self::DuplicateVariantTyField {
                 name: _,
                 location,
                 prev_location,
             } => Diagnostic::error()
                 .at(*location)
                 .with_code(code!(
-                    sema::duplicate_variant_type_fields
+                    sema::duplicate_variant_ty_field
                     as "ERROR_DUPLICATE_VARIANT_TYPE_FIELDS"
                 ))
                 .with_msg(&self)
@@ -1100,13 +1097,13 @@ impl IntoDiagnostic for SemaDiag {
                 )
                 .make(),
 
-            Self::DuplicateRecordFields {
+            Self::DuplicateRecordField {
                 name: _,
                 location,
                 prev_location,
             } => Diagnostic::error()
                 .at(*location)
-                .with_code(code!(sema::duplicate_record_fields as "ERROR_DUPLICATE_RECORD_FIELDS"))
+                .with_code(code!(sema::duplicate_record_field as "ERROR_DUPLICATE_RECORD_FIELDS"))
                 .with_msg(&self)
                 .with_label(Label::primary(*location))
                 .with_label(
@@ -1115,13 +1112,13 @@ impl IntoDiagnostic for SemaDiag {
                 )
                 .make(),
 
-            Self::DuplicateRecordPatternFields {
+            Self::DuplicateRecordPatField {
                 name: _,
                 location,
                 prev_location,
             } => Diagnostic::error()
                 .at(*location)
-                .with_code(code!(sema::duplicate_record_pattern_fields))
+                .with_code(code!(sema::duplicate_record_pat_field))
                 .with_msg(&self)
                 .with_label(Label::primary(*location))
                 .with_label(
@@ -1132,25 +1129,25 @@ impl IntoDiagnostic for SemaDiag {
 
             Self::UndefinedTy { name: _, location } => Diagnostic::error()
                 .at(*location)
-                .with_code(code!(sema::undefined_type))
+                .with_code(code!(sema::undefined_ty))
                 .with_msg(&self)
                 .with_label(Label::primary(*location))
                 .make(),
 
-            Self::UndefinedVariable { name: _, location } => Diagnostic::error()
+            Self::UndefinedVar { name: _, location } => Diagnostic::error()
                 .at(*location)
-                .with_code(code!(sema::undefined_variable as "ERROR_UNDEFINED_VARIABLE"))
+                .with_code(code!(sema::undefined_var as "ERROR_UNDEFINED_VARIABLE"))
                 .with_msg(&self)
                 .with_label(Label::primary(*location))
                 .make(),
 
-            Self::DuplicateVariableDef {
+            Self::DuplicateVarDef {
                 name: _,
                 location,
                 prev_location,
             } => Diagnostic::error()
                 .at(*location)
-                .with_code(code!(sema::duplicate_variable_def))
+                .with_code(code!(sema::duplicate_var_def))
                 .with_msg(&self)
                 .with_label(Label::primary(*location))
                 .with_label(
@@ -1180,14 +1177,14 @@ impl IntoDiagnostic for SemaDiag {
                 .with_msg(&self)
                 .make(),
 
-            Self::UnexpectedTypeForExpression {
+            Self::ExprTyMismatch {
                 location,
                 expected_ty: _,
                 actual_ty,
             } => Diagnostic::error()
                 .at(*location)
                 .with_code(code!(
-                    sema::expr_type_mismatch
+                    sema::expr_ty_mismatch
                     as "ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION"
                 ))
                 .with_msg(&self)
@@ -1197,7 +1194,7 @@ impl IntoDiagnostic for SemaDiag {
                 )
                 .make(),
 
-            Self::UnexpectedFieldAccess {
+            Self::NoSuchField {
                 location,
                 field: _,
                 record_ty,
@@ -1247,7 +1244,7 @@ impl IntoDiagnostic for SemaDiag {
                 )
                 .make(),
 
-            Self::TupleIndexOutOfBounds {
+            Self::NoSuchElement {
                 location,
                 idx,
                 tuple_len,
@@ -1274,13 +1271,13 @@ impl IntoDiagnostic for SemaDiag {
                 diag
             }
 
-            Self::FixNotFunction {
+            Self::FixNotFn {
                 location,
                 actual_ty,
                 inner_location,
             } => Diagnostic::error()
                 .at(*location)
-                .with_code(code!(sema::fix_not_function as "ERROR_NOT_A_FUNCTION"))
+                .with_code(code!(sema::fix_not_fn as "ERROR_NOT_A_FUNCTION"))
                 .with_msg(&self)
                 .with_label(Label::primary(*location))
                 .with_label(
@@ -1289,13 +1286,13 @@ impl IntoDiagnostic for SemaDiag {
                 )
                 .make(),
 
-            Self::FixWrongFunctionParamCount {
+            Self::FixWrongFnParamCount {
                 location,
                 actual_ty,
                 inner_location,
             } => Diagnostic::error()
                 .at(*location)
-                .with_code(code!(sema::fix_wrong_function_param_count))
+                .with_code(code!(sema::fix_wrong_fn_param_count))
                 .with_msg(&self)
                 .with_label(Label::primary(*location))
                 .with_label(
@@ -1304,7 +1301,7 @@ impl IntoDiagnostic for SemaDiag {
                 )
                 .make(),
 
-            Self::IncorrectNumberOfArgumentsInExpr {
+            Self::WrongArgCountInExpr {
                 location,
                 expected: _,
                 actual: _,
@@ -1315,7 +1312,7 @@ impl IntoDiagnostic for SemaDiag {
                 .with_label(Label::primary(*location))
                 .make(),
 
-            Self::IncorrectNumberOfArgumentsInPat {
+            Self::WrongArgCountInPat {
                 location,
                 expected: _,
                 actual: _,
@@ -1336,7 +1333,7 @@ impl IntoDiagnostic for SemaDiag {
                 .with_label(Label::primary(*location))
                 .make(),
 
-            Self::AmbiguousSumTypeInExpr { location } => Diagnostic::error()
+            Self::AmbiguousSumTyInExpr { location } => Diagnostic::error()
                 .at(*location)
                 .with_code(ERROR_AMBIGUOUS_SUM_TYPE)
                 .with_msg(&self)
@@ -1344,7 +1341,7 @@ impl IntoDiagnostic for SemaDiag {
                 .with_note("ascribe a sum type to the expression with the `as` operator")
                 .make(),
 
-            Self::AmbiguousSumTypeInPat { location } => Diagnostic::error()
+            Self::AmbiguousSumTyInPat { location } => Diagnostic::error()
                 .at(*location)
                 .with_code(ERROR_AMBIGUOUS_SUM_TYPE)
                 .with_msg(&self)
@@ -1372,13 +1369,13 @@ impl IntoDiagnostic for SemaDiag {
                 .with_label(Label::primary(*location))
                 .make(),
 
-            Self::ApplyNotFunction {
+            Self::ApplyNotFn {
                 location,
                 actual_ty,
                 callee_location,
             } => Diagnostic::error()
                 .at(*location)
-                .with_code(code!(sema::apply_not_function as "ERROR_NOT_A_FUNCTION"))
+                .with_code(code!(sema::apply_not_fn as "ERROR_NOT_A_FUNCTION"))
                 .with_msg(&self)
                 .with_label(Label::primary(*location))
                 .with_label(
@@ -1387,7 +1384,7 @@ impl IntoDiagnostic for SemaDiag {
                 )
                 .make(),
 
-            Self::UnexpectedLambda {
+            Self::UnexpectedFn {
                 location,
                 expected_ty: _,
             } => Diagnostic::error()
@@ -1397,7 +1394,7 @@ impl IntoDiagnostic for SemaDiag {
                 .with_label(Label::primary(*location))
                 .make(),
 
-            Self::UnexpectedNumberOfParametersInLambda {
+            Self::WrongFnParamCount {
                 location,
                 actual: _,
                 expected: _,
@@ -1411,7 +1408,7 @@ impl IntoDiagnostic for SemaDiag {
                 .with_label(Label::primary(*location))
                 .make(),
 
-            Self::UnexpectedTypeForParameter {
+            Self::ParamTyMismatch {
                 location,
                 name: _,
                 expected_ty: _,
@@ -1441,7 +1438,7 @@ impl IntoDiagnostic for SemaDiag {
                 .with_label(Label::primary(*location))
                 .make(),
 
-            Self::UnexpectedTupleLengthInExpr {
+            Self::WrongTupleLengthInExpr {
                 location,
                 actual: _,
                 expected: _,
@@ -1452,7 +1449,7 @@ impl IntoDiagnostic for SemaDiag {
                 .with_label(Label::primary(*location))
                 .make(),
 
-            Self::UnexpectedTupleLengthInPat {
+            Self::WrongTupleLengthInPat {
                 location,
                 actual: _,
                 expected: _,
@@ -1473,7 +1470,7 @@ impl IntoDiagnostic for SemaDiag {
                 .with_label(Label::primary(*location))
                 .make(),
 
-            Self::UnexpectedRecordFieldInExpr {
+            Self::NoSuchRecordFieldInExpr {
                 location,
                 name: _,
                 expected_ty: _,
@@ -1486,7 +1483,7 @@ impl IntoDiagnostic for SemaDiag {
                 .with_label(Label::secondary(*expr_location).with_msg("in this record expression"))
                 .make(),
 
-            Self::UnexpectedRecordFieldInPat {
+            Self::NoSuchRecordFieldInPat {
                 location,
                 name: _,
                 expected_ty: _,
@@ -1521,7 +1518,7 @@ impl IntoDiagnostic for SemaDiag {
                 .with_label(Label::primary(*location))
                 .make(),
 
-            Self::AmbiguousVariantExprType { location } => Diagnostic::error()
+            Self::AmbiguousVariantTyInExpr { location } => Diagnostic::error()
                 .at(*location)
                 .with_code(ERROR_AMBIGUOUS_VARIANT_TYPE)
                 .with_msg(&self)
@@ -1529,7 +1526,7 @@ impl IntoDiagnostic for SemaDiag {
                 .with_note("ascribe a variant type to the expression with the `as` operator")
                 .make(),
 
-            Self::AmbiguousVariantPatType { location } => Diagnostic::error()
+            Self::AmbiguousVariantTyInPat { location } => Diagnostic::error()
                 .at(*location)
                 .with_code(ERROR_AMBIGUOUS_VARIANT_TYPE)
                 .with_msg(&self)
@@ -1547,7 +1544,7 @@ impl IntoDiagnostic for SemaDiag {
                 .with_label(Label::primary(*location))
                 .make(),
 
-            Self::UnexpectedVariantLabelInExpr {
+            Self::NoSuchVariantLabelInExpr {
                 location,
                 name: _,
                 expected_ty: _,
@@ -1560,7 +1557,7 @@ impl IntoDiagnostic for SemaDiag {
                 .with_label(Label::secondary(*expr_location).with_msg("in this variant expression"))
                 .make(),
 
-            Self::UnexpectedVariantLabelInPat {
+            Self::NoSuchVariantLabelInPat {
                 location,
                 name: _,
                 expected_ty: _,
@@ -1589,7 +1586,7 @@ impl IntoDiagnostic for SemaDiag {
                 .with_label(Label::secondary(*expr_location).with_msg("in this variant expression"))
                 .make(),
 
-            Self::UnexpectedNonNullaryVariantPattern {
+            Self::UnexpectedNonNullaryVariantPat {
                 location,
                 name: _,
                 expected_ty: _,
@@ -1597,7 +1594,7 @@ impl IntoDiagnostic for SemaDiag {
             } => Diagnostic::error()
                 .at(*location)
                 .with_code(code!(
-                    sema::unexpected_non_nullary_variant_pattern
+                    sema::unexpected_non_nullary_variant_pat
                     as "ERROR_UNEXPECTED_NON_NULLARY_VARIANT_PATTERN"
                 ))
                 .with_msg(&self)
@@ -1623,7 +1620,7 @@ impl IntoDiagnostic for SemaDiag {
                 )))
                 .make(),
 
-            Self::UnexpectedNullaryVariantPattern {
+            Self::UnexpectedNullaryVariantPat {
                 location,
                 name: _,
                 expected_ty,
@@ -1631,7 +1628,7 @@ impl IntoDiagnostic for SemaDiag {
             } => Diagnostic::error()
                 .at(*location)
                 .with_code(code!(
-                    sema::unexpected_nullary_variant_pattern
+                    sema::unexpected_nullary_variant_pat
                     as "ERROR_UNEXPECTED_NULLARY_VARIANT_PATTERN"
                 ))
                 .with_msg(&self)
@@ -1642,7 +1639,7 @@ impl IntoDiagnostic for SemaDiag {
                 )
                 .make(),
 
-            Self::IllegalEmptyMatching { location } => Diagnostic::error()
+            Self::EmptyMatch { location } => Diagnostic::error()
                 .at(*location)
                 .with_code(code!(sema::empty_match as "ERROR_ILLEGAL_EMPTY_MATCHING"))
                 .with_msg(&self)
@@ -1665,32 +1662,33 @@ impl IntoDiagnostic for SemaDiag {
                 .with_note("ascribe a list type to the pattern with the `as` operator")
                 .make(),
 
-            Self::UnexpectedPatternForType {
+            Self::IllegalPatForTy {
                 location,
                 expected_ty: _,
             } => Diagnostic::error()
                 .at(*location)
-                .with_code(
-                    code!(sema::illegal_pattern_for_ty as "ERROR_UNEXPECTED_PATTERN_FOR_TYPE"),
-                )
+                .with_code(code!(sema::illegal_pat_for_ty as "ERROR_UNEXPECTED_PATTERN_FOR_TYPE"))
                 .with_msg(&self)
                 .with_label(Label::primary(*location))
                 .make(),
 
-            Self::AmbiguousBindingPatType { location } => Diagnostic::error()
+            Self::AmbiguousBindingPatTy { location } => Diagnostic::error()
                 .at(*location)
-                .with_code(code!(sema::ambiguous_binding_type))
+                .with_code(code!(sema::ambiguous_binding_ty))
                 .with_msg(&self)
                 .with_label(Label::primary(*location))
                 .make(),
 
-            Self::NonExhaustiveMatchPatterns {
+            Self::MatchNonExhaustive {
                 location,
                 scrutinee_location,
                 witness,
             } => Diagnostic::error()
                 .at(*location)
-                .with_code(ERROR_NON_EXHAUSTIVE_MATCH_PATTERNS)
+                .with_code(code!(
+                    sema::match_non_exhaustive
+                    as "ERROR_NON_EXHAUSTIVE_MATCH_PATTERNS"
+                ))
                 .with_msg(&self)
                 .with_label(
                     Label::primary(*scrutinee_location)
@@ -1698,9 +1696,12 @@ impl IntoDiagnostic for SemaDiag {
                 )
                 .make(),
 
-            Self::NonIrrefutableLetPattern { location, witness } => Diagnostic::error()
+            Self::NonIrrefutableLetPat { location, witness } => Diagnostic::error()
                 .at(*location)
-                .with_code(ERROR_NON_EXHAUSTIVE_MATCH_PATTERNS)
+                .with_code(code!(
+                    sema::non_irrefutable_let_pat
+                    as "ERROR_NON_EXHAUSTIVE_MATCH_PATTERNS"
+                ))
                 .with_msg(&self)
                 .with_label(
                     Label::primary(*location).with_msg(format!("no pattern matches `{witness}`")),
@@ -1708,7 +1709,7 @@ impl IntoDiagnostic for SemaDiag {
                 .with_note("a let pattern must be applicable to all values of this type")
                 .make(),
 
-            Self::IncorrectArityOfMain {
+            Self::WrongMainParamCount {
                 location,
                 actual: _,
             } => Diagnostic::error()

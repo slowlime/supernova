@@ -14,7 +14,7 @@ fn check() -> Unit {
   }
 
   fn succ-nat-is-not-bool(x : Nat) -> Bool {
-    //! ERROR(sema::expr_type_mismatch)
+    //! ERROR(sema::expr_ty_mismatch)
     return succ(x)
   }
 
@@ -28,12 +28,12 @@ fn infer() -> Unit {
 
 fn illegal-arg() -> Unit {
   fn check() -> Nat {
-    //! ERROR(sema::expr_type_mismatch)
+    //! ERROR(sema::expr_ty_mismatch)
     return succ(false)
   }
 
   fn infer() -> Unit {
-    //! ERROR(sema::expr_type_mismatch)
+    //! ERROR(sema::expr_ty_mismatch)
     return match succ(false) { _ => unit }
   }
 

@@ -21,7 +21,7 @@ fn check(x : [Nat]) -> Unit {
 
 fn infer(x : [Nat]) -> Unit {
   return letrec
-    //! ERROR(sema::ambiguous_list_type)
+    //! ERROR(sema::ambiguous_list_ty)
     [] = x,
     //!~ ERROR
     [a as Nat] = x,
@@ -32,9 +32,9 @@ fn infer(x : [Nat]) -> Unit {
 
 fn illegal-pattern-for-ty() -> Unit {
   return match 0 {
-    //! ERROR(sema::illegal_pattern_for_ty)
+    //! ERROR(sema::illegal_pat_for_ty)
     [] => unit
-  | //! ERROR(sema::illegal_pattern_for_ty)
+  | //! ERROR(sema::illegal_pat_for_ty)
     [x, y] => unit
   | _ => unit
   }
@@ -44,12 +44,12 @@ fn illegal-elem-tys(x : [Nat]) -> Unit {
   fn check() -> Unit {
     return match x {
       [
-        unit, //!< ERROR(sema::illegal_pattern_for_ty)
+        unit, //!< ERROR(sema::illegal_pat_for_ty)
         _
       ] => unit
     | [
         _,
-        unit //!< ERROR(sema::illegal_pattern_for_ty)
+        unit //!< ERROR(sema::illegal_pat_for_ty)
       ] => unit
     | _ => unit
     }
@@ -59,7 +59,7 @@ fn illegal-elem-tys(x : [Nat]) -> Unit {
     return letrec
       [
         x as Nat,
-        //! ERROR(sema::illegal_pattern_for_ty)
+        //! ERROR(sema::illegal_pat_for_ty)
         false
       ] = x
      in unit

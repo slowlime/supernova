@@ -16,7 +16,7 @@ fn bool-is-bool(x : Bool) -> Unit {
 
 fn nat-is-not-bool(x : Bool) -> Unit {
   return match x {
-    //! ERROR(sema::illegal_pattern_for_ty)
+    //! ERROR(sema::illegal_pat_for_ty)
     0 as Bool => unit
   | _ => unit
   }
@@ -29,7 +29,7 @@ fn provides-expected-type-to-inner-pat() -> Unit {
 
 fn ascribed-type-must-match-expected(x : Nat) -> Unit {
   return match x {
-    //! ERROR(sema::illegal_pattern_for_ty)
+    //! ERROR(sema::illegal_pat_for_ty)
     x as Bool => unit
   | _ => unit
   }

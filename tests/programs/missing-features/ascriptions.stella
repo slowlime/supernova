@@ -3,7 +3,7 @@ language core;
 fn wrong(x : Nat) -> Nat {
   //! ERROR(sema::ascription_expr_not_allowed)
   return match 0 as Nat {
-    //! ERROR(sema::ascription_pattern_not_allowed)
+    //! ERROR(sema::ascription_pat_not_allowed)
     x as Nat => x
   }
 }

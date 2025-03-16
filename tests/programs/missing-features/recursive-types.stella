@@ -2,7 +2,7 @@ language core;
 
 extend with #sum-types, #unit-type;
 
-//! ERROR(sema::recursive_type_not_allowed)
+//! ERROR(sema::recursive_ty_not_allowed)
 fn wrong(x : μ X. Unit + X) -> Nat {
   //! ERROR(sema::fold_expr_not_allowed)
   return match unfold[X] fold[X] unfold[X] x {

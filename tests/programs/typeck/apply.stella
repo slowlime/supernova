@@ -22,7 +22,7 @@ fn check() -> Unit {
   }
 
   fn apply-id-to-nat-is-not-bool(x : Nat) -> Bool {
-    //! ERROR(sema::expr_type_mismatch)
+    //! ERROR(sema::expr_ty_mismatch)
     return id(x)
   }
 
@@ -35,24 +35,24 @@ fn infer() -> Unit {
 }
 
 fn apply-not-function() -> Unit {
-  //! ERROR(sema::apply_not_function)
+  //! ERROR(sema::apply_not_fn)
   return false(0)
 }
 
 fn illegal-arg-tys() -> Unit {
   fn check() -> Unit {
     fn foo-arg-1() -> Bool {
-      //! ERROR(sema::expr_type_mismatch)
+      //! ERROR(sema::expr_ty_mismatch)
       return foo(unit, false, unit)
     }
 
     fn foo-arg-2() -> Bool {
-      //! ERROR(sema::expr_type_mismatch)
+      //! ERROR(sema::expr_ty_mismatch)
       return foo(0, unit, unit)
     }
 
     fn foo-arg-3() -> Bool {
-      //! ERROR(sema::expr_type_mismatch)
+      //! ERROR(sema::expr_ty_mismatch)
       return foo(0, false, 0)
     }
 
@@ -61,17 +61,17 @@ fn illegal-arg-tys() -> Unit {
 
   fn infer() -> Unit {
     fn foo-arg-1() -> Unit {
-      //! ERROR(sema::expr_type_mismatch)
+      //! ERROR(sema::expr_ty_mismatch)
       return match foo(unit, false, unit) { _ => unit }
     }
 
     fn foo-arg-2() -> Unit {
-      //! ERROR(sema::expr_type_mismatch)
+      //! ERROR(sema::expr_ty_mismatch)
       return match foo(0, unit, unit) { _ => unit }
     }
 
     fn foo-arg-3() -> Bool {
-      //! ERROR(sema::expr_type_mismatch)
+      //! ERROR(sema::expr_ty_mismatch)
       return match foo(0, false, 0) { _ => unit }
     }
 

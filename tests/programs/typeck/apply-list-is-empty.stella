@@ -16,7 +16,7 @@ fn check() -> Unit {
   }
 
   fn list-is-empty-nat-list-is-not-nat(xs : [Nat]) -> Nat {
-    //! ERROR(sema::expr_type_mismatch)
+    //! ERROR(sema::expr_ty_mismatch)
     return List::isempty(xs)
   }
 

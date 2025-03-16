@@ -9,11 +9,11 @@ extend with #let-bindings;
 extend with #let-many-bindings;
 
 fn undefined-var() -> Unit {
-  //! ERROR(sema::undefined_variable)
+  //! ERROR(sema::undefined_var)
   return x
 }
 
-//! ERROR(sema::undefined_type)
+//! ERROR(sema::undefined_ty)
 fn undefined-ty(x : Foo) -> Bar {
   return x
 }
@@ -27,13 +27,13 @@ fn var-in-nested-fn-is-not-visible-in-outer-scope() -> Unit {
     return unit
   }
 
-  //! ERROR(sema::undefined_variable)
+  //! ERROR(sema::undefined_var)
   return inaccessible()
 }
 
 fn successive-let-bindings-are-inaccesible() -> Unit {
   return let
-    //! ERROR(sema::undefined_variable)
+    //! ERROR(sema::undefined_var)
     a = b,
     b = 0
    in a
@@ -42,7 +42,7 @@ fn successive-let-bindings-are-inaccesible() -> Unit {
 fn pattern-bindings-are-not-visible-in-other-match-arms() -> Unit {
   return match {false, unit, 0} {
     {a, b, 0} => unit
-    //! ERROR(sema::undefined_variable)
+    //! ERROR(sema::undefined_var)
   | {_, _, _} => b
   }
 }

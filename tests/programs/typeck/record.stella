@@ -42,14 +42,14 @@ fn missing-record-field() -> Unit {
   return unit
 }
 
-fn unexpected-record-field() -> Unit {
+fn no-such-record-field() -> Unit {
   fn empty() -> {} {
-    //! ERROR(sema::unexpected_record_field)
+    //! ERROR(sema::no_such_record_field)
     return {a = 0}
   }
 
   fn non-empty() -> {a : Nat, b : Bool} {
-    //! ERROR(sema::unexpected_record_field)
+    //! ERROR(sema::no_such_record_field)
     return {a = 0, b = false, c = unit}
   }
 
@@ -62,17 +62,17 @@ fn illegal-record-field-tys() -> Unit {
   }
 
   fn wrong-a() -> Unit {
-    //! ERROR(sema::expr_type_mismatch)
+    //! ERROR(sema::expr_ty_mismatch)
     return expect({a = unit, b = false, c = unit})
   }
 
   fn wrong-b() -> Unit {
-    //! ERROR(sema::expr_type_mismatch)
+    //! ERROR(sema::expr_ty_mismatch)
     return expect({a = 0, b = unit, c = unit})
   }
 
   fn wrong-c() -> Unit {
-    //! ERROR(sema::expr_type_mismatch)
+    //! ERROR(sema::expr_ty_mismatch)
     return expect({a = 0, b = false, c = 0})
   }
 

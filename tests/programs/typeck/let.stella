@@ -32,11 +32,11 @@ fn let-body-typeck-uses-let-ty-expectation() -> Unit {
 }
 
 fn successive-let-bindings-may-change-tys() -> fn(Unit, Nat, Bool) -> Nat {
-  return let //!<~ ERROR
-    f = fn(x : Unit) { return 0 }, //!<~ ERROR
-    f = fn(x : Unit, y : Nat) { return f(x) }, //!<~ ERROR
+  return let                                               //!<~ ERROR
+    f = fn(x : Unit) { return 0 },                         //!<~ ERROR
+    f = fn(x : Unit, y : Nat) { return f(x) },             //!<~ ERROR
     f = fn(x : Unit, y : Nat, z : Bool) { return f(x, y) } //!<~ ERROR
-   in f //!<~ ERROR
+   in f                                                    //!<~ ERROR
 }
 
 fn patterns-know-scrutinee-ty() -> {Bool, Nat} {

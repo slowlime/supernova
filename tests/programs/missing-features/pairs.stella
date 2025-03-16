@@ -8,7 +8,7 @@ fn empty(x : {}) -> Nat {
     //! ERROR(sema::empty_tuple_not_allowed)
     {},
     //! ERROR(sema::illegal_pair_element_count)
-    {0}.0
+    {0}.1
   }
 }
 

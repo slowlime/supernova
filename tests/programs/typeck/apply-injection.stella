@@ -16,7 +16,7 @@ fn check() -> Unit {
   }
 
   fn inl-bool-is-not-nat-sum-bool(x : Bool) -> Nat + Bool {
-    //! ERROR(sema::expr_type_mismatch)
+    //! ERROR(sema::expr_ty_mismatch)
     return inl(x)
   }
 
@@ -26,7 +26,7 @@ fn check() -> Unit {
   }
 
   fn inr-bool-is-not-bool-sum-nat(x : Bool) -> Bool + Nat {
-    //! ERROR(sema::expr_type_mismatch)
+    //! ERROR(sema::expr_ty_mismatch)
     return inr(x)
   }
 
@@ -35,12 +35,12 @@ fn check() -> Unit {
 
 fn infer() -> Unit {
   fn inference-is-just-too-powerless() -> Unit {
-    //! ERROR(sema::ambiguous_sum_type)
+    //! ERROR(sema::ambiguous_sum_ty)
     return match inl(false) { _ as Bool + Nat => unit }
   }
 
   fn true-ambiguity() -> Unit {
-    //! ERROR(sema::ambiguous_sum_type)
+    //! ERROR(sema::ambiguous_sum_ty)
     return match inl(false) { _ => unit }
   }
 
@@ -63,12 +63,12 @@ fn unexpected-injection() -> Unit {
 
 fn illegal-arg() -> Unit {
   fn illegal-inl() -> Nat + Bool {
-    //! ERROR(sema::expr_type_mismatch)
+    //! ERROR(sema::expr_ty_mismatch)
     return inl(unit)
   }
 
   fn illegal-inr() -> Nat + Bool {
-    //! ERROR(sema::expr_type_mismatch)
+    //! ERROR(sema::expr_ty_mismatch)
     return inr(unit)
   }
 

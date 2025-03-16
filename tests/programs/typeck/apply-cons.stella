@@ -36,12 +36,12 @@ fn unexpected-list(x : Bool, xs : [Bool]) -> Bool {
 fn illegal-args() -> Unit {
   fn check() -> Unit {
     fn illegal-arg-1() -> [Bool] {
-      //! ERROR(sema::expr_type_mismatch)
+      //! ERROR(sema::expr_ty_mismatch)
       return cons(0, [])
     }
 
     fn illegal-arg-2(xs : [Nat]) -> [Bool] {
-      //! ERROR(sema::expr_type_mismatch)
+      //! ERROR(sema::expr_ty_mismatch)
       return cons(false, xs)
     }
 
@@ -50,7 +50,7 @@ fn illegal-args() -> Unit {
 
   fn infer() -> Unit {
     fn illegal-arg-2() -> Unit {
-      //! ERROR(sema::expr_type_mismatch)
+      //! ERROR(sema::expr_ty_mismatch)
       return match cons(false, [0]) { _ => unit }
     }
 

@@ -14,7 +14,7 @@ fn check() -> Unit {
 }
 
 fn infer() -> Unit {
-  //! ERROR(sema::ambiguous_binding_type)
+  //! ERROR(sema::ambiguous_binding_ty)
   return letrec x = 0 in unit
 }
 

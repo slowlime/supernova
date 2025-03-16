@@ -19,16 +19,16 @@ fn check(x : Nat + Bool) -> Unit {
 
 fn ambiguous-sum-type(x : Nat + Bool) -> Unit {
   return letrec
-    inl(a) = x, //!< ERROR(sema::ambiguous_sum_type)
-    inr(b) = x  //!< ERROR(sema::ambiguous_sum_type)
+    inl(a) = x, //!< ERROR(sema::ambiguous_sum_ty)
+    inr(b) = x  //!< ERROR(sema::ambiguous_sum_ty)
    in unit
 }
 
 fn illegal-pattern-for-ty() -> Unit {
   return match 0 {
-    //! ERROR(sema::illegal_pattern_for_ty)
+    //! ERROR(sema::illegal_pat_for_ty)
     inl(_) => unit
-    //! ERROR(sema::illegal_pattern_for_ty)
+    //! ERROR(sema::illegal_pat_for_ty)
   | inr(_) => unit
   | _ => unit
   }
@@ -37,10 +37,10 @@ fn illegal-pattern-for-ty() -> Unit {
 fn illegal-arg(x : Nat + Bool) -> Unit {
   return match x {
     inl(
-      unit //!< ERROR(sema::illegal_pattern_for_ty)
+      unit //!< ERROR(sema::illegal_pat_for_ty)
     ) => unit
   | inr(
-      unit //!< ERROR(sema::illegal_pattern_for_ty)
+      unit //!< ERROR(sema::illegal_pat_for_ty)
     ) => unit
   | _ => unit
   }

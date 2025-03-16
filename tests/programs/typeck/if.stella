@@ -23,13 +23,13 @@ fn infer(x : Bool) -> Unit {
 
 fn wrong-if-cond-ty(x : Nat) -> Unit {
   return if
-      x //!< ERROR(sema::expr_type_mismatch)
+      x //!< ERROR(sema::expr_ty_mismatch)
     then unit
     else unit
 }
 
 fn wrong-if-ty(x : Bool) -> Unit {
-  //! ERROR(sema::expr_type_mismatch)
+  //! ERROR(sema::expr_ty_mismatch)
   return if x then 0 else 0
 }
 
@@ -37,7 +37,7 @@ fn wrong-if-branch-tys(x : Bool) -> Unit {
   return match (
     if x
     then 0
-    else false //!< ERROR(sema::expr_type_mismatch)
+    else false //!< ERROR(sema::expr_ty_mismatch)
   ) { _ => unit }
 }
 

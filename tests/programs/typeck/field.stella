@@ -21,12 +21,12 @@ fn field-tuple-check(x : {Nat, Bool}) -> Unit {
   }
 
   fn field-1-is-not-bool() -> Bool {
-    //! ERROR(sema::expr_type_mismatch)
+    //! ERROR(sema::expr_ty_mismatch)
     return x.1
   }
 
   fn field-2-is-not-nat() -> Nat {
-    //! ERROR(sema::expr_type_mismatch)
+    //! ERROR(sema::expr_ty_mismatch)
     return x.2
   }
 
@@ -59,12 +59,12 @@ fn field-record-check(x : {a : Nat, b : Bool}) -> Unit {
   }
 
   fn field-a-is-not-bool() -> Bool {
-    //! ERROR(sema::expr_type_mismatch)
+    //! ERROR(sema::expr_ty_mismatch)
     return x.a
   }
 
   fn field-b-is-not-nat() -> Nat {
-    //! ERROR(sema::expr_type_mismatch)
+    //! ERROR(sema::expr_ty_mismatch)
     return x.b
   }
 

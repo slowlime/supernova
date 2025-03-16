@@ -16,7 +16,7 @@ fn check() -> Unit {
   }
 
   fn list-tail-nat-list-is-not-bool-list(xs : [Nat]) -> [Bool] {
-    //! ERROR(sema::expr_type_mismatch)
+    //! ERROR(sema::expr_ty_mismatch)
     return List::tail(xs)
   }
 
@@ -31,7 +31,7 @@ fn infer() -> Unit {
 fn illegal-args() -> Unit {
   fn check() -> Unit {
     fn wrong-list-type() -> Bool {
-      //! ERROR(sema::expr_type_mismatch)
+      //! ERROR(sema::expr_ty_mismatch)
       return List::tail([0])
     }
 

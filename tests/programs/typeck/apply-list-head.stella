@@ -16,7 +16,7 @@ fn check() -> Unit {
   }
 
   fn list-head-nat-list-is-not-bool(xs : [Nat]) -> Bool {
-    //! ERROR(sema::expr_type_mismatch)
+    //! ERROR(sema::expr_ty_mismatch)
     return List::head(xs)
   }
 
@@ -31,12 +31,12 @@ fn infer() -> Unit {
 fn illegal-args() -> Unit {
   fn check() -> Unit {
     fn wrong-list-type() -> Bool {
-      //! ERROR(sema::expr_type_mismatch)
+      //! ERROR(sema::expr_ty_mismatch)
       return List::head([0])
     }
 
     fn not-list() -> Bool {
-      //! ERROR(sema::expr_type_mismatch)
+      //! ERROR(sema::expr_ty_mismatch)
       return List::head(false)
     }
 

@@ -10,7 +10,7 @@ fn unit-check() -> Unit {
   }
 
   fn bool-is-not-unit() -> Unit {
-    //! ERROR(sema::expr_type_mismatch)
+    //! ERROR(sema::expr_ty_mismatch)
     return false
   }
 
@@ -34,7 +34,7 @@ fn bool-check() -> Unit {
   }
 
   fn unit-is-not-bool() -> Bool {
-    //! ERROR(sema::expr_type_mismatch)
+    //! ERROR(sema::expr_ty_mismatch)
     return unit
   }
 
@@ -67,7 +67,7 @@ fn nat-check() -> Unit {
   }
 
   fn unit-is-not-nat() -> Nat {
-    //! ERROR(sema::expr_type_mismatch)
+    //! ERROR(sema::expr_ty_mismatch)
     return unit
   }
 

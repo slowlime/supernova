@@ -24,7 +24,7 @@ fn check() -> Unit {
 }
 
 fn infer() -> Unit {
-  //! ERROR(sema::ambiguous_variant_type)
+  //! ERROR(sema::ambiguous_variant_ty)
   return match <|a = true|> { _ as <|a : Bool, b : Nat|> => unit }
 }
 
@@ -39,7 +39,7 @@ fn no-such-variant-label() -> <|a : Bool, b|> {
 }
 
 fn wrong-variant-data-ty() -> <|a : Nat, b : Bool|> {
-  //! ERROR(sema::expr_type_mismatch)
+  //! ERROR(sema::expr_ty_mismatch)
   return <|b = 0|>
 }
 

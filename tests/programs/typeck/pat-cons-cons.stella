@@ -25,7 +25,7 @@ fn infer(x : [Nat]) -> Unit {
 
 fn illegal-pattern-for-ty() -> Unit {
   return match 0 {
-    //! ERROR(sema::illegal_pattern_for_ty)
+    //! ERROR(sema::illegal_pat_for_ty)
     cons(x, xs) => unit
   | _ => unit
   }
@@ -35,12 +35,12 @@ fn illegal-args(x : [Nat]) -> Unit {
   fn check() -> Unit {
     return match x {
       cons(
-        unit, //!< ERROR(sema::illegal_pattern_for_ty)
+        unit, //!< ERROR(sema::illegal_pat_for_ty)
         _
       ) => unit
     | cons(
         _,
-        unit //!< ERROR(sema::illegal_pattern_for_ty)
+        unit //!< ERROR(sema::illegal_pat_for_ty)
       ) => unit
     | _ => unit
     }
@@ -50,11 +50,11 @@ fn illegal-args(x : [Nat]) -> Unit {
     return letrec
       cons(
         0,
-        bools as [Bool] //!< ERROR(sema::illegal_pattern_for_ty)
+        bools as [Bool] //!< ERROR(sema::illegal_pat_for_ty)
       ) = x,
       cons(
         0,
-        bool as Bool //!< ERROR(sema::illegal_pattern_for_ty)
+        bool as Bool //!< ERROR(sema::illegal_pat_for_ty)
       ) = x
      in unit
   }

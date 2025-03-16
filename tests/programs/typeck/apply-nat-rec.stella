@@ -14,7 +14,7 @@ fn check() -> Unit {
   }
 
   fn nat-rec-unit-is-not-bool(n : Nat, z : Unit, s : fn(Nat) -> fn(Unit) -> Unit) -> Bool {
-    //! ERROR(sema::expr_type_mismatch)
+    //! ERROR(sema::expr_ty_mismatch)
     return Nat::rec(n, z, s)
   }
 
@@ -42,7 +42,7 @@ fn illegal-args() -> Unit {
   fn check() -> Unit {
     fn illegal-arg-1() -> Bool {
       return Nat::rec(
-        //! ERROR(sema::expr_type_mismatch)
+        //! ERROR(sema::expr_ty_mismatch)
         false,
         true,
         id-bool-succ
@@ -52,7 +52,7 @@ fn illegal-args() -> Unit {
     fn illegal-arg-2() -> Bool {
       return Nat::rec(
         0,
-        //! ERROR(sema::expr_type_mismatch)
+        //! ERROR(sema::expr_ty_mismatch)
         0,
         id-bool-succ
       )
@@ -62,7 +62,7 @@ fn illegal-args() -> Unit {
       return Nat::rec(
         0,
         false,
-        //! ERROR(sema::expr_type_mismatch)
+        //! ERROR(sema::expr_ty_mismatch)
         id-nat-succ
       )
     }
@@ -73,7 +73,7 @@ fn illegal-args() -> Unit {
   fn infer() -> Unit {
     fn illegal-arg-1() -> Unit {
       return match Nat::rec(
-        //! ERROR(sema::expr_type_mismatch)
+        //! ERROR(sema::expr_ty_mismatch)
         false,
         false,
         id-bool-succ
@@ -86,7 +86,7 @@ fn illegal-args() -> Unit {
       return match Nat::rec(
         0,
         false,
-        //! ERROR(sema::expr_type_mismatch)
+        //! ERROR(sema::expr_ty_mismatch)
         id-nat-succ
       ) {
         _ => unit

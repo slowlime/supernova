@@ -17,7 +17,7 @@ fn unit-check() -> Unit {
   }
 
   fn unit-does-not-match-bool(x : Bool) -> Unit {
-    //! ERROR(sema::illegal_pattern_for_ty)
+    //! ERROR(sema::illegal_pat_for_ty)
     return match x { unit => unit }
   }
 
@@ -39,9 +39,9 @@ fn bool-check() -> Unit {
 
   fn neither-true-nor-false-match-unit(x : Unit) -> Unit {
     return match x {
-      //! ERROR(sema::illegal_pattern_for_ty)
+      //! ERROR(sema::illegal_pat_for_ty)
       true => unit
-    | //! ERROR(sema::illegal_pattern_for_ty)
+    | //! ERROR(sema::illegal_pat_for_ty)
       false => unit
     | _ => unit
     }
@@ -69,11 +69,11 @@ fn nat-check() -> Unit {
 
   fn nat-does-not-match-unit(x : Unit) -> Unit {
     return match x {
-      //! ERROR(sema::illegal_pattern_for_ty)
+      //! ERROR(sema::illegal_pat_for_ty)
       0 => unit
-    | //! ERROR(sema::illegal_pattern_for_ty)
+    | //! ERROR(sema::illegal_pat_for_ty)
       1 => unit
-    | //! ERROR(sema::illegal_pattern_for_ty)
+    | //! ERROR(sema::illegal_pat_for_ty)
       42 => unit
     | _ => unit
     }

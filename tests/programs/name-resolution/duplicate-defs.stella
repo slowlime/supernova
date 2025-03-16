@@ -17,12 +17,12 @@ fn duplicate-outer-def() -> Unit {
   return unit
 }
 
-//! ERROR(sema::duplicate_variable_def)
+//! ERROR(sema::duplicate_var_def)
 fn duplicate-outer-def(x : Unit) -> Unit {
   return x
 }
 
-//! ERROR(sema::duplicate_variable_def)
+//! ERROR(sema::duplicate_var_def)
 fn duplicate-param(x : Unit, x : Unit) -> Unit {
   return unit
 }
@@ -31,7 +31,7 @@ fn duplicate-letrec-binding() -> Unit {
   return letrec
     x as Bool = false,
     y as Bool = true,
-    //! ERROR(sema::duplicate_variable_def)
+    //! ERROR(sema::duplicate_var_def)
     x as Bool = true
    in unit
 }
@@ -41,7 +41,7 @@ fn duplicate-nested-decl() -> Unit {
     return unit
   }
 
-  //! ERROR(sema::duplicate_variable_def)
+  //! ERROR(sema::duplicate_var_def)
   fn foo() -> Unit {
     return unit
   }
@@ -51,14 +51,14 @@ fn duplicate-nested-decl() -> Unit {
 
 fn duplicate-pattern-bindings(x : {{Bool, Bool}, {Bool}}) -> Unit {
   return match x {
-    //! ERROR(sema::duplicate_variable_def)
+    //! ERROR(sema::duplicate_var_def)
     {{x, y}, {x}} => unit
   }
 }
 
 fn duplicate-binding-in-let-pattern() -> Unit {
   return let
-    //! ERROR(sema::duplicate_variable_def)
+    //! ERROR(sema::duplicate_var_def)
     {{x, y}, {y, z}} = {{false, true}, {false, true}}
    in unit
 }

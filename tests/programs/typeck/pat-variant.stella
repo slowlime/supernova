@@ -19,13 +19,13 @@ fn check(x : <|a : Nat, b : Bool|>) -> Unit {
 }
 
 fn ambiguous-variant-pat(x : <|a : Unit|>) -> Unit {
-  //! ERROR(sema::ambiguous_variant_type)
+  //! ERROR(sema::ambiguous_variant_ty)
   return letrec <|a = a|> = x in a
 }
 
 fn illegal-pattern-for-ty() -> Unit {
   return match 0 {
-    //! ERROR(sema::illegal_pattern_for_ty)
+    //! ERROR(sema::illegal_pat_for_ty)
     <|a|> => unit
   | _ => unit
   }
@@ -41,7 +41,7 @@ fn no-such-variant-label(x : <|a : Nat|>) -> Unit {
 fn wrong-variant-data-pat(x : <|a : Nat|>) -> Unit {
   return match x {
     <|a =
-        false //!< ERROR(sema::illegal_pattern_for_ty)
+        false //!< ERROR(sema::illegal_pat_for_ty)
     |> => unit
   | _ => unit
   }
@@ -49,7 +49,7 @@ fn wrong-variant-data-pat(x : <|a : Nat|>) -> Unit {
 
 fn unexpected-nullary-variant-pattern(x : <|a : Nat|>) -> Unit {
   return match x {
-    //! ERROR(sema::unexpected_nullary_variant_pattern)
+    //! ERROR(sema::unexpected_nullary_variant_pat)
     <|a|> => unit
   | _ => unit
   }
@@ -57,7 +57,7 @@ fn unexpected-nullary-variant-pattern(x : <|a : Nat|>) -> Unit {
 
 fn unexpected-non-nullary-variant-pattern(x : <|a|>) -> Unit {
   return match x {
-    //! ERROR(sema::unexpected_non_nullary_variant_pattern)
+    //! ERROR(sema::unexpected_non_nullary_variant_pat)
     <|a = 0|> => unit
   | _ => unit
   }

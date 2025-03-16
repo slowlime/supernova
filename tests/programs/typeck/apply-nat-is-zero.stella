@@ -14,7 +14,7 @@ fn check() -> Unit {
   }
 
   fn nat-is-zero-nat-is-not-nat(x : Nat) -> Nat {
-    //! ERROR(sema::expr_type_mismatch)
+    //! ERROR(sema::expr_ty_mismatch)
     return Nat::iszero(x)
   }
 
@@ -28,12 +28,12 @@ fn infer() -> Unit {
 
 fn illegal-arg() -> Unit {
   fn check() -> Bool {
-    //! ERROR(sema::expr_type_mismatch)
+    //! ERROR(sema::expr_ty_mismatch)
     return Nat::iszero(false)
   }
 
   fn infer() -> Unit {
-    //! ERROR(sema::expr_type_mismatch)
+    //! ERROR(sema::expr_ty_mismatch)
     return match Nat::iszero(false) { _ => unit }
   }
 

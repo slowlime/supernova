@@ -1,6 +1,6 @@
 language core;
 
-//! ERROR(sema::reference_type_not_allowed)
+//! ERROR(sema::reference_ty_not_allowed)
 fn wrong(x : &Nat) -> Nat {
   //! ERROR(sema::deref_expr_not_allowed)
   return *(

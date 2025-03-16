@@ -27,12 +27,12 @@ fn let-variant-irrefutable(x : <|a : Unit|>) -> Unit {
 }
 
 fn let-non-irrefutable(x : {Nat + Bool, Unit}) -> Unit {
-  //! ERROR(sema::match_non_exhaustive)
+  //! ERROR(sema::non_irrefutable_let_pat)
   return let {inl(x), y} = x in unit
 }
 
 fn letrec-non-irrefutable(x : {Nat + Bool, Unit}) -> Unit {
-  //! ERROR(sema::match_non_exhaustive)
+  //! ERROR(sema::non_irrefutable_let_pat)
   return letrec {inl(a) as Nat + Bool, b as Unit} = x in unit
 }
 

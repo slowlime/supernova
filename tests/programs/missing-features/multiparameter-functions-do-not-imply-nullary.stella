@@ -2,7 +2,7 @@ language core;
 
 extend with #multiparameter-functions;
 
-//! ERROR(sema::no_function_params)
+//! ERROR(sema::no_fn_params)
 fn wrong() -> Nat {
   return 0
 }
