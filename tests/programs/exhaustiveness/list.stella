@@ -1,0 +1,77 @@
+language core;
+
+extend with #nullary-functions;
+extend with #nested-function-declarations;
+extend with #structural-patterns;
+extend with #unit-type;
+
+extend with #lists;
+
+fn test(x : [[[Nat]]]) -> Unit {
+  fn exhaustive() -> Unit {
+    fn no-constructors() -> Unit {
+      //!~ ERROR
+      return match x { _ => unit }
+    }
+
+    fn some-constructors() -> Unit {
+      //!~ ERROR
+      return match x {
+        [] => unit
+      | [[[0], [1]], [[2, 3]], []] => unit
+      | [cons([0, 1], xs), [cons(2, cons(3, cons(4, [5])))], cons(cons(6, ys), zs)] => unit
+      | _ => unit
+      }
+    }
+
+    fn all-constructors() -> Unit {
+      //!~ ERROR
+      return match x {
+        [] => unit
+      | [x] => unit
+      | [x, y] => unit
+      | [x, y, []] => unit
+      | [x, y, cons(z, ws)] => unit
+      | cons(x, cons(y, cons(z, []))) => unit
+      | cons(x, cons(y, cons(z, [w]))) => unit
+      | cons(x, cons(y, cons(z, cons(w, ws)))) => unit
+      }
+    }
+
+    return unit
+  }
+
+  fn missing-empty() -> Unit {
+    //! ERROR(sema::match_non_exhaustive)
+    return match x {
+      [x] => unit
+    | [x, y] => unit
+    | [x, y, z] => unit
+    | cons(x, xs) => unit
+    }
+  }
+
+  fn missing-non-empty() -> Unit {
+    //! ERROR(sema::match_non_exhaustive)
+    return match x {
+      [] => unit
+    }
+  }
+
+  fn nested-non-exhaustive() -> Unit {
+    //! ERROR(sema::match_non_exhaustive)
+    return match x {
+      [] => unit
+    | cons([], _) => unit
+    | cons(cons([succ(x)], xs), ys) => unit
+    | cons(cons([], xs), ys) => unit
+    | cons(cons(cons(x, cons(y, zs)), ws), ts) => unit
+    }
+  }
+
+  return unit
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}
