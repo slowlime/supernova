@@ -24,6 +24,17 @@ fn test(x : Nat) -> Unit {
       }
     }
 
+    fn literals-only() -> Unit {
+      //!~ ERROR
+      return match x {
+        1 => unit
+      | 2 => unit
+      | 3 => unit
+      | 4 => unit
+      | _ => unit
+      }
+    }
+
     fn all-constructors() -> Unit {
       //!~ ERROR
       return match x {
@@ -55,6 +66,18 @@ fn test(x : Nat) -> Unit {
     | succ(succ(2)) => unit
     | 42 => unit
     | succ(succ(succ(succ(_)))) => unit
+    }
+  }
+
+  fn literals-only() -> Unit {
+    //! ERROR(sema::match_non_exhaustive)
+    return match x {
+      0 => unit
+    | 1 => unit
+    | 2 => unit
+    | 3 => unit
+    | 4 => unit
+    | 5 => unit
     }
   }
 
