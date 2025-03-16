@@ -28,6 +28,11 @@ fn infer() -> Unit {
   return match <|a = true|> { _ as <|a : Bool, b : Nat|> => unit }
 }
 
+fn distinct-permutations-are-distinct-types(x : <|a : Unit, b : Unit|>) -> <|b : Unit, a : Unit|> {
+  //! ERROR(sema::expr_ty_mismatch)
+  return x
+}
+
 fn unexpected-variant() -> Unit {
   //! ERROR(sema::unexpected_variant)
   return <|a|>

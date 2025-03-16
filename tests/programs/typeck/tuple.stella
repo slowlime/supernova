@@ -37,6 +37,11 @@ fn infer() -> Unit {
   return unit
 }
 
+fn cannot-permute-elements() -> {Nat, Bool} {
+  //! ERROR(sema::expr_ty_mismatch)
+  return {false, 0}
+}
+
 fn unexpected-tuple() -> Unit {
   fn empty() -> Unit {
     //! ERROR(sema::unexpected_tuple)

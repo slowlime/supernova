@@ -23,6 +23,16 @@ fn infer() -> Unit {
   return match {a = 0, b = false} { _ as {a : Nat, b : Bool} => unit }
 }
 
+fn allow-permutations-in-record-expr() -> {a : Nat, b : Nat} {
+  //!~ ERROR
+  return {b = 0, a = 0}
+}
+
+fn distinct-permutations-are-distinct-types(x : {a : Nat, b : Nat}) -> {b : Nat, a : Nat} {
+  //! ERROR(sema::expr_ty_mismatch)
+  return x
+}
+
 fn unexpected-record() -> Unit {
   //! ERROR(sema::unexpected_record)
   return {a = false, b = 0}
