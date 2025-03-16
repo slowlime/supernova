@@ -470,7 +470,9 @@ impl<'ast, D: DiagCtx> Visitor<'ast, 'ast> for Walker<'ast, '_, '_, D> {
                     self.enter_new_scope();
                 } else {
                     for binding in &e.bindings {
-                        binding.recurse(self);
+                        // visit the initializer first. this is critically important.
+                        self.visit_expr(&binding.expr);
+                        self.visit_pat(&binding.pat);
                         self.enter_new_scope();
                     }
                 }

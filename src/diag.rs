@@ -12,6 +12,8 @@ pub struct Code {
 }
 
 impl Code {
+    pub const INTERNAL_ERROR: Self = Self::new("internal_error");
+
     pub const fn new(code: &'static str) -> Self {
         Self { code, stella: None }
     }

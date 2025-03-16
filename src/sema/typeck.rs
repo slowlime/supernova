@@ -3,7 +3,7 @@ use std::mem;
 use fxhash::{FxHashMap, FxHashSet};
 
 use crate::ast;
-use crate::diag::{DiagCtx, Diagnostic, IntoDiagnostic, Label};
+use crate::diag::{Code, DiagCtx, Diagnostic, IntoDiagnostic, Label};
 use crate::location::Location;
 use crate::util::SliceExt;
 
@@ -184,7 +184,75 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         self.typeck_decls()?;
         self.check_main()?;
 
+        if cfg!(debug_assertions) {
+            self.check_valid();
+        }
+
         Ok(())
+    }
+
+    fn check_valid(&mut self) {
+        let mut failed = false;
+
+        for (_, expr) in &self.m.exprs {
+            if expr.ty_id == self.m.well_known_tys.error {
+                failed = true;
+                self.diag.emit(
+                    Diagnostic::error()
+                        .at(expr.def.location)
+                        .with_code(Code::INTERNAL_ERROR)
+                        .with_msg("the expression has the error type despite the typeck succeeding")
+                        .with_label(Label::primary(expr.def.location))
+                        .make(),
+                );
+            }
+        }
+
+        for (_, ty_expr) in &self.m.ty_exprs {
+            if ty_expr.ty_id == self.m.well_known_tys.error {
+                failed = true;
+                self.diag.emit(
+                    Diagnostic::error()
+                        .at(ty_expr.def.location)
+                        .with_msg(
+                            "the type expression has the error type despite the typeck succeeding",
+                        )
+                        .with_code(Code::INTERNAL_ERROR)
+                        .with_label(Label::primary(ty_expr.def.location))
+                        .make(),
+                );
+            }
+        }
+
+        for (_, pat) in &self.m.pats {
+            if pat.ty_id == self.m.well_known_tys.error {
+                failed = true;
+                self.diag.emit(
+                    Diagnostic::error()
+                        .at(pat.def.location)
+                        .with_code(Code::INTERNAL_ERROR)
+                        .with_msg("the pattern has the error type despite the typeck succeeding")
+                        .with_label(Label::primary(pat.def.location))
+                        .make(),
+                );
+            }
+        }
+
+        for (_, binding) in &self.m.bindings {
+            if binding.ty_id == self.m.well_known_tys.error {
+                failed = true;
+                self.diag.emit(
+                    Diagnostic::error()
+                        .at(binding.location)
+                        .with_code(Code::INTERNAL_ERROR)
+                        .with_msg("the binding has the error type despite the typeck succeeding")
+                        .with_label(Label::primary(binding.location))
+                        .make(),
+                );
+            }
+        }
+
+        assert!(!failed, "detected a typeck bug");
     }
 
     fn add_well_known_tys(&mut self) {
