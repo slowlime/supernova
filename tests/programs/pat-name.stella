@@ -1,0 +1,23 @@
+language core;
+
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #pattern-ascriptions;
+extend with #nested-function-declarations;
+extend with #unit-type;
+extend with #letrec-bindings, #let-patterns, #letrec-many-bindings;
+
+fn check() -> Unit {
+  //!~ ERROR
+  return match 0 { x => unit }
+}
+
+fn infer() -> Unit {
+  //! ERROR(sema::ambiguous_binding_type)
+  return letrec x = 0 in unit
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}
