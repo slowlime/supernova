@@ -44,13 +44,13 @@ impl DeconstructedPat {
                             unreachable!()
                         };
 
-                        write!(f, "<| {}", ty.elems[*idx].0)?;
+                        write!(f, "<|{}", ty.elems[*idx].0)?;
 
                         if let Some(pat) = self.0.fields.first() {
                             write!(f, ": {}", pat.display(self.1))?;
                         }
 
-                        write!(f, " |>")
+                        write!(f, "|>")
                     }
 
                     Cons::Inl => write!(f, "inl({})", self.0.fields[0].display(self.1)),

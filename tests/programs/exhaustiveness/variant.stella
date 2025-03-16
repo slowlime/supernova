@@ -1,0 +1,95 @@
+language core;
+
+extend with #nullary-functions;
+extend with #nested-function-declarations;
+extend with #structural-patterns;
+extend with #unit-type;
+
+extend with #variants;
+extend with #nullary-variant-labels;
+
+fn test(x : <|a : Nat, b, c : <|d : Unit, e : Bool|>, f : <|g : <|h|>|>|>) -> Unit {
+  fn exhaustive() -> Unit {
+    fn no-constructors() -> Unit {
+      //!~ ERROR
+      return match x { _ => unit }
+    }
+
+    fn some-constructors() -> Unit {
+      //!~ ERROR
+      return match x {
+        <|a = _|> => unit
+      | <|f = <|g = _|>|> => unit
+      | _ => unit
+      }
+    }
+
+    fn all-constructors() -> Unit {
+      //!~ ERROR
+      return match x {
+        <|a = 0|> => unit
+      | <|a = _|> => unit
+      | <|f = <|g = <|h|>|>|> => unit
+      | <|f = <|g = _|>|> => unit
+      | <|c = <|d = unit|>|> => unit
+      | <|c = <|e = true|>|> => unit
+      | <|c = <|e = false|>|> => unit
+      | <|b|> => unit
+      }
+    }
+
+    return unit
+  }
+
+  fn missing-a() -> Unit {
+    //! ERROR(sema::match_non_exhaustive)
+    return match x {
+      <|b|> => unit
+    | <|c = _|> => unit
+    | <|f = _|> => unit
+    }
+  }
+
+  fn missing-b() -> Unit {
+    //! ERROR(sema::match_non_exhaustive)
+    return match x {
+      <|a = _|> => unit
+    | <|c = _|> => unit
+    | <|f = _|> => unit
+    }
+  }
+
+  fn missing-c() -> Unit {
+    //! ERROR(sema::match_non_exhaustive)
+    return match x {
+      <|a = _|> => unit
+    | <|b|> => unit
+    | <|f = _|> => unit
+    }
+  }
+
+  fn missing-f() -> Unit {
+    //! ERROR(sema::match_non_exhaustive)
+    return match x {
+      <|a = _|> => unit
+    | <|b|> => unit
+    | <|c = _|> => unit
+    }
+  }
+
+  fn nested-non-exhaustive() -> Unit {
+    //! ERROR(sema::match_non_exhaustive)
+    return match x {
+      <|a = _|> => unit
+    | <|b|> => unit
+    | <|c = <|d = unit|>|> => unit
+    | <|f = _|> => unit
+    }
+  }
+
+  return unit
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}
