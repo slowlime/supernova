@@ -17,10 +17,23 @@ fn check(x : [Nat]) -> Unit {
   }                              //!<~ ERROR
 }
 
+fn check-shorthand(x : [Nat]) -> Unit {
+  return match x {       //!<~ ERROR
+    (x, (y, ys)) => unit //!<~ ERROR
+  | _ => unit            //!<~ ERROR
+  }                      //!<~ ERROR
+}
+
 fn infer(x : [Nat]) -> Unit {
   return letrec            //!<~ ERROR
     cons(y as Nat, ys) = x //!<~ ERROR
    in unit                 //!<~ ERROR
+}
+
+fn infer-shorthand(x : [Nat]) -> Unit {
+  return letrec        //!<~ ERROR
+    (y as Nat, ys) = x //!<~ ERROR
+  in unit              //!<~ ERROR
 }
 
 fn illegal-pattern-for-ty() -> Unit {
