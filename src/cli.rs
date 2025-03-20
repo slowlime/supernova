@@ -7,6 +7,10 @@ pub struct Args {
     /// Also show Stella error codes in diagnostics when available.
     #[arg(long)]
     pub stella_error_codes: bool,
+
+    /// Only print the first error found.
+    #[arg(short = 'x', long)]
+    pub first_error_only: bool,
 }
 
 impl Args {

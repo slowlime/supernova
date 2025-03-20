@@ -1,6 +1,7 @@
 use std::fmt::Display;
 
 use ariadne::{Color, ColorGenerator, IndexType, Report, ReportKind};
+use yansi::Paint;
 
 use crate::location::Location;
 use crate::sourcemap::SourceMap;
@@ -287,6 +288,10 @@ pub trait DiagCtx {
 pub struct StderrDiagCtx<'src> {
     source_map: &'src SourceMap,
     opts: ReportOptions,
+    first_error_only: bool,
+    had_error: bool,
+    errors_hidden: usize,
+    warnings_hidden: usize,
 }
 
 impl<'src> StderrDiagCtx<'src> {
@@ -294,17 +299,87 @@ impl<'src> StderrDiagCtx<'src> {
         Self {
             source_map,
             opts: Default::default(),
+            first_error_only: false,
+            had_error: false,
+            errors_hidden: 0,
+            warnings_hidden: 0,
         }
     }
 
     pub fn set_show_stella_codes(&mut self, value: bool) {
         self.opts.show_stella_codes = value;
     }
+
+    pub fn set_first_error_only(&mut self, value: bool) {
+        self.first_error_only = value;
+    }
+
+    pub fn finish(&mut self) {
+        fn ending(n: usize) -> &'static str {
+            if n == 1 { "" } else { "s" }
+        }
+
+        fn copula(n: usize) -> &'static str {
+            if n == 1 { "was" } else { "were" }
+        }
+
+        match (self.errors_hidden, self.warnings_hidden) {
+            (0, 0) => {}
+
+            (errors, 0) => {
+                let e = ending(errors);
+                let c = copula(errors);
+                eprintln!(
+                    "\n{}",
+                    format_args!("{errors} more error{e} {c} hidden").bright_red()
+                );
+            }
+
+            (0, warnings) => {
+                let e = ending(warnings);
+                let c = copula(warnings);
+                eprintln!(
+                    "\n{}",
+                    format_args!("{warnings} more warning{e} {c} hidden",).bright_yellow()
+                );
+            }
+
+            (errors, warnings) => {
+                let err_e = ending(errors);
+                let warn_e = ending(warnings);
+                let c = ending(errors + warnings);
+                eprintln!(
+                    "\n{}",
+                    format_args!("{errors} error{err_e} and {warnings} warning{warn_e} {c} hidden")
+                        .bright_red()
+                );
+            }
+        }
+    }
 }
 
 impl DiagCtx for StderrDiagCtx<'_> {
     fn emit(&mut self, diag: impl IntoDiagnostic) {
         let diag = diag.into_diagnostic();
+
+        match (diag.level, self.had_error) {
+            (Level::Warn, true) => {
+                self.warnings_hidden += 1;
+                return;
+            }
+
+            (Level::Error, true) => {
+                self.errors_hidden += 1;
+                return;
+            }
+
+            (Level::Error, _) => {
+                self.had_error = true;
+            }
+
+            _ => {}
+        }
+
         let _ = to_report(&diag, &self.opts).eprint(self.source_map.to_cache());
     }
 }

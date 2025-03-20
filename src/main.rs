@@ -49,6 +49,8 @@ fn main() -> ExitCode {
 
     let (_, result) = sema::process(&mut ast, &mut diag);
 
+    diag.finish();
+
     if result.is_err() {
         return ExitCode::FAILURE;
     }
