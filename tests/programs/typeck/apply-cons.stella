@@ -15,8 +15,8 @@ fn check() -> Unit {
     return cons(x, xs)
   }
 
-  fn cons-nat-and-nat-list-is-not-nat-list(x : Nat, xs : [Nat]) -> [Nat] {
-    //!~ ERROR
+  fn cons-nat-and-nat-list-is-not-bool-list(x : Nat, xs : [Nat]) -> [Bool] {
+    //! ERROR(sema::expr_ty_mismatch)
     return cons(x, xs)
   }
 

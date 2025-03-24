@@ -1,0 +1,47 @@
+language core;
+
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #pattern-ascriptions;
+extend with #nested-function-declarations;
+extend with #unit-type;
+
+extend with #references;
+
+fn check() -> Unit {
+  fn new-bool-is-ref-bool(x : Bool) -> &Bool {
+    //!~ ERROR
+    return new(x)
+  }
+
+  fn new-bool-is-not-ref-nat(x : Bool) -> &Nat {
+    //! ERROR(sema::expr_ty_mismatch)
+    return new(x)
+  }
+
+  return unit
+}
+
+fn infer(x : Bool) -> Unit {
+  //!~ ERROR
+  return match new(x) { _ as &Bool => unit }
+}
+
+fn unexpected-new-expr(x : Bool) -> Bool {
+  //! ERROR(sema::unexpected_new_expr)
+  return new(x)
+}
+
+fn illegal-args(x : Nat) -> Unit {
+  fn check() -> &Bool {
+    //! ERROR(sema::expr_ty_mismatch)
+    return new(x)
+  }
+
+  return unit
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}

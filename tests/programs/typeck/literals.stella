@@ -2,6 +2,7 @@ language core;
 
 extend with #nullary-functions, #structural-patterns, #pattern-ascriptions, #nested-function-declarations, #unit-type;
 extend with #natural-literals;
+extend with #references;
 
 fn unit-check() -> Unit {
   fn unit-is-unit() -> Unit {
@@ -86,6 +87,30 @@ fn nat-infer() -> Unit {
   }
 
   return unit
+}
+
+fn address-check() -> Unit {
+  fn address-is-ref-bool() -> &Bool {
+    //!~ ERROR
+    return <0xdeadf00d>
+  }
+
+  fn address-is-ref-nat() -> &Nat {
+    //!~ ERROR
+    return <0xdeadbeef>
+  }
+
+  fn address-is-not-unit() -> Unit {
+    //! ERROR(sema::unexpected_address_expr)
+    return <0x573114>
+  }
+
+  return unit
+}
+
+fn address-infer() -> Unit {
+  //! ERROR(sema::ambiguous_address_expr_ty)
+  return match <0x573114> { _ => unit }
 }
 
 fn main(x : Nat) -> Nat {

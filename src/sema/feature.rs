@@ -155,7 +155,7 @@ define_features! {
     Lists "list types" (ast::Extension::Lists);
 
     // References.
-    References "references";
+    References "references" (ast::Extension::References) => AddressLiterals;
     AddressLiterals "memory address literals";
 
     // Exceptions.

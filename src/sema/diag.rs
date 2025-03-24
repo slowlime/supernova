@@ -584,6 +584,27 @@ pub enum SemaDiag {
 
     #[error("expected the `main` function to have one parameter, got {actual}")]
     WrongMainParamCount { location: Location, actual: usize },
+
+    #[error("could not determine the type of a memory address literal expression")]
+    AmbiguousAddressExprTy { location: Location },
+
+    #[error("the expression has a wrong type: expected `{expected_ty}`, got a reference type")]
+    UnexpectedAddressExpr {
+        location: Location,
+        expected_ty: String,
+    },
+
+    #[error("the expression has a wrong type: expected `{expected_ty}`, got a reference type")]
+    UnexpectedNewExpr {
+        location: Location,
+        expected_ty: String,
+    },
+
+    #[error("this expression has a wrong type: expected a reference, got `{actual_ty}`")]
+    ExprTyNotReference {
+        location: Location,
+        actual_ty: String,
+    },
 }
 
 impl IntoDiagnostic for SemaDiag {
@@ -1715,6 +1736,53 @@ impl IntoDiagnostic for SemaDiag {
             } => Diagnostic::error()
                 .at(*location)
                 .with_code(code!(sema::wrong_main_param_count as "ERROR_INCORRECT_ARITY_OF_MAIN"))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .make(),
+
+            Self::AmbiguousAddressExprTy { location } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(
+                    sema::ambiguous_address_expr_ty
+                    as "ERROR_AMBIGUOUS_REFERENCE_TYPE"
+                ))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .with_note("ascribe a reference type to the expression with the `as` operator")
+                .make(),
+
+            Self::UnexpectedAddressExpr {
+                location,
+                expected_ty: _,
+            } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(
+                    sema::unexpected_address_expr
+                    as "ERROR_UNEXPECTED_MEMORY_ADDRESS"
+                ))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .make(),
+
+            Self::UnexpectedNewExpr {
+                location,
+                expected_ty: _,
+            } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(
+                    sema::unexpected_new_expr
+                    as "ERROR_UNEXPECTED_REFERENCE"
+                ))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .make(),
+
+            Self::ExprTyNotReference {
+                location,
+                actual_ty: _,
+            } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::expr_ty_not_reference as "ERROR_NOT_A_REFERENCE"))
                 .with_msg(&self)
                 .with_label(Label::primary(*location))
                 .make(),

@@ -23,6 +23,7 @@ In addition to the core language, the following extensions are also supported:
 - `#pairs`
 - `#pattern-ascriptions`
 - `#records`
+- `#references`
 - `#sequencing`
 - `#structural-patterns`
 - `#sum-types`

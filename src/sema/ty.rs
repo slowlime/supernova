@@ -22,6 +22,7 @@ impl Module<'_> {
                     TyKind::Unit => 3,
                     TyKind::Bool => 3,
                     TyKind::Nat => 3,
+                    TyKind::Ref(..) => 3,
                     TyKind::Sum(..) => 2,
                     TyKind::Fn(..) => 1,
                     TyKind::Tuple(..) => 3,
@@ -39,6 +40,8 @@ impl Module<'_> {
                     TyKind::Unit => write!(f, "Unit")?,
                     TyKind::Bool => write!(f, "Bool")?,
                     TyKind::Nat => write!(f, "Nat")?,
+
+                    TyKind::Ref(ty_id) => write!(f, "&{}", self.0.display_ty_prec(*ty_id, prec))?,
 
                     TyKind::Sum(lhs_ty_id, rhs_ty_id) => write!(
                         f,
@@ -146,6 +149,7 @@ pub enum TyKind {
     Unit,
     Bool,
     Nat,
+    Ref(TyId),
     Sum(TyId, TyId),
     Fn(TyFn),
     Tuple(TyTuple),

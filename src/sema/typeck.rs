@@ -151,6 +151,12 @@ pub enum ExpectationSource {
     BinOp {
         op_location: Location,
     },
+
+    AssignRhs {
+        op_location: Location,
+        lhs_expr_id: ExprId,
+        ty_id: TyId,
+    }
 }
 
 type ExpectedTy = (TyId, ExpectationSource);
@@ -368,6 +374,10 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 self.ty_conforms_to(lhs_ty_id, rhs_ty_id)
             }
 
+            (&TyKind::Ref(lhs_ty_id), &TyKind::Ref(rhs_ty_id)) => {
+                self.ty_conforms_to(lhs_ty_id, rhs_ty_id)
+            }
+
             (
                 // why not `_`?
                 // this makes sure I don't forget to fix this if I add new types.
@@ -380,7 +390,8 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 | TyKind::Tuple(..)
                 | TyKind::Record(..)
                 | TyKind::Variant(..)
-                | TyKind::List(..),
+                | TyKind::List(..)
+                | TyKind::Ref(..),
                 _,
             ) => false,
         }
@@ -777,6 +788,19 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                         .with_msg("expected because it's an operand to this operator"),
                 );
             }
+
+            ExpectationSource::AssignRhs { op_location, lhs_expr_id, ty_id } => {
+                let lhs_expr = self.m.exprs[lhs_expr_id].def;
+
+                diag.add_label(
+                    Label::secondary(op_location)
+                        .with_msg("expected because it's an operand to an assignment expression")
+                );
+                diag.add_label(Label::secondary(lhs_expr.location).with_msg(format!(
+                    "this expression has the type `{}`",
+                    self.m.display_ty(ty_id),
+                )));
+            }
         }
 
         diag
@@ -917,7 +941,13 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 self.m.ty_exprs[ty_expr.id].ty_id = self.m.well_known_tys.nat;
             }
 
-            ast::TyExprKind::Ref(_) => unimplemented!(),
+            ast::TyExprKind::Ref(t) => {
+                result = result.and(self.typeck_ty_expr(&t.ty_expr));
+
+                self.m.ty_exprs[ty_expr.id].ty_id = self.m.add_ty(Ty {
+                    kind: TyKind::Ref(self.m.ty_exprs[t.ty_expr.id].ty_id),
+                });
+            }
 
             ast::TyExprKind::Sum(t) => {
                 result = result.and(self.typeck_ty_expr(&t.lhs));
@@ -1037,7 +1067,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             ast::ExprKind::Bool(e) => self.typeck_expr_bool(expr.id, e, expected_ty),
             ast::ExprKind::Unit(e) => self.typeck_expr_unit(expr.id, e, expected_ty),
             ast::ExprKind::Int(e) => self.typeck_expr_int(expr.id, e, expected_ty),
-            ast::ExprKind::Address(_) => unimplemented!(),
+            ast::ExprKind::Address(e) => self.typeck_expr_address(expr.id, e, expected_ty),
             ast::ExprKind::Name(e) => self.typeck_expr_name(expr.id, e, expected_ty),
             ast::ExprKind::Field(e) => self.typeck_expr_field(expr.id, e, expected_ty),
             ast::ExprKind::Panic(_) => unimplemented!(),
@@ -1134,6 +1164,41 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         }
 
         self.m.exprs[expr_id].ty_id = self.m.well_known_tys.nat;
+
+        Ok(())
+    }
+
+    fn typeck_expr_address(
+        &mut self,
+        expr_id: ExprId,
+        _expr: &ast::ExprAddress,
+        expected_ty: Option<ExpectedTy>,
+    ) -> Result {
+        let Some((expected_ty_id, source)) = expected_ty else {
+            self.diag.emit(SemaDiag::AmbiguousAddressExprTy {
+                location: self.m.exprs[expr_id].def.location,
+            });
+
+            return Err(());
+        };
+
+        if expected_ty_id == self.m.well_known_tys.error {
+            return Ok(());
+        }
+
+        let TyKind::Ref(_) = self.m.tys[expected_ty_id].kind else {
+            self.diag.emit(self.augment_error_with_expectation(
+                SemaDiag::UnexpectedAddressExpr {
+                    location: self.m.exprs[expr_id].def.location,
+                    expected_ty: self.m.display_ty(expected_ty_id).to_string(),
+                },
+                source,
+            ));
+
+            return Err(());
+        };
+
+        self.m.exprs[expr_id].ty_id = expected_ty_id;
 
         Ok(())
     }
@@ -2515,8 +2580,80 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         let _ = expected_ty;
 
         match expr.op {
-            ast::UnOp::New => unimplemented!(),
-            ast::UnOp::Deref => unimplemented!(),
+            ast::UnOp::New => {
+                if let Some((expected_ty_id, source)) = expected_ty {
+                    let pointee_ty_id = if expected_ty_id == self.m.well_known_tys.error {
+                        self.m.well_known_tys.error
+                    } else {
+                        match self.m.tys[expected_ty_id].kind {
+                            TyKind::Ref(ty_id) => ty_id,
+
+                            _ => {
+                                self.diag.emit(self.augment_error_with_expectation(
+                                    SemaDiag::UnexpectedNewExpr {
+                                        location: self.m.exprs[expr_id].def.location,
+                                        expected_ty: self.m.display_ty(expected_ty_id).to_string(),
+                                    },
+                                    source.clone(),
+                                ));
+
+                                self.m.well_known_tys.error
+                            }
+                        }
+                    };
+
+                    let result = self.typeck_expr(&expr.rhs, Some((pointee_ty_id, source)));
+                    self.m.exprs[expr_id].ty_id = expected_ty_id;
+
+                    result
+                } else {
+                    let result = self.typeck_expr(&expr.rhs, None);
+                    let pointee_ty_id = self.m.exprs[expr.rhs.id].ty_id;
+
+                    self.m.exprs[expr_id].ty_id = self.m.add_ty(Ty {
+                        kind: TyKind::Ref(pointee_ty_id),
+                    });
+
+                    result
+                }
+            }
+
+            ast::UnOp::Deref => {
+                if let Some((expected_ty_id, source)) = expected_ty {
+                    if expected_ty_id == self.m.well_known_tys.error {
+                        return Ok(());
+                    }
+
+                    let arg_ty_id = self.m.add_ty(Ty {
+                        kind: TyKind::Ref(expected_ty_id),
+                    });
+
+                    let result = self.typeck_expr(&expr.rhs, Some((arg_ty_id, source)));
+                    self.m.exprs[expr_id].ty_id = expected_ty_id;
+
+                    result
+                } else {
+                    self.typeck_expr(&expr.rhs, None)?;
+                    let arg_ty_id = self.m.exprs[expr.rhs.id].ty_id;
+
+                    let ty_id = if arg_ty_id == self.m.well_known_tys.error {
+                        self.m.well_known_tys.error
+                    } else if let TyKind::Ref(ty_id) = self.m.tys[arg_ty_id].kind {
+                        ty_id
+                    } else {
+                        self.diag.emit(SemaDiag::ExprTyNotReference {
+                            location: expr.rhs.location,
+                            actual_ty: self.m.display_ty(arg_ty_id).to_string(),
+                        });
+
+                        return Err(());
+                    };
+
+                    self.m.exprs[expr_id].ty_id = ty_id;
+
+                    Ok(())
+                }
+            }
         }
     }
 
@@ -2625,7 +2762,49 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 result
             }
 
-            ast::BinOp::Assign => unimplemented!(),
+            ast::BinOp::Assign => {
+                let mut result = Ok(());
+                result = result.and(self.typeck_expr(&expr.lhs, None));
+                let ref_ty_id = self.m.exprs[expr.lhs.id].ty_id;
+
+                let pointee_ty_id = if ref_ty_id == self.m.well_known_tys.error {
+                    self.m.well_known_tys.error
+                } else if let TyKind::Ref(pointee_ty_id) = self.m.tys[ref_ty_id].kind {
+                    pointee_ty_id
+                } else {
+                    self.diag.emit(SemaDiag::ExprTyNotReference {
+                        location: expr.lhs.location,
+                        actual_ty: self.m.display_ty(ref_ty_id).to_string(),
+                    });
+
+                    return Err(());
+                };
+
+                result = result.and(self.typeck_expr(&expr.rhs, Some((
+                    pointee_ty_id,
+                    ExpectationSource::AssignRhs {
+                        op_location: expr.token.as_ref().map(|token| token.span).into(),
+                        lhs_expr_id: expr.lhs.id,
+                        ty_id: ref_ty_id,
+                    },
+                ))));
+
+                self.m.exprs[expr_id].ty_id = self.m.well_known_tys.unit;
+
+                if let Some((expected_ty_id, source)) = expected_ty {
+                    if !self.ty_conforms_to(self.m.well_known_tys.unit, expected_ty_id) {
+                        result = Err(());
+                        self.diag.emit(self.make_expr_ty_error(
+                            expr_id,
+                            self.m.well_known_tys.unit,
+                            expected_ty_id,
+                            source,
+                        ));
+                    }
+                }
+
+                result
+            }
         }
     }
 

@@ -40,6 +40,7 @@ pub enum Extension {
     Pairs,
     PatternAscriptions,
     Records,
+    References,
     Sequencing,
     StructuralPatterns,
     SumTypes,
