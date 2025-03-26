@@ -1,0 +1,41 @@
+// Tests for types that do not have their value constructors in patterns.
+//! PASS
+language core;
+
+extend with #nullary-functions;
+extend with #nested-function-declarations;
+extend with #structural-patterns;
+extend with #unit-type;
+extend with #type-ascriptions;
+extend with #pattern-ascriptions;
+
+extend with #references;
+extend with #panic;
+
+fn test-ref(x : &Nat) -> Unit {
+  return match x {
+    _ as &Nat => unit
+  }
+}
+
+fn test-address() -> Unit {
+  return match <0x573114> as &Bool {
+    _ as &Bool => unit
+  }
+}
+
+fn test-fn() -> Unit {
+  return match fn() { return unit } {
+    _ as fn() -> Unit => unit
+  }
+}
+
+fn test-panic() -> Unit {
+  return match panic! as Bool {
+    _ as Bool => unit
+  }
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}

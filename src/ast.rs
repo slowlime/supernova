@@ -38,6 +38,7 @@ pub enum Extension {
     NullaryFunctions,
     NullaryVariantLabels,
     Pairs,
+    Panic,
     PatternAscriptions,
     Records,
     References,

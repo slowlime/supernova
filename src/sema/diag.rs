@@ -605,6 +605,9 @@ pub enum SemaDiag {
         location: Location,
         actual_ty: String,
     },
+
+    #[error("could not determine the type of a panic expression")]
+    AmbiguousPanicExprTy { location: Location },
 }
 
 impl IntoDiagnostic for SemaDiag {
@@ -1785,6 +1788,17 @@ impl IntoDiagnostic for SemaDiag {
                 .with_code(code!(sema::expr_ty_not_reference as "ERROR_NOT_A_REFERENCE"))
                 .with_msg(&self)
                 .with_label(Label::primary(*location))
+                .make(),
+
+            Self::AmbiguousPanicExprTy { location } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(
+                    sema::ambiguous_panic_expr_ty
+                    as "ERROR_AMBIGUOUS_PANIC_TYPE"
+                ))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .with_note("ascribe a type to the expression with the `as` operator")
                 .make(),
         }
     }

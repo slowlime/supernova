@@ -155,14 +155,14 @@ define_features! {
     Lists "list types" (ast::Extension::Lists);
 
     // References.
-    References "references" (ast::Extension::References) => AddressLiterals;
     AddressLiterals "memory address literals";
+    References "references" (ast::Extension::References) => AddressLiterals;
 
     // Exceptions.
     ExceptionTypeDeclaration "exception type declaration";
     OpenVariantExceptions "open variant exceptions";
     Exceptions "exceptions";
-    Panic "panics";
+    Panic "panics" (ast::Extension::Panic);
 
     // Subtyping.
     Subtyping "subtyping";

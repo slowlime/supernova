@@ -681,8 +681,10 @@ impl<'ast, D: DiagCtx> DefaultVisitor<'ast, 'ast> for Walker<'ast, '_, '_, D> {
             | ast::ExprKind::Bool(_)
             | ast::ExprKind::Unit(_)
             | ast::ExprKind::Int(_)
+            | ast::ExprKind::Address(_)
             | ast::ExprKind::Name(_)
             | ast::ExprKind::Field(_)
+            | ast::ExprKind::Panic(_)
             | ast::ExprKind::Fix(_)
             | ast::ExprKind::Apply(_)
             | ast::ExprKind::Ascription(_)
@@ -727,8 +729,6 @@ impl<'ast, D: DiagCtx> DefaultVisitor<'ast, 'ast> for Walker<'ast, '_, '_, D> {
                 }
             }
 
-            ast::ExprKind::Address(_) => unimplemented!(),
-            ast::ExprKind::Panic(_) => unimplemented!(),
             ast::ExprKind::Throw(_) => unimplemented!(),
             ast::ExprKind::TryCatch(_) => unimplemented!(),
             ast::ExprKind::TryCast(_) => unimplemented!(),

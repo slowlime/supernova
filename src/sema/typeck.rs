@@ -1070,7 +1070,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             ast::ExprKind::Address(e) => self.typeck_expr_address(expr.id, e, expected_ty),
             ast::ExprKind::Name(e) => self.typeck_expr_name(expr.id, e, expected_ty),
             ast::ExprKind::Field(e) => self.typeck_expr_field(expr.id, e, expected_ty),
-            ast::ExprKind::Panic(_) => unimplemented!(),
+            ast::ExprKind::Panic(e) => self.typeck_expr_panic(expr.id, e, expected_ty),
             ast::ExprKind::Throw(_) => unimplemented!(),
             ast::ExprKind::TryCatch(_) => unimplemented!(),
             ast::ExprKind::TryCast(_) => unimplemented!(),
@@ -1331,6 +1331,25 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         }
 
         self.m.exprs[expr_id].ty_id = ty_id;
+
+        Ok(())
+    }
+
+    fn typeck_expr_panic(
+        &mut self,
+        expr_id: ExprId,
+        _expr: &ast::ExprPanic,
+        expected_ty: Option<ExpectedTy>,
+    ) -> Result {
+        let Some((expected_ty_id, _source)) = expected_ty else {
+            self.diag.emit(SemaDiag::AmbiguousPanicExprTy {
+                location: self.m.exprs[expr_id].def.location,
+            });
+
+            return Err(());
+        };
+
+        self.m.exprs[expr_id].ty_id = expected_ty_id;
 
         Ok(())
     }
