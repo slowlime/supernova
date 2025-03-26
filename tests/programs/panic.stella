@@ -1,0 +1,260 @@
+// panic! in every possible expression.
+//! PASS
+language core;
+
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #pattern-ascriptions;
+extend with #nested-function-declarations;
+extend with #unit-type;
+extend with #type-ascriptions;
+extend with #let-patterns;
+
+extend with #sum-types;
+extend with #tuples;
+extend with #records;
+extend with #fixpoint-combinator;
+extend with #lists;
+extend with #logical-operators;
+extend with #variants;
+extend with #sequencing;
+extend with #references;
+extend with #arithmetic-operators;
+extend with #comparison-operators;
+extend with #let-bindings;
+extend with #let-many-bindings;
+extend with #letrec-bindings;
+extend with #letrec-many-bindings;
+
+extend with #panic;
+
+fn decl-fn() -> Unit {
+  return panic!
+}
+
+fn expr-tuple-field() -> Unit {
+  return (panic! as {Unit}).1
+}
+
+fn expr-record-field() -> Unit {
+  return (panic! as {x : Unit}).x
+}
+
+/*
+fn expr-throw() -> Unit {
+  return throw (panic! as Bool)
+}
+*/
+
+/*
+fn expr-try-catch() -> Unit {
+  return try {
+    panic! as Unit
+  } catch {
+    _ => panic! as Unit
+  }
+}
+*/
+
+/*
+fn expr-try-with() -> Unit {
+  return try {
+    panic! as Unit
+  } with {
+    panic! as Unit
+  }
+}
+*/
+
+/*
+fn expr-try-cast() -> Unit {
+  return try {
+    panic! as Unit
+  } cast as Unit {
+    _ => panic! as Unit
+  } with {
+    panic! as Unit
+  }
+}
+*/
+
+fn expr-fix() -> Unit {
+  return fix(panic! as (fn(Unit) -> Unit))
+}
+
+fn expr-apply() -> Unit {
+  return (panic! as fn() -> Unit)()
+}
+
+fn expr-apply-inl() -> Unit {
+  return match inl(panic!) as (Bool + Nat) {
+    inl(_) => unit
+  | inr(_) => unit
+  }
+}
+
+fn expr-apply-inr() -> Unit {
+  return match inr(panic!) as (Bool + Nat) {
+    inl(_) => unit
+  | inr(_) => unit
+  }
+}
+
+fn expr-apply-cons() -> Unit {
+  fn arg-1() -> [Unit] {
+    return cons(panic!, [])
+  }
+
+  fn arg-2() -> [Unit] {
+    return cons(unit, panic!)
+  }
+
+  return unit
+}
+
+fn expr-apply-list-head() -> Unit {
+  return List::head(panic!)
+}
+
+fn expr-apply-list-is-empty() -> Bool {
+  return List::isempty(panic! as [Unit])
+}
+
+fn expr-apply-list-tail() -> [Unit] {
+  return List::tail(panic!)
+}
+
+fn expr-apply-succ() -> Nat {
+  return succ(panic!)
+}
+
+fn expr-apply-not() -> Bool {
+  return not(panic!)
+}
+
+fn expr-apply-nat-pred() -> Nat {
+  return Nat::pred(panic!)
+}
+
+fn expr-apply-nat-is-zero() -> Bool {
+  return Nat::iszero(panic!)
+}
+
+fn expr-apply-nat-rec() -> Unit {
+  fn arg-1() -> Unit {
+    return Nat::rec(panic!, unit, fn(x : Nat) { return fn(y : Unit) { return y } })
+  }
+
+  fn arg-2() -> Unit {
+    return Nat::rec(0, panic!, fn(x : Nat) { return fn(y : Unit) { return y } })
+  }
+
+  fn arg-3() -> Unit {
+    return Nat::rec(0, unit, panic!)
+  }
+
+  return unit
+}
+
+fn expr-ascription() -> Unit {
+  return match panic! as Bool {
+    _ as Bool => unit
+  }
+}
+
+/*
+fn expr-cast() -> Bool {
+  return (panic! as Bool) cast as Bool
+}
+*/
+
+fn expr-fn() -> fn(Bool) -> Unit {
+  return fn(x : Bool) {
+    return panic!
+  }
+}
+
+fn expr-tuple() -> {Nat, Bool} {
+  return {panic!, panic!}
+}
+
+fn expr-record() -> {x : Nat, y : Bool} {
+  return {x = panic!, y = panic!}
+}
+
+fn expr-variant() -> <|x : Bool|> {
+  return <|x = panic!|>
+}
+
+fn expr-match() -> Unit {
+  return match panic! as Bool {
+    _ => panic!
+  }
+}
+
+fn expr-list() -> [Unit] {
+  return [panic!, panic!, panic!]
+}
+
+fn expr-if() -> Unit {
+  return if panic!
+    then panic!
+    else panic!
+}
+
+fn expr-seq() -> Unit {
+  return panic!; panic!; panic!
+}
+
+fn expr-let() -> Unit {
+  return let
+      x = panic! as Bool,
+      y = panic! as Unit
+    in
+    panic!
+}
+
+fn expr-letrec() -> Unit {
+  return letrec
+      x as Bool = panic!,
+      y as Unit = panic!
+    in
+    panic!
+}
+
+fn expr-new() -> &Bool {
+  return new(panic!)
+}
+
+fn expr-deref() -> Unit {
+  return *panic!
+}
+
+fn expr-add() -> Nat {
+  return panic! + panic!
+}
+
+fn expr-or() -> Bool {
+  return panic! or not(panic!)
+}
+
+fn expr-and() -> Bool {
+  return panic! and panic!
+}
+
+fn expr-lt() -> Bool {
+  return panic! < panic!
+}
+
+fn expr-eq() -> Bool {
+  return panic! == panic!
+}
+
+fn expr-assign() -> Unit {
+  return (panic! as &Bool) := panic!
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}

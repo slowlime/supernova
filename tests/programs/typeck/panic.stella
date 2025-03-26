@@ -1,0 +1,38 @@
+language core;
+
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #pattern-ascriptions;
+extend with #nested-function-declarations;
+extend with #unit-type;
+
+extend with #panic;
+
+fn check() -> Unit {
+  fn panic-is-bool() -> Bool {
+    //!~ ERROR
+    return panic!
+  }
+
+  fn panic-is-nat() -> Nat {
+    //!~ ERROR
+    return panic!
+  }
+
+  fn panic-is-fn() -> fn(Nat) -> fn(Bool) -> Nat {
+    //!~ ERROR
+    return panic!
+  }
+
+  return unit
+}
+
+fn infer() -> Unit {
+  //! ERROR(sema::ambiguous_panic_expr_ty)
+  return match panic! { _ => unit }
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}

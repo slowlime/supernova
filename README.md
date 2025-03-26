@@ -21,6 +21,7 @@ In addition to the core language, the following extensions are also supported:
 - `#nullary-functions`
 - `#nullary-variant-labels`
 - `#pairs`
+- `#panic`
 - `#pattern-ascriptions`
 - `#records`
 - `#references`
