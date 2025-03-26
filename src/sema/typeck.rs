@@ -156,7 +156,7 @@ pub enum ExpectationSource {
         op_location: Location,
         lhs_expr_id: ExprId,
         ty_id: TyId,
-    }
+    },
 }
 
 type ExpectedTy = (TyId, ExpectationSource);
@@ -789,12 +789,16 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 );
             }
 
-            ExpectationSource::AssignRhs { op_location, lhs_expr_id, ty_id } => {
+            ExpectationSource::AssignRhs {
+                op_location,
+                lhs_expr_id,
+                ty_id,
+            } => {
                 let lhs_expr = self.m.exprs[lhs_expr_id].def;
 
                 diag.add_label(
                     Label::secondary(op_location)
-                        .with_msg("expected because it's an operand to an assignment expression")
+                        .with_msg("expected because it's an operand to an assignment expression"),
                 );
                 diag.add_label(Label::secondary(lhs_expr.location).with_msg(format!(
                     "this expression has the type `{}`",
@@ -1614,6 +1618,29 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 }
 
                 ast::Builtin::ListTail => {
+                    let mut result = Ok(());
+
+                    'ty_check: {
+                        if let Some((expected_ty_id, ref source)) = expected_ty {
+                            if expected_ty_id == self.m.well_known_tys.error {
+                                return Ok(());
+                            }
+
+                            let TyKind::List(_) = self.m.tys[expected_ty_id].kind else {
+                                result = Err(());
+                                break 'ty_check;
+                            };
+
+                            return self.typeck_application(
+                                expr_id,
+                                vec![Some((expected_ty_id, source.clone()))],
+                                expected_ty_id,
+                                &expr.args,
+                                Some((expected_ty_id, source.clone())),
+                            );
+                        }
+                    }
+
                     self.check_application_arg_count(expr_id, expr.args.len(), 1)?;
                     self.typeck_expr(&expr.args[0], None)?;
                     let arg_ty_id = self.m.exprs[expr.args[0].id].ty_id;
@@ -1646,7 +1673,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
 
                     self.m.exprs[expr_id].ty_id = arg_ty_id;
 
-                    Ok(())
+                    result
                 }
 
                 ast::Builtin::Succ | ast::Builtin::NatPred => self.typeck_application(

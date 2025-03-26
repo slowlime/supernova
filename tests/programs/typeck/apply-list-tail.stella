@@ -28,6 +28,11 @@ fn infer() -> Unit {
   return match List::tail([0]) { _ as [Nat] => unit }
 }
 
+fn arg-uses-expectation() -> [Unit] {
+  //!~ ERROR
+  return List::tail([])
+}
+
 fn illegal-args() -> Unit {
   fn check() -> Unit {
     fn wrong-list-type() -> Bool {
