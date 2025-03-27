@@ -5,6 +5,7 @@ use derive_more::Display;
 use fxhash::{FxHashMap, FxHashSet};
 
 use crate::ast;
+use crate::diag::Level;
 use crate::location::Location;
 
 macro_rules! to_option {
@@ -112,7 +113,7 @@ macro_rules! define_features {
 
         impl Display for FeatureKind {
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                write!(f, "{}", self.to_str())
+                write!(f, "\"{}\"", self.to_str())
             }
         }
     };
@@ -159,9 +160,11 @@ define_features! {
     References "references" (ast::Extension::References) => AddressLiterals;
 
     // Exceptions.
-    ExceptionTypeDeclaration "exception type declaration";
-    OpenVariantExceptions "open variant exceptions";
-    Exceptions "exceptions";
+    ExceptionTypeDeclaration "exception type declaration"
+        (ast::Extension::ExceptionTypeDeclaration);
+    OpenVariantExceptions "open variant exceptions" (ast::Extension::OpenVariantExceptions);
+    Exceptions "exceptions" (ast::Extension::Exceptions);
+    ThrowsAnnotations "throw annotation in function declarations";
     Panic "panics" (ast::Extension::Panic);
 
     // Subtyping.
@@ -169,6 +172,7 @@ define_features! {
     TopType "top type" => Subtyping;
     BottomType "bottom type" => Subtyping;
     CastExprs "cast expressions";
+    TryCastExprs "try-cast expressions";
     CastPatterns "cast patterns";
 
     // Recursive types.
@@ -189,15 +193,21 @@ pub struct Feature {
 }
 
 impl Feature {
-    pub const MUTUALLY_EXCLUSIVE_FEATURES: &[&[FeatureKind]] = &[
-        &[
-            FeatureKind::EquirecursiveTypes,
-            FeatureKind::IsorecursiveTypes,
-        ],
-        &[
-            FeatureKind::ExceptionTypeDeclaration,
-            FeatureKind::OpenVariantExceptions,
-        ],
+    pub const MUTUALLY_EXCLUSIVE_FEATURES: &[(Level, &[FeatureKind])] = &[
+        (
+            Level::Error,
+            &[
+                FeatureKind::EquirecursiveTypes,
+                FeatureKind::IsorecursiveTypes,
+            ],
+        ),
+        (
+            Level::Warn,
+            &[
+                FeatureKind::ExceptionTypeDeclaration,
+                FeatureKind::OpenVariantExceptions,
+            ],
+        ),
     ];
 
     pub fn from_extension(extension: ast::Extension, location: Location) -> Option<Self> {

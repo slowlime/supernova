@@ -50,8 +50,8 @@ pub(crate) use code;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Level {
-    Error,
     Warn,
+    Error,
 }
 
 #[derive(Debug, Clone)]
@@ -85,6 +85,16 @@ impl Diagnostic {
 
     pub fn add_note(&mut self, note: impl Display) {
         self.notes.push(note.to_string());
+    }
+
+    pub fn set_level(&mut self, level: Level) {
+        self.level = level;
+    }
+
+    pub fn with_level(mut self, level: Level) -> Self {
+        self.set_level(level);
+
+        self
     }
 
     pub fn build(level: Level) -> DiagnosticBuilder<false, false, false> {

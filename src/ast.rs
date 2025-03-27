@@ -24,6 +24,8 @@ pub struct Program<'src> {
 pub enum Extension {
     ArithmeticOperators,
     ComparisonOperators,
+    ExceptionTypeDeclaration,
+    Exceptions,
     FixpointCombinator,
     LetBindings,
     LetManyBindings,
@@ -37,6 +39,7 @@ pub enum Extension {
     NestedFunctionDeclarations,
     NullaryFunctions,
     NullaryVariantLabels,
+    OpenVariantExceptions,
     Pairs,
     Panic,
     PatternAscriptions,

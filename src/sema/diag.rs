@@ -633,15 +633,25 @@ impl IntoDiagnostic for SemaDiag {
                     .at(*location)
                     .with_code(code!(sema::conflicting_features))
                     .with_msg(&self)
-                    .with_label(Label::primary(*location))
                     .make();
+
+                let mut has_primary = false;
 
                 for (feature, reason) in features {
                     match reason {
-                        EnableReason::Extension(location @ Location::UserCode(_)) => diag
-                            .add_label(Label::secondary(*location).with_msg(format!(
-                                "the feature {feature} was enabled by the extension here"
-                            ))),
+                        EnableReason::Extension(ext_location @ Location::UserCode(_)) => diag
+                            .add_label(
+                                (if ext_location == location {
+                                    has_primary = true;
+
+                                    Label::primary
+                                } else {
+                                    Label::secondary
+                                })(*ext_location)
+                                .with_msg(format!(
+                                    "the feature {feature} was enabled by the extension here"
+                                )),
+                            ),
 
                         EnableReason::Extension(_) => diag
                             .add_note(format!("the feature {feature} was enabled by an extension")),
@@ -650,6 +660,10 @@ impl IntoDiagnostic for SemaDiag {
                             "the feature {feature} was enabled as a dependency of the feature {f}"
                         )),
                     }
+                }
+
+                if !has_primary {
+                    diag.add_label(Label::primary(*location));
                 }
 
                 diag

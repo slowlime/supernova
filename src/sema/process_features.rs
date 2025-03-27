@@ -1,7 +1,7 @@
 use fxhash::FxHashSet;
 
 use crate::ast;
-use crate::diag::{DiagCtx, Diagnostic, IntoDiagnostic};
+use crate::diag::{DiagCtx, Diagnostic, IntoDiagnostic, Level};
 use crate::location::Location;
 use crate::util::format_iter;
 
@@ -22,7 +22,7 @@ struct Pass<'ast, 'm, D> {
 fn make_feature_disabled_error(diag: impl IntoDiagnostic, feature: FeatureKind) -> Diagnostic {
     let mut diag = diag
         .into_diagnostic()
-        .with_note(format!("feature \"{feature}\" is disabled"));
+        .with_note(format!("feature {feature} is disabled"));
 
     let extensions = feature
         .extension()
@@ -85,7 +85,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
     fn check_feature_conflicts(&mut self) -> Result {
         let mut result = Ok(());
 
-        for &conflict in Feature::MUTUALLY_EXCLUSIVE_FEATURES {
+        for &(level, conflict) in Feature::MUTUALLY_EXCLUSIVE_FEATURES {
             if conflict
                 .iter()
                 .filter(|&&feature| self.m.is_feature_enabled(feature))
@@ -109,14 +109,21 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                     EnableReason::Extension(location) => Some(*location),
                     _ => None,
                 })
-                .min()
+                .max()
                 .unwrap_or(self.m.location);
 
-            self.diag.emit(SemaDiag::ConflictingFeatures {
-                location,
-                features: conflicting_features,
-            });
-            result = Err(());
+            self.diag.emit(
+                SemaDiag::ConflictingFeatures {
+                    location,
+                    features: conflicting_features,
+                }
+                .into_diagnostic()
+                .with_level(level),
+            );
+
+            if level >= Level::Error {
+                result = Err(());
+            }
         }
 
         result
@@ -184,7 +191,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 }
 
                 if (decl.throws_kw.is_some() || !decl.throws.is_empty())
-                    && !self.m.is_feature_enabled(FeatureKind::Exceptions)
+                    && !self.m.is_feature_enabled(FeatureKind::ThrowsAnnotations)
                 {
                     result = Err(());
                     self.diag.emit(make_feature_disabled_error(
@@ -196,7 +203,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                                 .map(|token| token.span)
                                 .into(),
                         },
-                        FeatureKind::Exceptions,
+                        FeatureKind::ThrowsAnnotations,
                     ));
                 }
 
@@ -244,23 +251,33 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             }
 
             ast::DeclKind::ExceptionType(_) => {
-                result = Err(());
-                self.diag.emit(make_feature_disabled_error(
-                    SemaDiag::ExceptionTyDeclNotAllowed {
-                        location: def.location,
-                    },
-                    FeatureKind::ExceptionTypeDeclaration,
-                ));
+                if !self
+                    .m
+                    .is_feature_enabled(FeatureKind::ExceptionTypeDeclaration)
+                {
+                    result = Err(());
+                    self.diag.emit(make_feature_disabled_error(
+                        SemaDiag::ExceptionTyDeclNotAllowed {
+                            location: def.location,
+                        },
+                        FeatureKind::ExceptionTypeDeclaration,
+                    ));
+                }
             }
 
             ast::DeclKind::ExceptionVariant(_) => {
-                result = Err(());
-                self.diag.emit(make_feature_disabled_error(
-                    SemaDiag::ExceptionVariantDeclNotAllowed {
-                        location: def.location,
-                    },
-                    FeatureKind::OpenVariantExceptions,
-                ));
+                if !self
+                    .m
+                    .is_feature_enabled(FeatureKind::OpenVariantExceptions)
+                {
+                    result = Err(());
+                    self.diag.emit(make_feature_disabled_error(
+                        SemaDiag::ExceptionVariantDeclNotAllowed {
+                            location: def.location,
+                        },
+                        FeatureKind::OpenVariantExceptions,
+                    ));
+                }
             }
         }
 
@@ -578,7 +595,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 }
             }
 
-            ast::ExprKind::TryCast(_) | ast::ExprKind::Cast(_) => {
+            ast::ExprKind::Cast(_) => {
                 if !self.m.is_feature_enabled(FeatureKind::CastExprs) {
                     result = Err(());
                     self.diag.emit(make_feature_disabled_error(
@@ -586,6 +603,18 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                             location: def.location,
                         },
                         FeatureKind::CastExprs,
+                    ));
+                }
+            }
+
+            ast::ExprKind::TryCast(_) => {
+                if !self.m.is_feature_enabled(FeatureKind::TryCastExprs) {
+                    result = Err(());
+                    self.diag.emit(make_feature_disabled_error(
+                        SemaDiag::CastExprNotAllowed {
+                            location: def.location,
+                        },
+                        FeatureKind::TryCastExprs,
                     ));
                 }
             }
