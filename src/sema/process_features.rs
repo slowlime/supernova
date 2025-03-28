@@ -1,7 +1,7 @@
 use fxhash::FxHashSet;
 
 use crate::ast;
-use crate::diag::{DiagCtx, Diagnostic, IntoDiagnostic, Level};
+use crate::diag::{DiagCtx, Diagnostic, IntoDiagnostic};
 use crate::location::Location;
 use crate::util::format_iter;
 
@@ -85,7 +85,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
     fn check_feature_conflicts(&mut self) -> Result {
         let mut result = Ok(());
 
-        for &(level, conflict) in Feature::MUTUALLY_EXCLUSIVE_FEATURES {
+        for &conflict in Feature::MUTUALLY_EXCLUSIVE_FEATURES {
             if conflict
                 .iter()
                 .filter(|&&feature| self.m.is_feature_enabled(feature))
@@ -112,18 +112,11 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 .max()
                 .unwrap_or(self.m.location);
 
-            self.diag.emit(
-                SemaDiag::ConflictingFeatures {
-                    location,
-                    features: conflicting_features,
-                }
-                .into_diagnostic()
-                .with_level(level),
-            );
-
-            if level >= Level::Error {
-                result = Err(());
-            }
+            result = Err(());
+            self.diag.emit(SemaDiag::ConflictingFeatures {
+                location,
+                features: conflicting_features,
+            });
         }
 
         result
@@ -583,7 +576,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 }
             }
 
-            ast::ExprKind::TryCatch(_) => {
+            ast::ExprKind::Try(_) => {
                 if !self.m.is_feature_enabled(FeatureKind::Exceptions) {
                     result = Err(());
                     self.diag.emit(make_feature_disabled_error(

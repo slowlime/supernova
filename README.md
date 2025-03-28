@@ -7,6 +7,8 @@ In addition to the core language, the following extensions are also supported:
 
 - `#arithmetic-operators`
 - `#comparison-operators`
+- `#exception-type-declaration`
+- `#exceptions`
 - `#fixpoint-combinator`
 - `#let-bindings`
 - `#let-many-bindings`
@@ -20,6 +22,7 @@ In addition to the core language, the following extensions are also supported:
 - `#nested-function-declarations`
 - `#nullary-functions`
 - `#nullary-variant-labels`
+- `#open-variant-exceptions`
 - `#pairs`
 - `#panic`
 - `#pattern-ascriptions`

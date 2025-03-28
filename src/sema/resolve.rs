@@ -6,7 +6,9 @@ use crate::ast;
 use crate::ast::visit::{AstRecurse, Visitor};
 use crate::diag::DiagCtx;
 
-use super::{BindingId, BindingKind, DeclId, Module, Namespace, Result, Scope, ScopeId, SemaDiag};
+use super::{
+    BindingId, BindingKind, DeclId, ExcTyDecl, Module, Namespace, Result, Scope, ScopeId, SemaDiag,
+};
 
 impl Module<'_> {
     pub(super) fn resolve(&mut self, diag: &mut impl DiagCtx) -> Result {
@@ -76,6 +78,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         let mut result = Ok(());
         let mut unprocessed = self.m.root_decl_ids().collect::<Vec<_>>();
         // so that diagnostics refer to declarations in the correct order.
+        // exception type resolution also relies on traversing in program order.
         unprocessed.reverse();
 
         while let Some(decl_id) = unprocessed.pop() {
@@ -120,8 +123,47 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             }
 
             ast::DeclKind::TypeAlias(_) => unimplemented!(),
-            ast::DeclKind::ExceptionType(_) => unimplemented!(),
-            ast::DeclKind::ExceptionVariant(_) => unimplemented!(),
+
+            ast::DeclKind::ExceptionType(_) => match self.m.exc_ty_decl {
+                ExcTyDecl::None => {
+                    self.m.exc_ty_decl = ExcTyDecl::Decl(decl_id);
+                }
+
+                ExcTyDecl::OpenVariantTy { .. } => unreachable!(),
+
+                ExcTyDecl::Decl(prev_decl_id) => {
+                    result = Err(());
+                    self.diag.emit(SemaDiag::DuplicateExceptionTyDecl {
+                        location: def.location,
+                        prev_location: self.m.decls[prev_decl_id].def.location,
+                    });
+                }
+            },
+
+            ast::DeclKind::ExceptionVariant(decl) => match &mut self.m.exc_ty_decl {
+                ExcTyDecl::None => {
+                    let elems = vec![decl_id];
+                    let mut fields = FxHashMap::default();
+                    fields.insert(decl.name.as_str(), 0);
+                    self.m.exc_ty_decl = ExcTyDecl::OpenVariantTy { fields, elems };
+                }
+
+                ExcTyDecl::OpenVariantTy { fields, elems } => {
+                    let idx = elems.len();
+                    elems.push(decl_id);
+
+                    if let Some(prev_field_idx) = fields.insert(decl.name.as_str(), idx) {
+                        result = Err(());
+                        self.diag.emit(SemaDiag::DuplicateVariantTyField {
+                            name: decl.name.as_str().into(),
+                            location: def.location,
+                            prev_location: self.m.decls[elems[prev_field_idx]].def.location,
+                        });
+                    }
+                }
+
+                ExcTyDecl::Decl(_) => unreachable!(),
+            },
         }
 
         result
@@ -272,8 +314,8 @@ impl<'ast, D: DiagCtx> Visitor<'ast, 'ast> for Walker<'ast, '_, '_, D> {
             }
 
             ast::DeclKind::TypeAlias(_) => unimplemented!(),
-            ast::DeclKind::ExceptionType(_) => unimplemented!(),
-            ast::DeclKind::ExceptionVariant(_) => unimplemented!(),
+            ast::DeclKind::ExceptionType(_) => {}
+            ast::DeclKind::ExceptionVariant(_) => {}
         }
 
         decl.recurse(self);
@@ -379,7 +421,28 @@ impl<'ast, D: DiagCtx> Visitor<'ast, 'ast> for Walker<'ast, '_, '_, D> {
             ast::ExprKind::Panic(_) => {}
             ast::ExprKind::Throw(_) => {}
 
-            ast::ExprKind::TryCatch(_) => unimplemented!(),
+            ast::ExprKind::Try(e) => {
+                self.visit_expr(&e.try_expr);
+
+                let prev_scope_id = self.enter_new_scope();
+
+                match &e.fallback {
+                    ast::ExprTryFallback::Catch(arm) => {
+                        self.visit_pat(&arm.pat);
+                        self.enter_new_scope();
+                        self.visit_expr(&arm.body);
+                    }
+
+                    ast::ExprTryFallback::With(expr) => {
+                        self.visit_expr(expr);
+                    }
+                }
+
+                self.current_scope_id = prev_scope_id;
+
+                return;
+            }
+
             ast::ExprKind::TryCast(_) => unimplemented!(),
 
             ast::ExprKind::Fix(_) => {}
@@ -508,13 +571,11 @@ impl<'ast, D: DiagCtx> Visitor<'ast, 'ast> for Walker<'ast, '_, '_, D> {
                         fields.insert(field.name.as_str(), field.name.location())
                     {
                         self.result = Err(());
-                        self.pass
-                            .diag
-                            .emit(SemaDiag::DuplicateRecordPatField {
-                                name: field.name.as_str().into(),
-                                location: field.name.location(),
-                                prev_location,
-                            });
+                        self.pass.diag.emit(SemaDiag::DuplicateRecordPatField {
+                            name: field.name.as_str().into(),
+                            location: field.name.location(),
+                            prev_location,
+                        });
                     }
                 }
             }

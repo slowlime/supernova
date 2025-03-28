@@ -1,3 +1,4 @@
+use std::fmt::Write;
 use std::mem;
 
 use fxhash::{FxHashMap, FxHashSet};
@@ -7,8 +8,9 @@ use crate::diag::{Code, DiagCtx, Diagnostic, IntoDiagnostic, Label};
 use crate::location::Location;
 use crate::util::SliceExt;
 
+use super::feature::FeatureKind;
 use super::ty::{Ty, TyFn, TyKind, TyRecord, TyTuple, TyVariant};
-use super::{DeclId, ExprId, Module, PatId, Result, SemaDiag, TyExprId, TyId};
+use super::{DeclId, ExcTyDecl, ExprId, Module, PatId, Result, SemaDiag, TyExprId, TyId};
 
 #[derive(Debug, Clone)]
 pub enum ExpectationSource {
@@ -157,6 +159,13 @@ pub enum ExpectationSource {
         lhs_expr_id: ExprId,
         ty_id: TyId,
     },
+
+    ExceptionTyDecl,
+
+    TryExpr {
+        expr_id: ExprId,
+        ty_id: TyId,
+    },
 }
 
 type ExpectedTy = (TyId, ExpectationSource);
@@ -187,6 +196,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
     fn run(mut self) -> Result {
         self.add_well_known_tys();
         self.set_all_tys_to_error();
+        self.typeck_exc_ty()?;
         self.typeck_decls()?;
         self.check_main()?;
 
@@ -440,7 +450,6 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                     }
                 }
             }
-
             ExpectationSource::FixArg(expr_id) => {
                 let expr = self.m.exprs[expr_id].def;
 
@@ -805,6 +814,48 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                     self.m.display_ty(ty_id),
                 )));
             }
+
+            ExpectationSource::ExceptionTyDecl => {
+                let mut msg =
+                    "the exception must conform to the variant exception type declared here"
+                        .to_owned();
+
+                match &self.m.exc_ty_decl {
+                    ExcTyDecl::None => {
+                        panic!("ExpectationSource::ExceptionTyDecl with no exc_ty_decl")
+                    }
+
+                    ExcTyDecl::OpenVariantTy { elems, .. } => {
+                        if elems.len() > 1 {
+                            let _ = write!(
+                                msg,
+                                " and in {} other declaration{suffix}",
+                                elems.len() - 1,
+                                suffix = if elems.len() == 2 { "" } else { "s" },
+                            );
+                        }
+
+                        diag.add_label(
+                            Label::secondary(self.m.decls[elems[0]].def.location).with_msg(msg),
+                        );
+                    }
+
+                    ExcTyDecl::Decl(decl_id) => {
+                        diag.add_label(
+                            Label::secondary(self.m.decls[*decl_id].def.location).with_msg(msg),
+                        );
+                    }
+                }
+            }
+
+            ExpectationSource::TryExpr { expr_id, ty_id } => {
+                let expr = self.m.exprs[expr_id].def;
+
+                diag.add_label(Label::secondary(expr.location).with_msg(format!(
+                    "expected because this expression has the type `{}`",
+                    self.m.display_ty(ty_id),
+                )));
+            }
         }
 
         diag
@@ -825,6 +876,74 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             },
             source,
         )
+    }
+
+    fn make_exception_ty_not_declared_error(&self, location: Location) -> Diagnostic {
+        let mut diag = SemaDiag::ExceptionTyNotDeclared { location }.into_diagnostic();
+
+        if self
+            .m
+            .is_feature_enabled(FeatureKind::OpenVariantExceptions)
+        {
+            diag.add_note(
+                "use an `exception variant` declaration to add a variant to the exception type",
+            );
+        } else if self
+            .m
+            .is_feature_enabled(FeatureKind::ExceptionTypeDeclaration)
+        {
+            diag.add_note("use an `exception type` declaration to specify the exception type");
+        } else {
+            diag.add_note(format!(
+                "enable #{} or #{} to allow specifying the exception type",
+                FeatureKind::OpenVariantExceptions.extension().unwrap(),
+                FeatureKind::ExceptionTypeDeclaration.extension().unwrap(),
+            ));
+        }
+
+        diag
+    }
+
+    fn typeck_exc_ty(&mut self) -> Result {
+        let mut result = Ok(());
+
+        self.m.exc_ty_id = match &self.m.exc_ty_decl {
+            ExcTyDecl::None => None,
+
+            ExcTyDecl::OpenVariantTy { elems, .. } => {
+                let elems = elems
+                    .clone()
+                    .into_iter()
+                    .map(|decl_id| {
+                        let ast::DeclKind::ExceptionVariant(decl) = &self.m.decls[decl_id].def.kind
+                        else {
+                            unreachable!();
+                        };
+
+                        result = result.and(self.typeck_ty_expr(&decl.variant_ty_expr));
+                        let ty_id = self.m.ty_exprs[decl.variant_ty_expr.id].ty_id;
+
+                        (decl.name.as_str().to_owned(), Some(ty_id))
+                    })
+                    .collect();
+
+                Some(self.m.add_ty(Ty {
+                    kind: TyKind::Variant(TyVariant::new(elems)),
+                }))
+            }
+
+            ExcTyDecl::Decl(decl_id) => {
+                let ast::DeclKind::ExceptionType(decl) = &self.m.decls[*decl_id].def.kind else {
+                    unreachable!();
+                };
+
+                result = result.and(self.typeck_ty_expr(&decl.ty_expr));
+
+                Some(self.m.ty_exprs[decl.ty_expr.id].ty_id)
+            }
+        };
+
+        result
     }
 
     fn typeck_decls(&mut self) -> Result {
@@ -894,8 +1013,9 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             }
 
             ast::DeclKind::TypeAlias(_) => unimplemented!(),
-            ast::DeclKind::ExceptionType(_) => unimplemented!(),
-            ast::DeclKind::ExceptionVariant(_) => unimplemented!(),
+
+            ast::DeclKind::ExceptionType(_) => {}
+            ast::DeclKind::ExceptionVariant(_) => {}
         }
 
         result
@@ -924,8 +1044,9 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             }
 
             ast::DeclKind::TypeAlias(_) => unimplemented!(),
-            ast::DeclKind::ExceptionType(_) => unimplemented!(),
-            ast::DeclKind::ExceptionVariant(_) => unimplemented!(),
+
+            ast::DeclKind::ExceptionType(_) => {}
+            ast::DeclKind::ExceptionVariant(_) => {}
         }
 
         result
@@ -1075,8 +1196,8 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             ast::ExprKind::Name(e) => self.typeck_expr_name(expr.id, e, expected_ty),
             ast::ExprKind::Field(e) => self.typeck_expr_field(expr.id, e, expected_ty),
             ast::ExprKind::Panic(e) => self.typeck_expr_panic(expr.id, e, expected_ty),
-            ast::ExprKind::Throw(_) => unimplemented!(),
-            ast::ExprKind::TryCatch(_) => unimplemented!(),
+            ast::ExprKind::Throw(e) => self.typeck_expr_throw(expr.id, e, expected_ty),
+            ast::ExprKind::Try(e) => self.typeck_expr_try(expr.id, e, expected_ty),
             ast::ExprKind::TryCast(_) => unimplemented!(),
             ast::ExprKind::Fix(e) => self.typeck_expr_fix(expr.id, e, expected_ty),
             ast::ExprKind::Fold(_) => unimplemented!(),
@@ -1356,6 +1477,84 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         self.m.exprs[expr_id].ty_id = expected_ty_id;
 
         Ok(())
+    }
+
+    fn typeck_expr_throw(
+        &mut self,
+        expr_id: ExprId,
+        expr: &ast::ExprThrow<'ast>,
+        expected_ty: Option<ExpectedTy>,
+    ) -> Result {
+        let Some((expected_ty_id, _source)) = expected_ty else {
+            self.diag.emit(SemaDiag::AmbiguousThrowExprTy {
+                location: self.m.exprs[expr_id].def.location,
+            });
+
+            return Err(());
+        };
+
+        self.m.exprs[expr_id].ty_id = expected_ty_id;
+
+        let Some(exc_ty_id) = self.m.exc_ty_id else {
+            self.diag.emit(
+                self.make_exception_ty_not_declared_error(self.m.exprs[expr_id].def.location),
+            );
+
+            return Err(());
+        };
+
+        self.typeck_expr(
+            &expr.exc,
+            Some((exc_ty_id, ExpectationSource::ExceptionTyDecl)),
+        )
+    }
+
+    fn typeck_expr_try(
+        &mut self,
+        expr_id: ExprId,
+        expr: &ast::ExprTry<'ast>,
+        expected_ty: Option<ExpectedTy>,
+    ) -> Result {
+        let mut result = Ok(());
+        result = result.and(self.typeck_expr(&expr.try_expr, expected_ty.clone()));
+
+        let expected_ty = expected_ty.unwrap_or_else(|| {
+            let ty_id = self.m.exprs[expr.try_expr.id].ty_id;
+
+            (
+                ty_id,
+                ExpectationSource::TryExpr {
+                    expr_id: expr.try_expr.id,
+                    ty_id,
+                },
+            )
+        });
+        let ty_id = expected_ty.0;
+
+        match &expr.fallback {
+            ast::ExprTryFallback::Catch(arm) => {
+                let exc_ty_id = self.m.exc_ty_id.unwrap_or_else(|| {
+                    self.diag
+                        .emit(self.make_exception_ty_not_declared_error(arm.pat.location));
+
+                    self.m.well_known_tys.error
+                });
+
+                result = result.and(self.typeck_pat(
+                    &arm.pat,
+                    Some((exc_ty_id, ExpectationSource::ExceptionTyDecl)),
+                ));
+                result = result.and(self.typeck_expr(&arm.body, Some(expected_ty)));
+            }
+
+            ast::ExprTryFallback::With(expr) => {
+                result = result.and(self.typeck_expr(expr, Some(expected_ty)));
+            }
+        }
+
+        self.m.exprs[expr_id].ty_id = ty_id;
+
+        result
     }
 
     fn typeck_expr_fix(

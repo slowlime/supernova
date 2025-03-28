@@ -251,6 +251,12 @@ pub enum SemaDiag {
     #[error("cast patterns are not allowed")]
     CastPatNotAllowed { location: Location },
 
+    #[error("the exception type is declared multiple times")]
+    DuplicateExceptionTyDecl {
+        location: Location,
+        prev_location: Location,
+    },
+
     #[error("the field `{name}` is declared multiple times in the same record type")]
     DuplicateRecordTyField {
         name: String,
@@ -608,6 +614,12 @@ pub enum SemaDiag {
 
     #[error("could not determine the type of a panic expression")]
     AmbiguousPanicExprTy { location: Location },
+
+    #[error("could not determine the type of a throw expression")]
+    AmbiguousThrowExprTy { location: Location },
+
+    #[error("the exception type is not declared")]
+    ExceptionTyNotDeclared { location: Location },
 }
 
 impl IntoDiagnostic for SemaDiag {
@@ -1097,6 +1109,17 @@ impl IntoDiagnostic for SemaDiag {
                 .with_code(code!(sema::cast_pat_not_allowed))
                 .with_msg(&self)
                 .with_label(Label::primary(*location))
+                .make(),
+
+            Self::DuplicateExceptionTyDecl { location, prev_location } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::duplicate_exception_ty_decl))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .with_label(
+                    Label::secondary(*prev_location)
+                        .with_msg("the exception type was previously declared here"),
+                )
                 .make(),
 
             Self::DuplicateRecordTyField {
@@ -1813,6 +1836,27 @@ impl IntoDiagnostic for SemaDiag {
                 .with_msg(&self)
                 .with_label(Label::primary(*location))
                 .with_note("ascribe a type to the expression with the `as` operator")
+                .make(),
+
+            Self::AmbiguousThrowExprTy { location } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(
+                    sema::ambiguous_throw_expr_ty
+                    as "ERROR_AMBIGUOUS_THROW_TYPE"
+                ))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .with_note("ascribe a type to the expression with the `as` operator")
+                .make(),
+
+            Self::ExceptionTyNotDeclared { location } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(
+                    sema::exception_ty_not_declared
+                    as "ERROR_EXCEPTION_TYPE_NOT_DECLARED"
+                ))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
                 .make(),
         }
     }

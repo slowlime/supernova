@@ -1,0 +1,24 @@
+language core;
+
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #pattern-ascriptions;
+extend with #nested-function-declarations;
+extend with #unit-type;
+
+extend with #exceptions;
+extend with #open-variant-exceptions;
+
+exception variant a : Bool
+exception variant b : Bool
+
+//! ERROR(sema::duplicate_variant_ty_field)
+exception variant a : Bool
+
+//! ERROR(sema::duplicate_variant_ty_field)
+exception variant b : Bool
+
+fn main(x : Nat) -> Nat {
+  return x
+}

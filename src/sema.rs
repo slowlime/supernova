@@ -43,8 +43,8 @@ impl DeclInfo<'_> {
             ast::DeclKind::Dummy => {}
             ast::DeclKind::Fn(decl) => decl.decls.iter().for_each(|decl| f(decl.id)),
             ast::DeclKind::TypeAlias(_) => todo!(),
-            ast::DeclKind::ExceptionType(_) => todo!(),
-            ast::DeclKind::ExceptionVariant(_) => todo!(),
+            ast::DeclKind::ExceptionType(_) => {}
+            ast::DeclKind::ExceptionVariant(_) => {}
         }
     }
 }
@@ -122,6 +122,18 @@ impl Scope {
     }
 }
 
+#[derive(Debug, Clone)]
+pub enum ExcTyDecl<'ast> {
+    None,
+
+    OpenVariantTy {
+        fields: FxHashMap<&'ast str, usize>,
+        elems: Vec<DeclId>,
+    },
+
+    Decl(DeclId),
+}
+
 #[derive(Debug)]
 pub struct Module<'ast> {
     pub location: Location,                            // initialized by load_ast
@@ -138,9 +150,11 @@ pub struct Module<'ast> {
     pub ty_name_exprs: SparseSecondaryMap<TyExprId, BindingId>, // initialized by resolve
     pub name_exprs: SparseSecondaryMap<ExprId, BindingId>, // initialized by resolve
     pub main_decl_id: DeclId,                      // initialized by resolve
+    pub exc_ty_decl: ExcTyDecl<'ast>,              // initialized by resolve
     pub tys: SlotMap<TyId, Ty>,                    // initialized by typeck
     ty_dedup: FxHashMap<TyKind, TyId>,             // initialized by typeck
     pub well_known_tys: WellKnownTys,              // initialized by typeck
+    pub exc_ty_id: Option<TyId>,                   // initialized by typeck
 }
 
 impl Module<'_> {
@@ -160,9 +174,11 @@ impl Module<'_> {
             ty_name_exprs: Default::default(),
             name_exprs: Default::default(),
             main_decl_id: Default::default(),
+            exc_ty_decl: ExcTyDecl::None,
             tys: Default::default(),
             ty_dedup: Default::default(),
             well_known_tys: Default::default(),
+            exc_ty_id: None,
         }
     }
 

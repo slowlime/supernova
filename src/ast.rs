@@ -784,7 +784,7 @@ pub enum ExprKind<'src> {
     Field(ExprField<'src>),
     Panic(ExprPanic),
     Throw(ExprThrow<'src>),
-    TryCatch(ExprTry<'src>),
+    Try(ExprTry<'src>),
     TryCast(ExprTryCast<'src>),
     Fix(ExprFix<'src>),
     Fold(ExprFold<'src>),
@@ -823,7 +823,7 @@ impl<'src> AstRecurse<'src> for ExprKind<'src> {
             Self::Field(expr) => expr.recurse(visitor),
             Self::Panic(_) => {}
             Self::Throw(expr) => expr.recurse(visitor),
-            Self::TryCatch(expr) => expr.recurse(visitor),
+            Self::Try(expr) => expr.recurse(visitor),
             Self::TryCast(expr) => expr.recurse(visitor),
             Self::Fix(expr) => expr.recurse(visitor),
             Self::Fold(expr) => expr.recurse(visitor),
@@ -861,7 +861,7 @@ impl<'src> AstRecurse<'src> for ExprKind<'src> {
             Self::Field(expr) => expr.recurse_mut(visitor),
             Self::Panic(_) => {}
             Self::Throw(expr) => expr.recurse_mut(visitor),
-            Self::TryCatch(expr) => expr.recurse_mut(visitor),
+            Self::Try(expr) => expr.recurse_mut(visitor),
             Self::TryCast(expr) => expr.recurse_mut(visitor),
             Self::Fix(expr) => expr.recurse_mut(visitor),
             Self::Fold(expr) => expr.recurse_mut(visitor),

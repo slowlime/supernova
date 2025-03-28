@@ -5,7 +5,6 @@ use derive_more::Display;
 use fxhash::{FxHashMap, FxHashSet};
 
 use crate::ast;
-use crate::diag::Level;
 use crate::location::Location;
 
 macro_rules! to_option {
@@ -193,21 +192,15 @@ pub struct Feature {
 }
 
 impl Feature {
-    pub const MUTUALLY_EXCLUSIVE_FEATURES: &[(Level, &[FeatureKind])] = &[
-        (
-            Level::Error,
-            &[
-                FeatureKind::EquirecursiveTypes,
-                FeatureKind::IsorecursiveTypes,
-            ],
-        ),
-        (
-            Level::Warn,
-            &[
-                FeatureKind::ExceptionTypeDeclaration,
-                FeatureKind::OpenVariantExceptions,
-            ],
-        ),
+    pub const MUTUALLY_EXCLUSIVE_FEATURES: &[&[FeatureKind]] = &[
+        &[
+            FeatureKind::EquirecursiveTypes,
+            FeatureKind::IsorecursiveTypes,
+        ],
+        &[
+            FeatureKind::ExceptionTypeDeclaration,
+            FeatureKind::OpenVariantExceptions,
+        ],
     ];
 
     pub fn from_extension(extension: ast::Extension, location: Location) -> Option<Self> {

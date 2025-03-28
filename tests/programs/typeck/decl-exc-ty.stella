@@ -1,0 +1,19 @@
+language core;
+
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #pattern-ascriptions;
+extend with #nested-function-declarations;
+extend with #unit-type;
+extend with #variants;
+
+extend with #exceptions;
+extend with #exception-type-declaration;
+
+//! ERROR(sema::duplicate_variant_ty_field)
+exception type = <|a : Nat, a : Nat|>
+
+fn main(x : Nat) -> Nat {
+  return x
+}

@@ -1,0 +1,43 @@
+language core;
+
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #pattern-ascriptions;
+extend with #nested-function-declarations;
+extend with #unit-type;
+
+extend with #exceptions;
+extend with #exception-type-declaration;
+
+exception type = Nat
+
+fn check() -> Unit {
+  fn throw-is-bool() -> Bool {
+    //!~ ERROR
+    return throw(0)
+  }
+
+  fn throw-is-nat() -> Nat {
+    //!~ ERROR
+    return throw(0)
+  }
+
+  fn throw-is-fn() -> fn(Nat) -> fn(Bool) -> Nat {
+    //!~ ERROR
+    return throw(0)
+  }
+
+  return unit
+}
+
+fn infer() -> Unit {
+  //! ERROR(sema::ambiguous_throw_expr_ty)
+  return match throw(0) { _ => unit }
+}
+
+// invalid argument tests are checked in `tests/programs/exceptions/`
+
+fn main(x : Nat) -> Nat {
+  return x
+}

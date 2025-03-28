@@ -2,7 +2,7 @@ language core;
 
 extend with #exceptions;
 extend with #exception-type-declaration;
-//! WARN(sema::conflicting_features)
+//! ERROR(sema::conflicting_features)
 extend with #open-variant-exceptions;
 
 fn main(x : Nat) -> Nat {

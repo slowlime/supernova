@@ -1,0 +1,63 @@
+language core;
+
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #pattern-ascriptions;
+extend with #nested-function-declarations;
+extend with #unit-type;
+extend with #variants;
+extend with #nullary-variant-labels;
+
+extend with #exceptions;
+extend with #open-variant-exceptions;
+
+exception variant a : Nat
+exception variant b : Bool
+
+fn throw-arg-must-be-var-a-b() -> Unit {
+  fn passes-when-a(x : Nat) -> Unit {
+    //!~ ERROR
+    return throw(<|a = x|>)
+  }
+
+  fn passes-when-b(x : Bool) -> Unit {
+    //!~ ERROR
+    return throw(<|b = x|>)
+  }
+
+  fn fails-if-not-variant(x : Bool) -> Unit {
+    //! ERROR(sema::expr_ty_mismatch)
+    return throw(x)
+  }
+
+  fn fails-if-wrong-variant(x : Bool) -> Unit {
+    //! ERROR(sema::no_such_variant_label)
+    return throw(<|c = x|>)
+  }
+
+  fn fails-if-nullary-variant(x : Bool) -> Unit {
+    //! ERROR(sema::missing_data_for_label)
+    return throw(<|a|>)
+  }
+
+  return unit
+}
+
+fn try-catch-arm-pat-is-variant() -> Unit {
+  fn as-var-a-b-passes() -> Unit {
+    //!~ ERROR
+    return try { unit } catch { _ as <|a : Nat, b : Bool|> => unit }
+  }
+
+  fn as-bool-fails() -> Unit {
+    //! ERROR(sema::illegal_pat_for_ty)
+    return try { unit } catch { _ as Bool => unit }
+  }
+
+  return unit
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}

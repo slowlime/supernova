@@ -1,0 +1,55 @@
+language core;
+
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #type-ascriptions;
+extend with #pattern-ascriptions;
+extend with #nested-function-declarations;
+extend with #unit-type;
+
+extend with #exceptions;
+extend with #exception-type-declaration;
+
+exception type = Bool
+
+fn check() -> Unit {
+  fn try-with-nat-with-nat-is-nat(x : Bool) -> Nat {
+    //!~ ERROR
+    return try { throw(x) } with { 0 }
+  }
+
+  return unit
+}
+
+fn infer(x : Bool) -> Unit {
+  fn infers-from-left-expr() -> Unit {
+    //! ERROR(sema::ambiguous_throw_expr_ty)
+    return match (try { throw(x) } with { 0 }) { _ => unit }
+  }
+
+  //!~ ERROR
+  return match (try { throw(x) as Nat } with { 0 }) { _ as Nat => unit }
+}
+
+fn wrong-try-ty(x : Bool) -> Unit {
+  return try {
+    x //!< ERROR(sema::expr_ty_mismatch)
+  } with {
+    x //!< ERROR(sema::expr_ty_mismatch)
+  }
+}
+
+fn wrong-try-with-ty(x : Bool) -> Unit {
+  return match (
+    try {
+      throw(x) as Bool
+    } with {
+      0 //!< ERROR(sema::expr_ty_mismatch)
+    }
+  ) { _ => unit }
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}
