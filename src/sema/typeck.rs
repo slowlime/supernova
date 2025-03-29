@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::fmt::Write;
 use std::mem;
 
@@ -6,11 +7,28 @@ use fxhash::{FxHashMap, FxHashSet};
 use crate::ast;
 use crate::diag::{Code, DiagCtx, Diagnostic, IntoDiagnostic, Label};
 use crate::location::Location;
-use crate::util::SliceExt;
 
 use super::feature::FeatureKind;
 use super::ty::{Ty, TyFn, TyKind, TyRecord, TyTuple, TyVariant};
 use super::{DeclId, ExcTyDecl, ExprId, Module, PatId, Result, SemaDiag, TyExprId, TyId};
+
+fn tuple_ordering<I>(elems: I) -> Option<Ordering>
+where
+    I: IntoIterator<Item = Option<Ordering>>,
+{
+    elems.into_iter().try_fold(Ordering::Equal, |acc, elem| {
+        use Ordering::Equal as E;
+        use Ordering::Greater as R;
+        use Ordering::Less as L;
+
+        Some(match (acc, elem?) {
+            (E, E) => E,
+            (E | L, E | L) => L,
+            (E | R, E | R) => R,
+            _ => return None,
+        })
+    })
+}
 
 #[derive(Debug, Clone)]
 pub enum ExpectationSource {
@@ -211,7 +229,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         let mut failed = false;
 
         for (_, expr) in &self.m.exprs {
-            if expr.ty_id == self.m.well_known_tys.error {
+            if self.is_error_ty(expr.ty_id) {
                 failed = true;
                 self.diag.emit(
                     Diagnostic::error()
@@ -225,7 +243,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         }
 
         for (_, ty_expr) in &self.m.ty_exprs {
-            if ty_expr.ty_id == self.m.well_known_tys.error {
+            if self.is_error_ty(ty_expr.ty_id) {
                 failed = true;
                 self.diag.emit(
                     Diagnostic::error()
@@ -241,7 +259,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         }
 
         for (_, pat) in &self.m.pats {
-            if pat.ty_id == self.m.well_known_tys.error {
+            if self.is_error_ty(pat.ty_id) {
                 failed = true;
                 self.diag.emit(
                     Diagnostic::error()
@@ -255,7 +273,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         }
 
         for (_, binding) in &self.m.bindings {
-            if binding.ty_id == self.m.well_known_tys.error {
+            if self.is_error_ty(binding.ty_id) {
                 failed = true;
                 self.diag.emit(
                     Diagnostic::error()
@@ -324,6 +342,209 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         ty_id == self.m.well_known_tys.error
     }
 
+    fn cmp_ty_tuple<L, R>(&self, lhs: L, rhs: R) -> Option<Ordering>
+    where
+        L: IntoIterator<Item = TyId>,
+        L::IntoIter: ExactSizeIterator,
+        R: IntoIterator<Item = TyId>,
+        R::IntoIter: ExactSizeIterator,
+    {
+        let lhs = lhs.into_iter();
+        let rhs = rhs.into_iter();
+
+        if lhs.len() != rhs.len() {
+            return None;
+        }
+
+        tuple_ordering(lhs.zip(rhs).map(|(l, r)| self.cmp_tys(l, r)))
+    }
+
+    /// Returns the ordering between two types induced by the subtype relation.
+    fn cmp_tys(&self, lhs_ty_id: TyId, rhs_ty_id: TyId) -> Option<Ordering> {
+        if lhs_ty_id == rhs_ty_id {
+            return Some(Ordering::Equal);
+        }
+
+        Some(
+            match (&self.m.tys[lhs_ty_id].kind, &self.m.tys[rhs_ty_id].kind) {
+                // ∀T: Error <: T ∧ T <: Error.
+                // of course, valid programs would never observe this.
+                (TyKind::Error, _) | (_, TyKind::Error) => Ordering::Equal,
+
+                (&TyKind::Ref(lhs), &TyKind::Ref(rhs)) => self.cmp_tys(lhs, rhs)?,
+
+                (&TyKind::Sum(ll, lr), &TyKind::Sum(rl, rr)) => {
+                    tuple_ordering([self.cmp_tys(ll, rl), self.cmp_tys(lr, rr)])?
+                }
+
+                (TyKind::Fn(lhs), TyKind::Fn(rhs)) => {
+                    tuple_ordering([
+                        self.cmp_ty_tuple(lhs.params.iter().copied(), rhs.params.iter().copied())
+                            // fn is contravariant in parameters.
+                            .map(Ordering::reverse),
+                        self.cmp_tys(lhs.ret, rhs.ret),
+                    ])?
+                }
+
+                (TyKind::Tuple(lhs), TyKind::Tuple(rhs)) => {
+                    self.cmp_ty_tuple(lhs.elems.iter().copied(), rhs.elems.iter().copied())?
+                }
+
+                // {} means both an empty record type and an empty tuple.
+                (TyKind::Record(r), TyKind::Tuple(t)) | (TyKind::Tuple(t), TyKind::Record(r))
+                    if r.elems.is_empty() && t.elems.is_empty() =>
+                {
+                    Ordering::Equal
+                }
+
+                // {} <: {t₁, ..., tₙ}.
+                (TyKind::Record(lhs), TyKind::Tuple(rhs))
+                    if self.m.is_feature_enabled(FeatureKind::Subtyping) =>
+                {
+                    if lhs.elems.is_empty() {
+                        Ordering::Less
+                    } else if rhs.elems.is_empty() {
+                        Ordering::Greater
+                    } else {
+                        return None;
+                    }
+                }
+
+                // {} <: {f₁ : t₁, ..., fₙ : tₙ}.
+                (TyKind::Tuple(lhs), TyKind::Record(rhs))
+                    if self.m.is_feature_enabled(FeatureKind::Subtyping) =>
+                {
+                    if lhs.elems.is_empty() {
+                        Ordering::Less
+                    } else if rhs.elems.is_empty() {
+                        Ordering::Greater
+                    } else {
+                        return None;
+                    }
+                }
+
+                (TyKind::Record(lhs), TyKind::Record(rhs))
+                    if self.m.is_feature_enabled(FeatureKind::Subtyping) =>
+                {
+                    let lhs_fields = lhs.fields.keys().collect::<FxHashSet<_>>();
+                    let rhs_fields = rhs.fields.keys().collect::<FxHashSet<_>>();
+
+                    // fields(lhs) ⊆ fields(rhs) ⇒ width_ordering = >:.
+                    let (width_ordering, fields) = if lhs_fields == rhs_fields {
+                        (Ordering::Equal, &lhs_fields)
+                    } else if lhs_fields.is_superset(&rhs_fields) {
+                        (Ordering::Less, &rhs_fields)
+                    } else if lhs_fields.is_subset(&rhs_fields) {
+                        (Ordering::Greater, &lhs_fields)
+                    } else {
+                        return None;
+                    };
+
+                    tuple_ordering([Some(width_ordering)].into_iter().chain(fields.iter().map(
+                        |name| {
+                            let lhs_idx = lhs.fields[name.as_str()];
+                            let rhs_idx = rhs.fields[name.as_str()];
+
+                            self.cmp_tys(lhs.elems[lhs_idx].1, rhs.elems[rhs_idx].1)
+                        },
+                    )))?
+                }
+
+                (TyKind::Record(lhs), TyKind::Record(rhs)) => {
+                    if lhs.elems.len() != rhs.elems.len() {
+                        return None;
+                    }
+
+                    if lhs
+                        .elems
+                        .iter()
+                        .zip(&rhs.elems)
+                        .any(|((lhs_name, _), (rhs_name, _))| lhs_name != rhs_name)
+                    {
+                        return None;
+                    }
+
+                    self.cmp_ty_tuple(
+                        lhs.elems.iter().map(|&(_, l)| l),
+                        rhs.elems.iter().map(|&(_, r)| r),
+                    )?
+                }
+
+                (TyKind::Variant(lhs), TyKind::Variant(rhs))
+                    if self.m.is_feature_enabled(FeatureKind::Subtyping) =>
+                {
+                    let lhs_labels = lhs.labels.keys().collect::<FxHashSet<_>>();
+                    let rhs_labels = rhs.labels.keys().collect::<FxHashSet<_>>();
+
+                    // fields(lhs) ⊆ fields(rhs) ⇒ width_ordering = <:.
+                    let (width_ordering, labels) = if lhs_labels == rhs_labels {
+                        (Ordering::Equal, &lhs_labels)
+                    } else if lhs_labels.is_subset(&rhs_labels) {
+                        (Ordering::Less, &lhs_labels)
+                    } else if lhs_labels.is_superset(&rhs_labels) {
+                        (Ordering::Greater, &rhs_labels)
+                    } else {
+                        return None;
+                    };
+
+                    tuple_ordering([Some(width_ordering)].into_iter().chain(labels.iter().map(
+                        |name| {
+                            let lhs_idx = lhs.labels[name.as_str()];
+                            let rhs_idx = rhs.labels[name.as_str()];
+
+                            match (lhs.elems[lhs_idx].1, rhs.elems[rhs_idx].1) {
+                                (Some(l), Some(r)) => self.cmp_tys(l, r),
+                                (None, None) => Some(Ordering::Equal),
+                                _ => None,
+                            }
+                        },
+                    )))?
+                }
+
+                (TyKind::Variant(lhs), TyKind::Variant(rhs)) => {
+                    if lhs.elems.len() != rhs.elems.len() {
+                        return None;
+                    }
+
+                    if lhs
+                        .elems
+                        .iter()
+                        .zip(&rhs.elems)
+                        .any(|((lhs_name, _), (rhs_name, _))| lhs_name != rhs_name)
+                    {
+                        return None;
+                    }
+
+                    tuple_ordering(lhs.elems.iter().zip(&rhs.elems).map(
+                        |(&(_, l), &(_, r))| match (l, r) {
+                            (Some(l), Some(r)) => self.cmp_tys(l, r),
+                            (None, None) => Some(Ordering::Equal),
+                            _ => None,
+                        },
+                    ))?
+                }
+
+                (&TyKind::List(l), &TyKind::List(r)) => self.cmp_tys(l, r)?,
+
+                (
+                    // why not `_`?
+                    // this makes sure I don't forget to fix this if I add new types.
+                    TyKind::Unit
+                    | TyKind::Bool
+                    | TyKind::Nat
+                    | TyKind::Sum(..)
+                    | TyKind::Fn(..)
+                    | TyKind::Tuple(..)
+                    | TyKind::Record(..)
+                    | TyKind::Variant(..)
+                    | TyKind::List(..)
+                    | TyKind::Ref(..),
+                    _,
+                ) => return None,
+            },
+        )
+    }
+
     fn ty_conforms_to(&self, ty_id: TyId, expected_ty_id: TyId) -> bool {
         if self.is_error_ty(ty_id) || self.is_error_ty(expected_ty_id) {
             return true;
@@ -333,84 +554,8 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             return true;
         }
 
-        match (&self.m.tys[ty_id].kind, &self.m.tys[expected_ty_id].kind) {
-            (
-                &TyKind::Sum(lhs_ty_id, rhs_ty_id),
-                &TyKind::Sum(expected_lhs_ty_id, expected_rhs_ty_id),
-            ) => {
-                self.ty_conforms_to(lhs_ty_id, expected_lhs_ty_id)
-                    && self.ty_conforms_to(rhs_ty_id, expected_rhs_ty_id)
-            }
-
-            (TyKind::Fn(lhs), TyKind::Fn(rhs)) => {
-                self.all_tys_conform_to(&lhs.params, &rhs.params)
-                    && self.ty_conforms_to(lhs.ret, rhs.ret)
-            }
-
-            (TyKind::Tuple(lhs), TyKind::Tuple(rhs)) => {
-                self.all_tys_conform_to(&lhs.elems, &rhs.elems)
-            }
-
-            (TyKind::Record(r), TyKind::Tuple(t)) | (TyKind::Tuple(t), TyKind::Record(r))
-                if r.elems.is_empty() && t.elems.is_empty() =>
-            {
-                true
-            }
-
-            (TyKind::Record(lhs), TyKind::Record(rhs)) => lhs.elems.zip_all(
-                &rhs.elems,
-                |(lhs_name, lhs_ty_id), (rhs_name, rhs_ty_id)| {
-                    lhs_name == rhs_name && self.ty_conforms_to(*lhs_ty_id, *rhs_ty_id)
-                },
-            ),
-
-            (TyKind::Variant(lhs), TyKind::Variant(rhs)) => lhs.elems.zip_all(
-                &rhs.elems,
-                |(lhs_name, lhs_ty_id), (rhs_name, rhs_ty_id)| {
-                    lhs_name == rhs_name
-                        && (match (lhs_ty_id, rhs_ty_id) {
-                            (Some(lhs_ty_id), Some(rhs_ty_id)) => {
-                                self.ty_conforms_to(*lhs_ty_id, *rhs_ty_id)
-                            }
-
-                            (None, None) => true,
-
-                            _ => false,
-                        })
-                },
-            ),
-
-            (&TyKind::List(lhs_ty_id), &TyKind::List(rhs_ty_id)) => {
-                self.ty_conforms_to(lhs_ty_id, rhs_ty_id)
-            }
-
-            (&TyKind::Ref(lhs_ty_id), &TyKind::Ref(rhs_ty_id)) => {
-                self.ty_conforms_to(lhs_ty_id, rhs_ty_id)
-            }
-
-            (
-                // why not `_`?
-                // this makes sure I don't forget to fix this if I add new types.
-                TyKind::Error
-                | TyKind::Unit
-                | TyKind::Bool
-                | TyKind::Nat
-                | TyKind::Sum(..)
-                | TyKind::Fn(..)
-                | TyKind::Tuple(..)
-                | TyKind::Record(..)
-                | TyKind::Variant(..)
-                | TyKind::List(..)
-                | TyKind::Ref(..),
-                _,
-            ) => false,
-        }
-    }
-
-    fn all_tys_conform_to(&self, ty_ids: &[TyId], expected_ty_ids: &[TyId]) -> bool {
-        ty_ids.zip_all(expected_ty_ids, |&ty_id, &expected_ty_id| {
-            self.ty_conforms_to(ty_id, expected_ty_id)
-        })
+        self.cmp_tys(ty_id, expected_ty_id)
+            .is_some_and(|ord| ord <= Ordering::Equal)
     }
 
     fn are_tys_equivalent(&self, lhs_ty_id: TyId, rhs_ty_id: TyId) -> bool {
@@ -868,11 +1013,23 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         expected_ty_id: TyId,
         source: ExpectationSource,
     ) -> Diagnostic {
+        let location = self.m.exprs[expr_id].def.location;
+        let expected_ty = self.m.display_ty(expected_ty_id).to_string();
+        let actual_ty = self.m.display_ty(ty_id).to_string();
+
         self.augment_error_with_expectation(
-            SemaDiag::ExprTyMismatch {
-                location: self.m.exprs[expr_id].def.location,
-                expected_ty: self.m.display_ty(expected_ty_id).to_string(),
-                actual_ty: self.m.display_ty(ty_id).to_string(),
+            if self.m.is_feature_enabled(FeatureKind::Subtyping) {
+                SemaDiag::ExprTyMismatchSubtype {
+                    location,
+                    expected_ty,
+                    actual_ty,
+                }
+            } else {
+                SemaDiag::ExprTyMismatch {
+                    location,
+                    expected_ty,
+                    actual_ty,
+                }
             },
             source,
         )
@@ -1307,7 +1464,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             return Err(());
         };
 
-        if expected_ty_id == self.m.well_known_tys.error {
+        if self.is_error_ty(expected_ty_id) {
             return Ok(());
         }
 
@@ -1370,7 +1527,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         self.typeck_expr(&expr.base, None)?;
         let base_ty_id = self.m.exprs[expr.base.id].ty_id;
 
-        if base_ty_id == self.m.well_known_tys.error {
+        if self.is_error_ty(base_ty_id) {
             return Ok(());
         }
 
@@ -1566,7 +1723,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         self.typeck_expr(&expr.expr, None)?;
         let inner_ty_id = self.m.exprs[expr.expr.id].ty_id;
 
-        if inner_ty_id == self.m.well_known_tys.error {
+        if self.is_error_ty(inner_ty_id) {
             return Ok(());
         }
 
@@ -1641,7 +1798,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                         return Err(());
                     };
 
-                    if expected_ty_id == self.m.well_known_tys.error {
+                    if self.is_error_ty(expected_ty_id) {
                         return Ok(());
                     }
 
@@ -1681,7 +1838,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
 
                 ast::Builtin::Cons => {
                     if let Some((expected_ty_id, source)) = expected_ty {
-                        if expected_ty_id == self.m.well_known_tys.error {
+                        if self.is_error_ty(expected_ty_id) {
                             return Ok(());
                         }
 
@@ -1735,7 +1892,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
 
                 ast::Builtin::ListHead => {
                     if let Some((expected_ty_id, source)) = expected_ty {
-                        if expected_ty_id == self.m.well_known_tys.error {
+                        if self.is_error_ty(expected_ty_id) {
                             return Ok(());
                         }
 
@@ -1761,7 +1918,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                         self.typeck_expr(&expr.args[0], None)?;
                         let arg_ty_id = self.m.exprs[expr.args[0].id].ty_id;
 
-                        let ty_id = if arg_ty_id == self.m.well_known_tys.error {
+                        let ty_id = if self.is_error_ty(arg_ty_id) {
                             self.m.well_known_tys.error
                         } else if let TyKind::List(elem_ty_id) = self.m.tys[arg_ty_id].kind {
                             elem_ty_id
@@ -1785,7 +1942,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                     self.typeck_expr(&expr.args[0], None)?;
                     let arg_ty_id = self.m.exprs[expr.args[0].id].ty_id;
 
-                    if arg_ty_id == self.m.well_known_tys.error {
+                    if self.is_error_ty(arg_ty_id) {
                         // ignore.
                     } else if let TyKind::List(_) = self.m.tys[arg_ty_id].kind {
                         // also good.
@@ -1821,7 +1978,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
 
                     'ty_check: {
                         if let Some((expected_ty_id, ref source)) = expected_ty {
-                            if expected_ty_id == self.m.well_known_tys.error {
+                            if self.is_error_ty(expected_ty_id) {
                                 return Ok(());
                             }
 
@@ -1844,7 +2001,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                     self.typeck_expr(&expr.args[0], None)?;
                     let arg_ty_id = self.m.exprs[expr.args[0].id].ty_id;
 
-                    if arg_ty_id == self.m.well_known_tys.error {
+                    if self.is_error_ty(arg_ty_id) {
                         // ignore.
                     } else if let TyKind::List(_) = self.m.tys[arg_ty_id].kind {
                         // also good.
@@ -1919,7 +2076,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
 
                 ast::Builtin::NatRec => {
                     if let Some((expected_ty_id, source)) = expected_ty {
-                        if expected_ty_id == self.m.well_known_tys.error {
+                        if self.is_error_ty(expected_ty_id) {
                             return Ok(());
                         }
 
@@ -2004,7 +2161,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 self.typeck_expr(callee, None)?;
                 let callee_ty_id = self.m.exprs[callee.id].ty_id;
 
-                if callee_ty_id == self.m.well_known_tys.error {
+                if self.is_error_ty(callee_ty_id) {
                     return Err(());
                 }
 
@@ -2133,7 +2290,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         expected_ty: Option<ExpectedTy>,
     ) -> Result {
         if let Some((expected_ty_id, source)) = expected_ty {
-            if expected_ty_id == self.m.well_known_tys.error {
+            if self.is_error_ty(expected_ty_id) {
                 return Ok(());
             }
 
@@ -2230,7 +2387,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         expected_ty: Option<ExpectedTy>,
     ) -> Result {
         if let Some((expected_ty_id, source)) = expected_ty {
-            if expected_ty_id == self.m.well_known_tys.error {
+            if self.is_error_ty(expected_ty_id) {
                 return self.typeck_expr_tuple(expr_id, expr, None);
             }
 
@@ -2325,7 +2482,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         expected_ty: Option<ExpectedTy>,
     ) -> Result {
         if let Some((expected_ty_id, source)) = expected_ty {
-            if expected_ty_id == self.m.well_known_tys.error {
+            if self.is_error_ty(expected_ty_id) {
                 return self.typeck_expr_record(expr_id, expr, None);
             }
 
@@ -2457,7 +2614,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             return Err(());
         };
 
-        if expected_ty_id == self.m.well_known_tys.error {
+        if self.is_error_ty(expected_ty_id) {
             return Ok(());
         }
 
@@ -2607,7 +2764,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         expected_ty: Option<ExpectedTy>,
     ) -> Result {
         if let Some((expected_ty_id, source)) = expected_ty {
-            let elem_ty_id = if expected_ty_id == self.m.well_known_tys.error {
+            let elem_ty_id = if self.is_error_ty(expected_ty_id) {
                 self.m.well_known_tys.error
             } else {
                 let TyKind::List(ty_id) = self.m.tys[expected_ty_id].kind else {
@@ -2827,7 +2984,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         match expr.op {
             ast::UnOp::New => {
                 if let Some((expected_ty_id, source)) = expected_ty {
-                    let pointee_ty_id = if expected_ty_id == self.m.well_known_tys.error {
+                    let pointee_ty_id = if self.is_error_ty(expected_ty_id) {
                         self.m.well_known_tys.error
                     } else {
                         match self.m.tys[expected_ty_id].kind {
@@ -2865,7 +3022,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
 
             ast::UnOp::Deref => {
                 if let Some((expected_ty_id, source)) = expected_ty {
-                    if expected_ty_id == self.m.well_known_tys.error {
+                    if self.is_error_ty(expected_ty_id) {
                         return Ok(());
                     }
 
@@ -2881,7 +3038,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                     self.typeck_expr(&expr.rhs, None)?;
                     let arg_ty_id = self.m.exprs[expr.rhs.id].ty_id;
 
-                    let ty_id = if arg_ty_id == self.m.well_known_tys.error {
+                    let ty_id = if self.is_error_ty(arg_ty_id) {
                         self.m.well_known_tys.error
                     } else if let TyKind::Ref(ty_id) = self.m.tys[arg_ty_id].kind {
                         ty_id
@@ -3012,7 +3169,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 result = result.and(self.typeck_expr(&expr.lhs, None));
                 let ref_ty_id = self.m.exprs[expr.lhs.id].ty_id;
 
-                let pointee_ty_id = if ref_ty_id == self.m.well_known_tys.error {
+                let pointee_ty_id = if self.is_error_ty(ref_ty_id) {
                     self.m.well_known_tys.error
                 } else if let TyKind::Ref(pointee_ty_id) = self.m.tys[ref_ty_id].kind {
                     pointee_ty_id
@@ -3084,7 +3241,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             return Err(());
         };
 
-        if expected_ty_id == self.m.well_known_tys.error {
+        if self.is_error_ty(expected_ty_id) {
             return Ok(());
         }
 
@@ -3182,7 +3339,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                     return Err(());
                 };
 
-                if expected_ty_id == self.m.well_known_tys.error {
+                if self.is_error_ty(expected_ty_id) {
                     return Ok(());
                 }
 
@@ -3225,7 +3382,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
 
             ast::Cons::Cons => {
                 if let Some((expected_ty_id, source)) = expected_ty {
-                    if expected_ty_id == self.m.well_known_tys.error {
+                    if self.is_error_ty(expected_ty_id) {
                         return Ok(());
                     }
 
@@ -3339,7 +3496,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         expected_ty: Option<ExpectedTy>,
     ) -> Result {
         if let Some((expected_ty_id, source)) = expected_ty {
-            if expected_ty_id == self.m.well_known_tys.error {
+            if self.is_error_ty(expected_ty_id) {
                 return Ok(());
             }
 
@@ -3431,7 +3588,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         expected_ty: Option<ExpectedTy>,
     ) -> Result {
         if let Some((expected_ty_id, source)) = expected_ty {
-            if expected_ty_id == self.m.well_known_tys.error {
+            if self.is_error_ty(expected_ty_id) {
                 return Ok(());
             }
 
@@ -3554,7 +3711,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         expected_ty: Option<ExpectedTy>,
     ) -> Result {
         if let Some((expected_ty_id, source)) = expected_ty {
-            let elem_ty_id = if expected_ty_id == self.m.well_known_tys.error {
+            let elem_ty_id = if self.is_error_ty(expected_ty_id) {
                 self.m.well_known_tys.error
             } else {
                 let TyKind::List(ty_id) = self.m.tys[expected_ty_id].kind else {

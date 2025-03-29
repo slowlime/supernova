@@ -47,6 +47,7 @@ pub enum Extension {
     References,
     Sequencing,
     StructuralPatterns,
+    StructuralSubtyping,
     SumTypes,
     Tuples,
     TypeAscriptions,

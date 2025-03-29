@@ -315,6 +315,15 @@ pub enum SemaDiag {
         actual_ty: String,
     },
 
+    #[error(
+        "the expression has a wrong type: expected a subtype of `{expected_ty}`, got `{actual_ty}`"
+    )]
+    ExprTyMismatchSubtype {
+        location: Location,
+        expected_ty: String,
+        actual_ty: String,
+    },
+
     #[error("the record has no field `{field}`")]
     NoSuchField {
         location: Location,
@@ -1111,7 +1120,10 @@ impl IntoDiagnostic for SemaDiag {
                 .with_label(Label::primary(*location))
                 .make(),
 
-            Self::DuplicateExceptionTyDecl { location, prev_location } => Diagnostic::error()
+            Self::DuplicateExceptionTyDecl {
+                location,
+                prev_location,
+            } => Diagnostic::error()
                 .at(*location)
                 .with_code(code!(sema::duplicate_exception_ty_decl))
                 .with_msg(&self)
@@ -1247,6 +1259,23 @@ impl IntoDiagnostic for SemaDiag {
                 .with_code(code!(
                     sema::expr_ty_mismatch
                     as "ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION"
+                ))
+                .with_msg(&self)
+                .with_label(
+                    Label::primary(*location)
+                        .with_msg(format!("this expression has the type `{actual_ty}`")),
+                )
+                .make(),
+
+            Self::ExprTyMismatchSubtype {
+                location,
+                expected_ty: _,
+                actual_ty,
+            } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(
+                    sema::expr_ty_mismatch
+                    as "ERROR_UNEXPECTED_SUBTYPE"
                 ))
                 .with_msg(&self)
                 .with_label(

@@ -167,9 +167,9 @@ define_features! {
     Panic "panics" (ast::Extension::Panic);
 
     // Subtyping.
-    Subtyping "subtyping";
-    TopType "top type" => Subtyping;
-    BottomType "bottom type" => Subtyping;
+    Subtyping "subtyping" (ast::Extension::StructuralSubtyping);
+    TopType "top type";
+    BottomType "bottom type";
     CastExprs "cast expressions";
     TryCastExprs "try-cast expressions";
     CastPatterns "cast patterns";
