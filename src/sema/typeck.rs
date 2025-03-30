@@ -34,7 +34,12 @@ where
 pub enum ExpectationSource {
     FnDeclRet(DeclId),
 
-    FixArg(ExprId),
+    FixArg {
+        expr_id: ExprId,
+        ty_id: TyId,
+    },
+
+    FixArgRet(ExprId),
 
     InjectionArg {
         expr_id: ExprId,
@@ -595,7 +600,17 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                     }
                 }
             }
-            ExpectationSource::FixArg(expr_id) => {
+
+            ExpectationSource::FixArg { expr_id, ty_id } => {
+                let expr = self.m.exprs[expr_id].def;
+
+                diag.add_label(Label::secondary(expr.location).with_msg(format!(
+                    "expected so that the `fix` expression has the type `{}`",
+                    self.m.display_ty(ty_id),
+                )));
+            }
+
+            ExpectationSource::FixArgRet(expr_id) => {
                 let expr = self.m.exprs[expr_id].def;
 
                 diag.add_label(Label::secondary(expr.location).with_msg(
@@ -1720,7 +1735,22 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         expr: &ast::ExprFix<'ast>,
         expected_ty: Option<ExpectedTy>,
     ) -> Result {
-        self.typeck_expr(&expr.expr, None)?;
+        let inner_expected_ty = expected_ty.as_ref().map(|&(expected_ty_id, _)| {
+            (
+                self.m.add_ty(Ty {
+                    kind: TyKind::Fn(TyFn {
+                        params: vec![expected_ty_id],
+                        ret: expected_ty_id,
+                    }),
+                }),
+                ExpectationSource::FixArg {
+                    expr_id,
+                    ty_id: expected_ty_id,
+                },
+            )
+        });
+        self.typeck_expr(&expr.expr, inner_expected_ty)?;
+
         let inner_ty_id = self.m.exprs[expr.expr.id].ty_id;
 
         if self.is_error_ty(inner_ty_id) {
@@ -1759,7 +1789,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 expr.expr.id,
                 inner_ty_id,
                 expected_ty,
-                ExpectationSource::FixArg(expr_id),
+                ExpectationSource::FixArgRet(expr_id),
             ));
 
             return Err(());
