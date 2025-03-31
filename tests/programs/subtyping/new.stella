@@ -14,9 +14,18 @@ extend with #panic;
 
 extend with #references;
 
-fn expect-top() -> Top {
-  //!~ ERROR
-  return new(0)
+fn expect-top() -> Unit {
+  fn can-infer() -> Top {
+    //!~ ERROR
+    return new(0)
+  }
+
+  fn cannot-infer() -> Top {
+    //! ERROR(sema::ambiguous_address_expr_ty)
+    return new(<0x0>)
+  }
+
+  return unit
 }
 
 fn expect-bot() -> Bot {

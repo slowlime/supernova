@@ -13,7 +13,7 @@ extend with #bottom-type;
 extend with #sum-types;
 
 fn expect-top() -> Top {
-  //! ERROR(sema::ambiguous_variant_ty)
+  //! ERROR(sema::ambiguous_sum_ty)
   return inl(false)
 }
 

@@ -35,6 +35,8 @@ fn bot-in-non-tail(x : Bot) -> Unit {
       //! ERROR(sema::expr_ty_mismatch)
       return x; false
     }
+
+    return unit
   }
 
   fn infer() -> Unit {

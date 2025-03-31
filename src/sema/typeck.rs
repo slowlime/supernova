@@ -1489,18 +1489,22 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             return Ok(());
         }
 
-        let TyKind::Ref(_) = self.m.tys[expected_ty_id].kind else {
-            // WARN: this needs to be changed when Top is added.
-            self.diag.emit(self.augment_error_with_expectation(
-                SemaDiag::UnexpectedAddressExpr {
-                    location: self.m.exprs[expr_id].def.location,
-                    expected_ty: self.m.display_ty(expected_ty_id).to_string(),
-                },
-                source,
-            ));
+        match self.m.tys[expected_ty_id].kind {
+            TyKind::Ref(_) => {}
+            TyKind::Top => {}
 
-            return Err(());
-        };
+            _ => {
+                self.diag.emit(self.augment_error_with_expectation(
+                    SemaDiag::UnexpectedAddressExpr {
+                        location: self.m.exprs[expr_id].def.location,
+                        expected_ty: self.m.display_ty(expected_ty_id).to_string(),
+                    },
+                    source,
+                ));
+
+                return Err(());
+            }
+        }
 
         self.m.exprs[expr_id].ty_id = expected_ty_id;
 
@@ -1765,8 +1769,15 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             return Ok(());
         }
 
+        if inner_ty_id == self.m.well_known_tys.bot && expected_ty.is_some() {
+            // only allow doing this when checking the type. that's what the reference
+            // implementatino does, don't ask me.
+            self.m.exprs[expr_id].ty_id = self.m.well_known_tys.bot;
+
+            return Ok(());
+        }
+
         let TyKind::Fn(inner_ty) = &self.m.tys[inner_ty_id].kind else {
-            // WARN: this needs to be changed when Bot is added.
             self.diag.emit(SemaDiag::FixNotFn {
                 location: self.m.exprs[expr_id].def.location,
                 actual_ty: self.m.display_ty(inner_ty_id).to_string(),
@@ -1842,7 +1853,10 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                         return Ok(());
                     }
 
-                    // WARN: this needs to be changed when Top is added.
+                    if expected_ty_id == self.m.well_known_tys.top {
+                        return self.typeck_expr_apply(expr_id, expr, None);
+                    }
+
                     let TyKind::Sum(lhs_ty_id, rhs_ty_id) = self.m.tys[expected_ty_id].kind else {
                         self.diag.emit(self.augment_error_with_expectation(
                             SemaDiag::UnexpectedInjection {
@@ -1883,7 +1897,10 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                             return Ok(());
                         }
 
-                        // WARN: this needs to be changed when Top is added.
+                        if expected_ty_id == self.m.well_known_tys.top {
+                            return self.typeck_expr_apply(expr_id, expr, None);
+                        }
+
                         let TyKind::List(elem_ty_id) = self.m.tys[expected_ty_id].kind else {
                             self.diag.emit(self.augment_error_with_expectation(
                                 SemaDiag::UnexpectedList {
@@ -2336,7 +2353,10 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 return Ok(());
             }
 
-            // WARN: this needs to be changed when Top is added.
+            if expected_ty_id == self.m.well_known_tys.top {
+                return self.typeck_expr_fn(expr_id, expr, None);
+            }
+
             let TyKind::Fn(ty) = &self.m.tys[expected_ty_id].kind else {
                 self.diag.emit(self.augment_error_with_expectation(
                     SemaDiag::UnexpectedFn {
@@ -2434,7 +2454,10 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 return self.typeck_expr_tuple(expr_id, expr, None);
             }
 
-            // WARN: this needs to be changed when Top is added.
+            if expected_ty_id == self.m.well_known_tys.top {
+                return self.typeck_expr_tuple(expr_id, expr, None);
+            }
+
             let ty = match &self.m.tys[expected_ty_id].kind {
                 TyKind::Tuple(ty) => ty,
                 TyKind::Record(ty) if ty.elems.is_empty() => &TyTuple { elems: vec![] },
@@ -2530,7 +2553,10 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 return self.typeck_expr_record(expr_id, expr, None);
             }
 
-            // WARN: this needs to be changed when Top is added.
+            if expected_ty_id == self.m.well_known_tys.top {
+                return self.typeck_expr_record(expr_id, expr, None);
+            }
+
             let ty = match &self.m.tys[expected_ty_id].kind {
                 TyKind::Tuple(ty) if ty.elems.is_empty() => &TyRecord::new(vec![]),
                 TyKind::Record(ty) => ty,
@@ -2661,7 +2687,10 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 return Ok(());
             }
 
-            // WARN: this needs to be changed when Top is added.
+            if expected_ty_id == self.m.well_known_tys.top {
+                return self.typeck_expr_variant(expr_id, expr, None);
+            }
+
             let TyKind::Variant(ty) = &self.m.tys[expected_ty_id].kind else {
                 self.diag.emit(self.augment_error_with_expectation(
                     SemaDiag::UnexpectedVariant {
@@ -2834,7 +2863,10 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             let elem_ty_id = if self.is_untyped(expected_ty_id) {
                 self.m.well_known_tys.error
             } else {
-                // WARN: this needs to be changed when Top is added.
+                if expected_ty_id == self.m.well_known_tys.top {
+                    return self.typeck_expr_list(expr_id, expr, None);
+                }
+
                 let TyKind::List(ty_id) = self.m.tys[expected_ty_id].kind else {
                     self.diag.emit(self.augment_error_with_expectation(
                         SemaDiag::UnexpectedList {
@@ -3052,7 +3084,10 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                     let pointee_ty_id = if self.is_untyped(expected_ty_id) {
                         self.m.well_known_tys.error
                     } else {
-                        // WARN: this needs to be changed when Top is added.
+                        if expected_ty_id == self.m.well_known_tys.top {
+                            return self.typeck_expr_unary(expr_id, expr, None);
+                        }
+
                         match self.m.tys[expected_ty_id].kind {
                             TyKind::Ref(ty_id) => ty_id,
 
