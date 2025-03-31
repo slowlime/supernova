@@ -23,6 +23,7 @@ pub struct Program<'src> {
 #[strum(serialize_all = "kebab-case")]
 pub enum Extension {
     ArithmeticOperators,
+    BottomType,
     ComparisonOperators,
     ExceptionTypeDeclaration,
     Exceptions,
@@ -49,6 +50,7 @@ pub enum Extension {
     StructuralPatterns,
     StructuralSubtyping,
     SumTypes,
+    TopType,
     Tuples,
     TypeAscriptions,
     UnitType,

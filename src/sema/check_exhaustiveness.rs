@@ -353,7 +353,7 @@ impl PatMat {
         }
 
         let missing = match &m.tys[self.ty_ids[0]].kind {
-            TyKind::Error => unreachable!(),
+            TyKind::Untyped { .. } => unreachable!(),
 
             TyKind::Unit => [Cons::Unit].into_iter().find(|c| !present.contains(c)),
 
@@ -393,6 +393,9 @@ impl PatMat {
             TyKind::List(_) => [Cons::Cons, Cons::EmptyList]
                 .into_iter()
                 .find(|c| !present.contains(c)),
+
+            TyKind::Top => None,
+            TyKind::Bot => None,
         };
 
         (present, missing)

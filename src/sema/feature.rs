@@ -168,8 +168,8 @@ define_features! {
 
     // Subtyping.
     Subtyping "subtyping" (ast::Extension::StructuralSubtyping);
-    TopType "top type";
-    BottomType "bottom type";
+    TopType "top type" (ast::Extension::TopType);
+    BottomType "bottom type" (ast::Extension::BottomType);
     CastExprs "cast expressions";
     TryCastExprs "try-cast expressions";
     CastPatterns "cast patterns";

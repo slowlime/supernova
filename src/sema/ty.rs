@@ -18,7 +18,7 @@ impl Module<'_> {
                 let ty_kind = &self.0.tys[self.1].kind;
 
                 let prec = match ty_kind {
-                    TyKind::Error => 3,
+                    TyKind::Untyped { .. } => 3,
                     TyKind::Unit => 3,
                     TyKind::Bool => 3,
                     TyKind::Nat => 3,
@@ -29,6 +29,8 @@ impl Module<'_> {
                     TyKind::Record(..) => 3,
                     TyKind::Variant(..) => 3,
                     TyKind::List(..) => 3,
+                    TyKind::Top => 3,
+                    TyKind::Bot => 3,
                 };
 
                 if prec < self.2 {
@@ -36,7 +38,8 @@ impl Module<'_> {
                 }
 
                 match ty_kind {
-                    TyKind::Error => write!(f, "<error>")?,
+                    TyKind::Untyped { error: true } => write!(f, "<error>")?,
+                    TyKind::Untyped { error: false } => write!(f, "<any>")?,
                     TyKind::Unit => write!(f, "Unit")?,
                     TyKind::Bool => write!(f, "Bool")?,
                     TyKind::Nat => write!(f, "Nat")?,
@@ -113,6 +116,9 @@ impl Module<'_> {
                     TyKind::List(elem_ty_id) => {
                         write!(f, "[{}]", self.0.display_ty_prec(*elem_ty_id, 0))?;
                     }
+
+                    TyKind::Top => write!(f, "Top")?,
+                    TyKind::Bot => write!(f, "Bot")?,
                 }
 
                 if prec < self.2 {
@@ -130,10 +136,13 @@ impl Module<'_> {
 #[derive(Debug, Default, Clone)]
 pub struct WellKnownTys {
     pub error: TyId,
+    pub untyped: TyId,
     pub unit: TyId,
     pub bool: TyId,
     pub nat: TyId,
     pub empty_tuple: TyId,
+    pub top: TyId,
+    pub bot: TyId,
 }
 
 #[derive(Debug, Clone)]
@@ -141,10 +150,9 @@ pub struct Ty {
     pub kind: TyKind,
 }
 
-#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TyKind {
-    #[default]
-    Error,
+    Untyped { error: bool },
 
     Unit,
     Bool,
@@ -156,6 +164,14 @@ pub enum TyKind {
     Record(TyRecord),
     Variant(TyVariant),
     List(TyId),
+    Top,
+    Bot,
+}
+
+impl Default for TyKind {
+    fn default() -> Self {
+        Self::Untyped { error: true }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

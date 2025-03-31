@@ -234,13 +234,13 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         let mut failed = false;
 
         for (_, expr) in &self.m.exprs {
-            if self.is_error_ty(expr.ty_id) {
+            if self.is_untyped(expr.ty_id) {
                 failed = true;
                 self.diag.emit(
                     Diagnostic::error()
                         .at(expr.def.location)
                         .with_code(Code::INTERNAL_ERROR)
-                        .with_msg("the expression has the error type despite the typeck succeeding")
+                        .with_msg("the expression is untyped despite the typeck succeeding")
                         .with_label(Label::primary(expr.def.location))
                         .make(),
                 );
@@ -248,14 +248,12 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         }
 
         for (_, ty_expr) in &self.m.ty_exprs {
-            if self.is_error_ty(ty_expr.ty_id) {
+            if self.is_untyped(ty_expr.ty_id) {
                 failed = true;
                 self.diag.emit(
                     Diagnostic::error()
                         .at(ty_expr.def.location)
-                        .with_msg(
-                            "the type expression has the error type despite the typeck succeeding",
-                        )
+                        .with_msg("the type expression is untyped despite the typeck succeeding")
                         .with_code(Code::INTERNAL_ERROR)
                         .with_label(Label::primary(ty_expr.def.location))
                         .make(),
@@ -264,13 +262,13 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         }
 
         for (_, pat) in &self.m.pats {
-            if self.is_error_ty(pat.ty_id) {
+            if self.is_untyped(pat.ty_id) {
                 failed = true;
                 self.diag.emit(
                     Diagnostic::error()
                         .at(pat.def.location)
                         .with_code(Code::INTERNAL_ERROR)
-                        .with_msg("the pattern has the error type despite the typeck succeeding")
+                        .with_msg("the pattern is untyped despite the typeck succeeding")
                         .with_label(Label::primary(pat.def.location))
                         .make(),
                 );
@@ -278,13 +276,13 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         }
 
         for (_, binding) in &self.m.bindings {
-            if self.is_error_ty(binding.ty_id) {
+            if self.is_untyped(binding.ty_id) {
                 failed = true;
                 self.diag.emit(
                     Diagnostic::error()
                         .at(binding.location)
                         .with_code(Code::INTERNAL_ERROR)
-                        .with_msg("the binding has the error type despite the typeck succeeding")
+                        .with_msg("the binding is untyped despite the typeck succeeding")
                         .with_label(Label::primary(binding.location))
                         .make(),
                 );
@@ -296,7 +294,10 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
 
     fn add_well_known_tys(&mut self) {
         self.m.well_known_tys.error = self.m.add_ty(Ty {
-            kind: TyKind::Error,
+            kind: TyKind::Untyped { error: true },
+        });
+        self.m.well_known_tys.untyped = self.m.add_ty(Ty {
+            kind: TyKind::Untyped { error: false },
         });
         self.m.well_known_tys.unit = self.m.add_ty(Ty { kind: TyKind::Unit });
         self.m.well_known_tys.bool = self.m.add_ty(Ty { kind: TyKind::Bool });
@@ -304,6 +305,8 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         self.m.well_known_tys.empty_tuple = self.m.add_ty(Ty {
             kind: TyKind::Tuple(TyTuple { elems: vec![] }),
         });
+        self.m.well_known_tys.top = self.m.add_ty(Ty { kind: TyKind::Top });
+        self.m.well_known_tys.bot = self.m.add_ty(Ty { kind: TyKind::Bot });
     }
 
     fn set_all_tys_to_error(&mut self) {
@@ -343,8 +346,8 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         }
     }
 
-    fn is_error_ty(&self, ty_id: TyId) -> bool {
-        ty_id == self.m.well_known_tys.error
+    fn is_untyped(&self, ty_id: TyId) -> bool {
+        matches!(self.m.tys[ty_id].kind, TyKind::Untyped { .. })
     }
 
     fn cmp_ty_tuple<L, R>(&self, lhs: L, rhs: R) -> Option<Ordering>
@@ -372,9 +375,16 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
 
         Some(
             match (&self.m.tys[lhs_ty_id].kind, &self.m.tys[rhs_ty_id].kind) {
-                // ∀T: Error <: T ∧ T <: Error.
-                // of course, valid programs would never observe this.
-                (TyKind::Error, _) | (_, TyKind::Error) => Ordering::Equal,
+                // ∀T: Untyped <: T ∧ T <: Untyped.
+                (TyKind::Untyped { .. }, _) | (_, TyKind::Untyped { .. }) => Ordering::Equal,
+
+                // ∀T: T <: Top.
+                (_, TyKind::Top) => Ordering::Less,
+                (TyKind::Top, _) => Ordering::Greater,
+
+                // ∀T: Bot <: T.
+                (TyKind::Bot, _) => Ordering::Less,
+                (_, TyKind::Bot) => Ordering::Greater,
 
                 (&TyKind::Ref(lhs), &TyKind::Ref(rhs)) => self.cmp_tys(lhs, rhs)?,
 
@@ -402,30 +412,20 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                     Ordering::Equal
                 }
 
-                // {} <: {t₁, ..., tₙ}.
-                (TyKind::Record(lhs), TyKind::Tuple(rhs))
-                    if self.m.is_feature_enabled(FeatureKind::Subtyping) =>
+                // {} <: {f₁ : T₁, ..., fₙ : Tₙ}.
+                (TyKind::Record(_), TyKind::Tuple(rhs))
+                    if self.m.is_feature_enabled(FeatureKind::Subtyping)
+                        && rhs.elems.is_empty() =>
                 {
-                    if lhs.elems.is_empty() {
-                        Ordering::Less
-                    } else if rhs.elems.is_empty() {
-                        Ordering::Greater
-                    } else {
-                        return None;
-                    }
+                    Ordering::Greater
                 }
 
-                // {} <: {f₁ : t₁, ..., fₙ : tₙ}.
-                (TyKind::Tuple(lhs), TyKind::Record(rhs))
-                    if self.m.is_feature_enabled(FeatureKind::Subtyping) =>
+                // {} <: {f₁ : T₁, ..., fₙ : Tₙ}.
+                (TyKind::Tuple(lhs), TyKind::Record(_))
+                    if self.m.is_feature_enabled(FeatureKind::Subtyping)
+                        && lhs.elems.is_empty() =>
                 {
-                    if lhs.elems.is_empty() {
-                        Ordering::Less
-                    } else if rhs.elems.is_empty() {
-                        Ordering::Greater
-                    } else {
-                        return None;
-                    }
+                    Ordering::Less
                 }
 
                 (TyKind::Record(lhs), TyKind::Record(rhs))
@@ -551,7 +551,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
     }
 
     fn ty_conforms_to(&self, ty_id: TyId, expected_ty_id: TyId) -> bool {
-        if self.is_error_ty(ty_id) || self.is_error_ty(expected_ty_id) {
+        if self.is_untyped(ty_id) || self.is_untyped(expected_ty_id) {
             return true;
         }
 
@@ -1344,8 +1344,14 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 self.m.ty_exprs[ty_expr.id].ty_id = self.m.well_known_tys.unit;
             }
 
-            ast::TyExprKind::Top(_) => unimplemented!(),
-            ast::TyExprKind::Bot(_) => unimplemented!(),
+            ast::TyExprKind::Top(_) => {
+                self.m.ty_exprs[ty_expr.id].ty_id = self.m.well_known_tys.top;
+            }
+
+            ast::TyExprKind::Bot(_) => {
+                self.m.ty_exprs[ty_expr.id].ty_id = self.m.well_known_tys.bot;
+            }
+
             ast::TyExprKind::Auto(_) => unimplemented!(),
 
             ast::TyExprKind::Name(_) => {
@@ -1479,7 +1485,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             return Err(());
         };
 
-        if self.is_error_ty(expected_ty_id) {
+        if self.is_untyped(expected_ty_id) {
             return Ok(());
         }
 
@@ -1543,7 +1549,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         self.typeck_expr(&expr.base, None)?;
         let base_ty_id = self.m.exprs[expr.base.id].ty_id;
 
-        if self.is_error_ty(base_ty_id) {
+        if self.is_untyped(base_ty_id) {
             return Ok(());
         }
 
@@ -1740,7 +1746,8 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             (
                 self.m.add_ty(Ty {
                     kind: TyKind::Fn(TyFn {
-                        params: vec![expected_ty_id],
+                        // don't check the parameter type because we'll do it later anyway.
+                        params: vec![self.m.well_known_tys.untyped],
                         ret: expected_ty_id,
                     }),
                 }),
@@ -1754,7 +1761,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
 
         let inner_ty_id = self.m.exprs[expr.expr.id].ty_id;
 
-        if self.is_error_ty(inner_ty_id) {
+        if self.is_untyped(inner_ty_id) {
             return Ok(());
         }
 
@@ -1831,7 +1838,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                         return Err(());
                     };
 
-                    if self.is_error_ty(expected_ty_id) {
+                    if self.is_untyped(expected_ty_id) {
                         return Ok(());
                     }
 
@@ -1872,7 +1879,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
 
                 ast::Builtin::Cons => {
                     if let Some((expected_ty_id, source)) = expected_ty {
-                        if self.is_error_ty(expected_ty_id) {
+                        if self.is_untyped(expected_ty_id) {
                             return Ok(());
                         }
 
@@ -1927,7 +1934,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
 
                 ast::Builtin::ListHead => {
                     if let Some((expected_ty_id, source)) = expected_ty {
-                        if self.is_error_ty(expected_ty_id) {
+                        if self.is_untyped(expected_ty_id) {
                             return Ok(());
                         }
 
@@ -1953,7 +1960,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                         self.typeck_expr(&expr.args[0], None)?;
                         let arg_ty_id = self.m.exprs[expr.args[0].id].ty_id;
 
-                        let ty_id = if self.is_error_ty(arg_ty_id) {
+                        let ty_id = if self.is_untyped(arg_ty_id) {
                             self.m.well_known_tys.error
                         } else if let TyKind::List(elem_ty_id) = self.m.tys[arg_ty_id].kind {
                             elem_ty_id
@@ -1977,7 +1984,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                     self.typeck_expr(&expr.args[0], None)?;
                     let arg_ty_id = self.m.exprs[expr.args[0].id].ty_id;
 
-                    if self.is_error_ty(arg_ty_id) {
+                    if self.is_untyped(arg_ty_id) {
                         // ignore.
                     } else if let TyKind::List(_) = self.m.tys[arg_ty_id].kind {
                         // also good.
@@ -2013,7 +2020,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
 
                     'ty_check: {
                         if let Some((expected_ty_id, ref source)) = expected_ty {
-                            if self.is_error_ty(expected_ty_id) {
+                            if self.is_untyped(expected_ty_id) {
                                 return Ok(());
                             }
 
@@ -2036,7 +2043,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                     self.typeck_expr(&expr.args[0], None)?;
                     let arg_ty_id = self.m.exprs[expr.args[0].id].ty_id;
 
-                    if self.is_error_ty(arg_ty_id) {
+                    if self.is_untyped(arg_ty_id) {
                         // ignore.
                     } else if let TyKind::List(_) = self.m.tys[arg_ty_id].kind {
                         // also good.
@@ -2111,7 +2118,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
 
                 ast::Builtin::NatRec => {
                     if let Some((expected_ty_id, source)) = expected_ty {
-                        if self.is_error_ty(expected_ty_id) {
+                        if self.is_untyped(expected_ty_id) {
                             return Ok(());
                         }
 
@@ -2196,7 +2203,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 self.typeck_expr(callee, None)?;
                 let callee_ty_id = self.m.exprs[callee.id].ty_id;
 
-                if self.is_error_ty(callee_ty_id) {
+                if self.is_untyped(callee_ty_id) {
                     return Err(());
                 }
 
@@ -2325,7 +2332,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         expected_ty: Option<ExpectedTy>,
     ) -> Result {
         if let Some((expected_ty_id, source)) = expected_ty {
-            if self.is_error_ty(expected_ty_id) {
+            if self.is_untyped(expected_ty_id) {
                 return Ok(());
             }
 
@@ -2423,7 +2430,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         expected_ty: Option<ExpectedTy>,
     ) -> Result {
         if let Some((expected_ty_id, source)) = expected_ty {
-            if self.is_error_ty(expected_ty_id) {
+            if self.is_untyped(expected_ty_id) {
                 return self.typeck_expr_tuple(expr_id, expr, None);
             }
 
@@ -2519,7 +2526,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         expected_ty: Option<ExpectedTy>,
     ) -> Result {
         if let Some((expected_ty_id, source)) = expected_ty {
-            if self.is_error_ty(expected_ty_id) {
+            if self.is_untyped(expected_ty_id) {
                 return self.typeck_expr_record(expr_id, expr, None);
             }
 
@@ -2588,21 +2595,22 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
 
             result?;
 
-            let expected_field_ty_ids = ty
+            let fields = expr
                 .fields
                 .iter()
-                .map(|(name, &idx)| {
+                .map(|field| {
                     (
-                        // so that the name does not depend on `self`
-                        provided_fields_by_name[name.as_str()].name.as_str(),
-                        ty.elems.get(idx).map(|&(_, ty_id)| ty_id),
+                        &field.expr,
+                        ty.fields
+                            .get(field.name.as_str())
+                            .map(|&idx| ty.elems[idx].1),
                     )
                 })
-                .collect::<FxHashMap<_, _>>();
+                .collect::<Vec<_>>();
 
-            for (name, expected_field_ty_id) in expected_field_ty_ids {
+            for (expr, expected_field_ty_id) in fields {
                 result = result.and(self.typeck_expr(
-                    &provided_fields_by_name[name].expr,
+                    expr,
                     expected_field_ty_id.map(|expected_field_ty_id| {
                         (
                             expected_field_ty_id,
@@ -2649,7 +2657,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         expected_ty: Option<ExpectedTy>,
     ) -> Result {
         if let Some((expected_ty_id, source)) = expected_ty {
-            if self.is_error_ty(expected_ty_id) {
+            if self.is_untyped(expected_ty_id) {
                 return Ok(());
             }
 
@@ -2823,7 +2831,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         expected_ty: Option<ExpectedTy>,
     ) -> Result {
         if let Some((expected_ty_id, source)) = expected_ty {
-            let elem_ty_id = if self.is_error_ty(expected_ty_id) {
+            let elem_ty_id = if self.is_untyped(expected_ty_id) {
                 self.m.well_known_tys.error
             } else {
                 // WARN: this needs to be changed when Top is added.
@@ -3041,7 +3049,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         match expr.op {
             ast::UnOp::New => {
                 if let Some((expected_ty_id, source)) = expected_ty {
-                    let pointee_ty_id = if self.is_error_ty(expected_ty_id) {
+                    let pointee_ty_id = if self.is_untyped(expected_ty_id) {
                         self.m.well_known_tys.error
                     } else {
                         // WARN: this needs to be changed when Top is added.
@@ -3080,7 +3088,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
 
             ast::UnOp::Deref => {
                 if let Some((expected_ty_id, source)) = expected_ty {
-                    if self.is_error_ty(expected_ty_id) {
+                    if self.is_untyped(expected_ty_id) {
                         return Ok(());
                     }
 
@@ -3097,7 +3105,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                     let arg_ty_id = self.m.exprs[expr.rhs.id].ty_id;
 
                     // WARN: may need to be changed when Bot is added.
-                    let ty_id = if self.is_error_ty(arg_ty_id) {
+                    let ty_id = if self.is_untyped(arg_ty_id) {
                         self.m.well_known_tys.error
                     } else if let TyKind::Ref(ty_id) = self.m.tys[arg_ty_id].kind {
                         ty_id
@@ -3228,7 +3236,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 result = result.and(self.typeck_expr(&expr.lhs, None));
                 let ref_ty_id = self.m.exprs[expr.lhs.id].ty_id;
 
-                let pointee_ty_id = if self.is_error_ty(ref_ty_id) {
+                let pointee_ty_id = if self.is_untyped(ref_ty_id) {
                     self.m.well_known_tys.error
                 } else if let TyKind::Ref(pointee_ty_id) = self.m.tys[ref_ty_id].kind {
                     pointee_ty_id
@@ -3293,7 +3301,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         expected_ty: Option<ExpectedTy>,
     ) -> Result {
         if let Some((expected_ty_id, source)) = expected_ty {
-            if self.is_error_ty(expected_ty_id) {
+            if self.is_untyped(expected_ty_id) {
                 return Ok(());
             }
 
@@ -3413,7 +3421,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                     return Err(());
                 };
 
-                if self.is_error_ty(expected_ty_id) {
+                if self.is_untyped(expected_ty_id) {
                     return Ok(());
                 }
 
@@ -3456,7 +3464,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
 
             ast::Cons::Cons => {
                 if let Some((expected_ty_id, source)) = expected_ty {
-                    if self.is_error_ty(expected_ty_id) {
+                    if self.is_untyped(expected_ty_id) {
                         return Ok(());
                     }
 
@@ -3570,7 +3578,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         expected_ty: Option<ExpectedTy>,
     ) -> Result {
         if let Some((expected_ty_id, source)) = expected_ty {
-            if self.is_error_ty(expected_ty_id) {
+            if self.is_untyped(expected_ty_id) {
                 return Ok(());
             }
 
@@ -3662,7 +3670,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         expected_ty: Option<ExpectedTy>,
     ) -> Result {
         if let Some((expected_ty_id, source)) = expected_ty {
-            if self.is_error_ty(expected_ty_id) {
+            if self.is_untyped(expected_ty_id) {
                 return Ok(());
             }
 
@@ -3785,7 +3793,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         expected_ty: Option<ExpectedTy>,
     ) -> Result {
         if let Some((expected_ty_id, source)) = expected_ty {
-            let elem_ty_id = if self.is_error_ty(expected_ty_id) {
+            let elem_ty_id = if self.is_untyped(expected_ty_id) {
                 self.m.well_known_tys.error
             } else {
                 let TyKind::List(ty_id) = self.m.tys[expected_ty_id].kind else {
