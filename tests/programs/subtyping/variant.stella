@@ -1,0 +1,59 @@
+language core;
+
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #pattern-ascriptions;
+extend with #type-ascriptions;
+extend with #nested-function-declarations;
+extend with #unit-type;
+extend with #structural-subtyping;
+extend with #top-type;
+extend with #bottom-type;
+extend with #panic;
+
+extend with #variants;
+extend with #nullary-variant-labels;
+
+fn expect-top() -> Unit {
+  fn can-infer() -> Top {
+    //!~ ERROR
+    return <|x = 0|>
+  }
+
+  fn cannot-infer() -> Top {
+    //! ERROR(sema::ambiguous_panic_expr_ty)
+    return <|x = panic!|>
+  }
+
+  return unit
+}
+
+fn expect-bot() -> Bot {
+  //! ERROR(sema::unexpected_variant)
+  return <|x|>
+}
+
+fn variant-with-bot(x : Bot) -> Bot {
+  //! ERROR(sema::unexpected_variant)
+  return <|x = x|>
+}
+
+fn width-subtyping() -> <|x : Nat, y : Bool|> {
+  //!~ ERROR
+  return <|x = 0|>
+}
+
+fn covariance() -> <|x : Top, y : Top|> {
+  //!~ ERROR
+  return <|x = 0|>
+}
+
+fn can-infer-without-expectation() -> Unit {
+  //!~ ERROR
+  return match <|x = 0|> { _ as <|x : Nat|> => unit }
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}

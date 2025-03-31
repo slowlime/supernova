@@ -1,0 +1,59 @@
+language core;
+
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #pattern-ascriptions;
+extend with #type-ascriptions;
+extend with #nested-function-declarations;
+extend with #unit-type;
+extend with #structural-subtyping;
+extend with #top-type;
+extend with #bottom-type;
+extend with #panic;
+
+extend with #let-patterns;
+extend with #letrec-bindings;
+
+fn expect-top() -> Top {
+  //!~ ERROR
+  return letrec x as Nat = 0 in x
+}
+
+fn expect-bot() -> Bot {
+  //! ERROR(sema::expr_ty_mismatch)
+  return letrec x as Nat = 0 in x
+}
+
+fn bot-in-binding(x : Bot) -> Unit {
+  fn check() -> Unit {
+    fn is-nat() -> Nat {
+      //!~ ERROR
+      return letrec x as Bot = x in 0
+    }
+
+    fn is-not-bot() -> Bot {
+      //! ERROR(sema::expr_ty_mismatch)
+      return letrec x as Bot = x in 0
+    }
+
+    return unit
+  }
+
+  fn infer() -> Unit {
+    //!~ ERROR
+    return match (letrec x as Bot = x in 0) {
+      //!~ ERROR
+      _ as Nat => unit
+
+    | //! ERROR(sema::illegal_pat_for_ty)
+      _ as Bot => unit
+    }
+  }
+
+  return unit
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}

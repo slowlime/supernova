@@ -1,0 +1,98 @@
+language core;
+
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #pattern-ascriptions;
+extend with #nested-function-declarations;
+extend with #unit-type;
+extend with #structural-subtyping;
+extend with #top-type;
+extend with #bottom-type;
+
+extend with #lists;
+
+fn expect-top() -> Unit {
+  fn can-infer() -> Top {
+    //!~ ERROR
+    return cons(false, [])
+  }
+
+  fn cannot-infer() -> Top {
+    //! ERROR(sema::ambiguous_list_ty)
+    return cons([], [])
+  }
+
+  return unit
+}
+
+fn expect-bot() -> Bot {
+  //! ERROR(sema::unexpected_list)
+  return cons(false, [])
+}
+
+fn args(t : Top, b : Bot) -> Unit {
+  fn check() -> Unit {
+    fn arg-1-bot() -> Unit {
+      fn is-bot-list() -> [Bot] {
+        //!~ ERROR
+        return cons(b, [])
+      }
+
+      fn is-not-bot() -> Bot {
+        //! ERROR(sema::unexpected_list)
+        return cons(b, [])
+      }
+
+      return unit
+    }
+
+    fn arg-2-bot() -> Unit {
+      fn is-bot-list() -> [Bot] {
+        //!~ ERROR
+        return cons(b, b)
+      }
+
+      fn is-not-bot() -> Bot {
+        //! ERROR(sema::unexpected_list)
+        return cons(b, b)
+      }
+
+      return unit
+    }
+
+    return unit
+  }
+
+  fn infer() -> Unit {
+    fn arg-1-bot() -> Unit {
+      //!~ ERROR
+      return match cons(b, []) {
+        //!~ ERROR
+        _ as [Bot] => unit
+
+      | //! ERROR(sema::illegal_pat_for_ty)
+        _ as Bot => unit
+      }
+    }
+
+    fn arg-2-bot() -> Unit {
+      //!~ ERROR
+      return match cons(b, b) {
+        //!~ ERROR
+        _ as [Bot] => unit
+
+      | //! ERROR(sema::illegal_pat_for_ty)
+        _ as Bot => unit
+      }
+    }
+
+    return unit
+  }
+
+  return unit
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}

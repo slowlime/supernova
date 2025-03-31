@@ -1,0 +1,81 @@
+language core;
+
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #pattern-ascriptions;
+extend with #nested-function-declarations;
+extend with #unit-type;
+extend with #structural-subtyping;
+extend with #top-type;
+extend with #bottom-type;
+
+fn expect-top(x : Bot) -> Top {
+  //!~ ERROR
+  return Nat::rec(0, unit, fn(x : Top) { return fn(x : Top) { return x } })
+}
+
+fn expect-bot() -> Bot {
+  //! ERROR(sema::expr_ty_mismatch)
+  return Nat::rec(0, unit, fn(x : Top) { return fn(x : Top) { return x } })
+}
+
+fn args(t : Top, b : Bot) -> Unit {
+  fn check() -> Unit {
+    fn bot-1() -> Unit {
+      fn expecting-bot() -> Bot {
+        //! ERROR(sema::expr_ty_mismatch)
+        return Nat::rec(b, 0, fn(x : Top) { return fn(x : Top) { return b } })
+      }
+
+      fn expecting-nat() -> Nat {
+        //!~ ERROR
+        return Nat::rec(b, 0, fn(x : Top) { return fn(x : Top) { return b } })
+      }
+
+      return unit
+    }
+
+    fn bot-2() -> Bot {
+      //!~ ERROR
+      return Nat::rec(0, b, fn(x : Top) { return fn(x : Bot) { return x } })
+    }
+
+    fn bot-3() -> Unit {
+      //!~ ERROR
+      return Nat::rec(0, unit, b)
+    }
+
+    fn arg-3-fn-top-to-bot() -> Unit {
+      //!~ ERROR
+      return Nat::rec(0, b, fn(x : Top) { return b })
+    }
+
+    return unit
+  }
+
+  fn infer() -> Unit {
+    fn bot-1() -> Unit {
+      //!~ ERROR
+      return match Nat::rec(b, 0, fn(x : Top) { return b }) { _ as Nat => unit }
+    }
+
+    fn bot-2() -> Unit {
+      //!~ ERROR
+      return match Nat::rec(0, b, fn(x : Top) { return b }) { _ as Bot => unit }
+    }
+
+    fn bot-3() -> Unit {
+      //!~ ERROR
+      return match Nat::rec(0, unit, b) { _ as Unit => unit }
+    }
+
+    return unit
+  }
+
+  return unit
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}

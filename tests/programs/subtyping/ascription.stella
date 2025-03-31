@@ -1,0 +1,43 @@
+language core;
+
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #pattern-ascriptions;
+extend with #type-ascriptions;
+extend with #nested-function-declarations;
+extend with #unit-type;
+extend with #structural-subtyping;
+extend with #top-type;
+extend with #bottom-type;
+
+fn expect-top(x : Nat) -> Top {
+  //!~ ERROR
+  return x as Nat
+}
+
+fn expect-bot(x : Nat) -> Bot {
+  //! ERROR(sema::expr_ty_mismatch)
+  return x as Nat
+}
+
+fn arg-not-subty-of-ascribed(x : Nat) -> Top {
+  // Nat <: Top and Bool <: Bool, but not Nat <: Bool.
+  //! ERROR(sema::expr_ty_mismatch)
+  return x as Bool
+}
+
+fn ascribed-ty-not-subty-of-expected(x : Bot) -> Nat {
+  // Bot <: Bool and Bot <: Nat, but not Bool <: Nat.
+  //! ERROR(sema::expr_ty_mismatch)
+  return x as Bool
+}
+
+fn step-by-step-widening(x : Bot) -> Top {
+  //!~ ERROR
+  return x as (fn(Top) -> Bot) as (fn(Nat) -> Bot) as (fn(Nat) -> Nat) as (fn(Nat) -> Top) as (fn(Bot) -> Top) as Top
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}

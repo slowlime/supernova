@@ -1,0 +1,59 @@
+language core;
+
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #pattern-ascriptions;
+extend with #nested-function-declarations;
+extend with #unit-type;
+extend with #structural-subtyping;
+extend with #top-type;
+extend with #bottom-type;
+
+extend with #sum-types;
+
+fn expect-top() -> Top {
+  //! ERROR(sema::ambiguous_variant_ty)
+  return inl(false)
+}
+
+fn expect-bot() -> Bot {
+  //! ERROR(sema::unexpected_injection)
+  return inr(false)
+}
+
+fn arg(t : Top, b : Bot) -> Unit {
+  fn check() -> Unit {
+    fn top() -> Top + Bot {
+      //!~ ERROR
+      return inl(t)
+    }
+
+    fn bot() -> Unit {
+      fn expecting-bot-plus-bot() -> Bot + Bot {
+        //!~ ERROR
+        return inr(b)
+      }
+
+      fn expecting-just-bot() -> Bot {
+        //! ERROR(sema::unexpected_injection)
+        return inr(b)
+      }
+
+      return unit
+    }
+
+    return unit
+  }
+
+  fn infer() -> Unit {
+    //! ERROR(sema::ambiguous_sum_ty)
+    return match inl(b) { _ => unit }
+  }
+
+  return unit
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}

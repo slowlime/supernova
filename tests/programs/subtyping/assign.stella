@@ -1,0 +1,61 @@
+language core;
+
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #pattern-ascriptions;
+extend with #type-ascriptions;
+extend with #nested-function-declarations;
+extend with #unit-type;
+extend with #structural-subtyping;
+extend with #top-type;
+extend with #bottom-type;
+extend with #panic;
+
+extend with #references;
+
+fn expect-top(x : &Bool, y : Bool) -> Top {
+  //!~ ERROR
+  return x := y
+}
+
+fn expect-bot(x : &Bool, y : Bool) -> Bot {
+  //! ERROR(sema::expr_ty_mismatch)
+  return x := y
+}
+
+fn args(t : Top, b : Bot, rt : &Top) -> Unit {
+  fn check() -> Unit {
+    fn lhs-bot() -> Unit {
+      //! ERROR(sema::expr_ty_not_reference)
+      return b := t
+    }
+
+    fn lhs-ref-to-top() -> Unit {
+      //!~ ERROR
+      return rt := t
+    }
+
+    return unit
+  }
+
+  fn infer() -> Unit {
+    fn lhs-bot() -> Unit {
+      //! ERROR(sema::expr_ty_not_reference)
+      return match (b := t) { _ => unit }
+    }
+
+    fn lhs-ref-to-top() -> Unit {
+      //!~ ERROR
+      return match (rt := t) { _ => unit }
+    }
+
+    return unit
+  }
+
+  return unit
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}

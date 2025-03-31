@@ -1,0 +1,64 @@
+language core;
+
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #pattern-ascriptions;
+extend with #type-ascriptions;
+extend with #nested-function-declarations;
+extend with #unit-type;
+extend with #structural-subtyping;
+extend with #top-type;
+extend with #bottom-type;
+extend with #panic;
+
+extend with #records;
+
+fn expect-top() -> Top {
+  //!~ ERROR
+  return {x = 0, y = false}
+}
+
+fn expect-bot() -> Bot {
+  //! ERROR(sema::unexpected_record)
+  return {x = 0, y = false}
+}
+
+fn record-with-bot(x : Bot) -> Bot {
+  //! ERROR(sema::unexpected_record)
+  return {x = x}
+}
+
+fn width-subtyping() -> {x : Nat} {
+  //!~ ERROR
+  return {x = 0, y = false}
+}
+
+fn extra-fields-are-also-checked() -> {x : Nat} {
+  //! ERROR(sema::extracting_field_of_non_record_ty)
+  return {x = 0, y = false.x}
+}
+
+fn infer-in-extra-fields() -> {x : Nat} {
+  //! ERROR(sema::ambiguous_panic_expr_ty)
+  return {x = 0, y = panic!}
+}
+
+fn record-is-subtype-of-empty-tuple() -> {} {
+  //!~ ERROR
+  return {x = 0, y = false, z = unit}
+}
+
+fn covariance() -> {x : Top, y : Top} {
+  //!~ ERROR
+  return {x = 0, y = false}
+}
+
+fn width-and-depth() -> {x : Top} {
+  //!~ ERROR
+  return {x = 0, y = false}
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}

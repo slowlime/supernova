@@ -1,0 +1,72 @@
+language core;
+
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #pattern-ascriptions;
+extend with #nested-function-declarations;
+extend with #unit-type;
+extend with #structural-subtyping;
+extend with #top-type;
+extend with #bottom-type;
+
+fn expect-top() -> Top {
+  //!~ ERROR
+  return Nat::pred(0)
+}
+
+fn expect-bot() -> Bot {
+  //! ERROR(sema::expr_ty_mismatch)
+  return Nat::pred(0)
+}
+
+fn arg(t : Top, b : Bot) -> Unit {
+  fn check() -> Unit {
+    fn top() -> Nat {
+      //! ERROR(sema::expr_ty_mismatch)
+      return Nat::pred(t)
+    }
+
+    fn bot() -> Unit {
+      fn expecting-nat() -> Nat {
+        //!~ ERROR
+        return Nat::pred(b)
+      }
+
+      fn expecting-bot() -> Bot {
+        //! ERROR(sema::expr_ty_mismatch)
+        return Nat::pred(b)
+      }
+
+      return unit
+    }
+
+    return unit
+  }
+
+  fn infer() -> Unit {
+    fn top() -> Unit {
+      //! ERROR(sema::expr_ty_mismatch)
+      return match Nat::pred(t) { _ => unit }
+    }
+
+    fn bot() -> Unit {
+      //!~ ERROR
+      return match Nat::pred(b) {
+        //!~ ERROR
+        _ as Nat => unit
+
+      | //! ERROR(sema::illegal_pat_for_ty)
+        _ as Bot => unit
+      }
+    }
+
+    return unit
+  }
+
+  return unit
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}

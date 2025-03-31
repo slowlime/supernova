@@ -1,0 +1,42 @@
+language core;
+
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #pattern-ascriptions;
+extend with #type-ascriptions;
+extend with #nested-function-declarations;
+extend with #unit-type;
+extend with #structural-subtyping;
+extend with #top-type;
+extend with #bottom-type;
+extend with #panic;
+
+fn expect-top() -> Top {
+  //!~ ERROR
+  return match false { true => false | false => true }
+}
+
+fn expect-bot() -> Bot {
+  //! ERROR(sema::expr_ty_mismatch)
+  return match false { true => false | false => true }
+}
+
+fn bot-scrutinee(x : Bot) -> Bot {
+  //! ERROR(sema::expr_ty_mismatch)
+  return match x { _ => unit }
+}
+
+fn cannot-use-empty-match-with-bot(x : Bot) -> Unit {
+  //! ERROR(sema::empty_match)
+  return match x {}
+}
+
+fn match-arms-do-not-join(x : fn(Top) -> Bot, y : fn(Bot) -> Top) -> Unit {
+  //! ERROR(sema::expr_ty_mismatch)
+  return match false { true => x | false => y }
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}

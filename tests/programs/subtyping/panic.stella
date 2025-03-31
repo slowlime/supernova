@@ -1,0 +1,28 @@
+//! PASS
+language core;
+
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #pattern-ascriptions;
+extend with #nested-function-declarations;
+extend with #unit-type;
+extend with #structural-subtyping;
+extend with #top-type;
+extend with #bottom-type;
+
+extend with #panic;
+
+fn expect-top() -> Top {
+  //!~ ERROR
+  return panic!
+}
+
+fn expect-bot() -> Bot {
+  //!~ ERROR
+  return panic!
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}

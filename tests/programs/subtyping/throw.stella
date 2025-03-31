@@ -1,0 +1,44 @@
+language core;
+
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #pattern-ascriptions;
+extend with #nested-function-declarations;
+extend with #unit-type;
+extend with #structural-subtyping;
+extend with #top-type;
+extend with #bottom-type;
+
+extend with #exceptions;
+extend with #exception-type-declaration;
+
+exception type = Nat
+
+fn expect-top() -> Top {
+  //!~ ERROR
+  return throw(0)
+}
+
+fn expect-bot() -> Bot {
+  //!~ ERROR
+  return throw(0)
+}
+
+fn arg() -> Unit {
+  fn top(t : Top) -> Bot {
+    //! ERROR(sema::expr_ty_mismatch)
+    return throw(t)
+  }
+
+  fn bot(b : Bot) -> Bot {
+    //!~ ERROR
+    return throw(b)
+  }
+
+  return unit
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}

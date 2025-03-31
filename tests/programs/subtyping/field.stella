@@ -1,0 +1,96 @@
+language core;
+
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #pattern-ascriptions;
+extend with #nested-function-declarations;
+extend with #unit-type;
+extend with #structural-subtyping;
+extend with #top-type;
+extend with #bottom-type;
+
+extend with #records;
+extend with #tuples;
+
+fn expect-top(x : {Nat}) -> Top {
+  //!~ ERROR
+  return x.1
+}
+
+fn expect-bot(x : {Nat}) -> Bot {
+  //! ERROR(sema::expr_ty_mismatch)
+  return x.1
+}
+
+fn arg(t : Top, b : Bot) -> Unit {
+  fn check() -> Unit {
+    fn tuple() -> Unit {
+      fn top() -> Top {
+        //! ERROR(sema::indexing_non_tuple_ty)
+        return t.1
+      }
+
+      fn bot() -> Bot {
+        //! ERROR(sema::indexing_non_tuple_ty)
+        return b.1
+      }
+
+      return unit
+    }
+
+    fn record() -> Unit {
+      fn top() -> Top {
+        //! ERROR(sema::extracting_field_of_non_record_ty)
+        return t.x
+      }
+
+      fn bot() -> Bot {
+        //! ERROR(sema::extracting_field_of_non_record_ty)
+        return b.x
+      }
+
+      return unit
+    }
+
+    return unit
+  }
+
+  fn infer() -> Unit {
+    fn tuple() -> Unit {
+      fn top() -> Unit {
+        //! ERROR(sema::indexing_non_tuple_ty)
+        return match t.1 { _ as Top => unit }
+      }
+
+      fn bot() -> Unit {
+        //! ERROR(sema::indexing_non_tuple_ty)
+        return match b.1 { _ as Bot => unit }
+      }
+
+      return unit
+    }
+
+    fn record() -> Unit {
+      fn top() -> Unit {
+        //! ERROR(sema::extracting_field_of_non_record_ty)
+        return match t.x { _ as Top => unit }
+      }
+
+      fn bot() -> Unit {
+        //! ERROR(sema::extracting_field_of_non_record_ty)
+        return match b.x { _ as Bot => unit }
+      }
+
+      return unit
+    }
+
+    return unit
+  }
+
+  return unit
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}

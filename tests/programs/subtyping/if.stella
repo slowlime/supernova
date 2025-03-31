@@ -1,0 +1,69 @@
+language core;
+
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #pattern-ascriptions;
+extend with #nested-function-declarations;
+extend with #unit-type;
+extend with #structural-subtyping;
+extend with #top-type;
+extend with #bottom-type;
+extend with #lists;
+
+fn expect-top() -> Unit {
+  fn can-infer() -> Top {
+    //!~ ERROR
+    return if true then false else true
+  }
+
+  fn cannot-infer() -> Top {
+    //! ERROR(sema::ambiguous_list_ty)
+    return if true then [] else []
+  }
+
+  return unit
+}
+
+fn expect-bot() -> Bot {
+  //! ERROR(sema::expr_ty_mismatch)
+  return if true then unit else unit
+}
+
+fn if-branches-do-not-join(x : fn(Top) -> Bot, y : fn(Bot) -> Top) -> Unit {
+  //! ERROR(sema::expr_ty_mismatch)
+  return if true then x else y
+}
+
+fn bot-in-branch(x : Bot) -> Unit {
+  fn check() -> Unit {
+    fn is-nat() -> Nat {
+      //!~ ERROR
+      return if true then 0 else x
+    }
+
+    fn is-not-bot() -> Bot {
+      //! ERROR(sema::expr_ty_mismatch)
+      return if true then 0 else x
+    }
+
+    return unit
+  }
+
+  fn infer() -> Unit {
+    //!~ ERROR
+    return match (if true then 0 else x) {
+      //!~ ERROR
+      _ as Nat => unit
+
+    | //! ERROR(sema::illegal_pat_for_ty)
+      _ as Bot => unit
+    }
+  }
+
+  return unit
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}

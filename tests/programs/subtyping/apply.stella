@@ -1,0 +1,97 @@
+language core;
+
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #pattern-ascriptions;
+extend with #nested-function-declarations;
+extend with #unit-type;
+extend with #structural-subtyping;
+extend with #top-type;
+extend with #bottom-type;
+extend with #panic;
+
+fn expect-top(f : fn(Nat) -> Bool, x : Nat) -> Top {
+  //!~ ERROR
+  return f(x)
+}
+
+fn expect-bot(f : fn(Nat) -> Nat, x : Nat) -> Bot {
+  //! ERROR(sema::expr_ty_mismatch)
+  return f(x)
+}
+
+fn args(t : Top, b : Bot, f : fn(Nat) -> Nat) -> Unit {
+  fn check() -> Unit {
+    fn callee-top() -> Top {
+      //! ERROR(sema::apply_not_fn)
+      return t(b)
+    }
+
+    fn arg-top() -> Top {
+      return f(
+        t //!< ERROR(sema::expr_ty_mismatch)
+      )
+    }
+
+    fn callee-bot() -> Top {
+      //! ERROR(sema::apply_not_fn)
+      return b(t)
+    }
+
+    fn arg-bot() -> Unit {
+      fn expecting-bot() -> Bot {
+        //! ERROR(sema::expr_ty_mismatch)
+        return f(b)
+      }
+
+      fn expecting-nat() -> Nat {
+        //!~ ERROR
+        return f(b)
+      }
+
+      return unit
+    }
+
+    return unit
+  }
+
+  fn infer() -> Unit {
+    fn callee-top() -> Unit {
+      //! ERROR(sema::apply_not_fn)
+      return match t(b) { _ => unit }
+    }
+
+    fn arg-top() -> Unit {
+      return match f(
+        t //!< ERROR(sema::expr_ty_mismatch)
+      ) {
+        _ => unit
+      }
+    }
+
+    fn callee-bot() -> Top {
+      //! ERROR(sema::apply_not_fn)
+      return match b(t) { _ => unit }
+    }
+
+    fn arg-bot() -> Unit {
+      //!~ ERROR
+      return match f(b) {
+        //!~ ERROR
+        _ as Nat => unit
+
+      | //! ERROR(sema::illegal_pat_for_ty)
+        _ as Bot => unit
+      }
+    }
+
+    return unit
+  }
+
+  return unit
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}

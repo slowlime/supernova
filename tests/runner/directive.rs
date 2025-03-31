@@ -74,12 +74,17 @@ impl DirectiveDiag {
                     .is_none_or(|code| diag.code.code() == code)
         });
 
+        let what = match self.diag_line {
+            Some((line, _)) => format!("diagnostic at line {line}"),
+            None => "diagnostic for built-in code".into(),
+        };
+
         match (found, self.invert) {
             (true, false) | (false, true) => TestResult::Passed,
 
             (true, true) => {
                 eprintln!(
-                    "Found an unexpected disgnostic matching the directive at line {}",
+                    "Found an unexpected {what} matching the directive at line {}",
                     self.line
                 );
 
@@ -88,7 +93,7 @@ impl DirectiveDiag {
 
             (false, false) => {
                 eprintln!(
-                    "Found no diagnostic matching the directive at line {}",
+                    "Found no {what} matching the directive at line {}",
                     self.line,
                 );
 

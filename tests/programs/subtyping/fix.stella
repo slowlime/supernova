@@ -1,0 +1,68 @@
+language core;
+
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #pattern-ascriptions;
+extend with #nested-function-declarations;
+extend with #unit-type;
+extend with #structural-subtyping;
+extend with #top-type;
+extend with #bottom-type;
+
+extend with #fixpoint-combinator;
+
+fn nat-to-nat(x : Nat) -> Nat {
+  return x
+}
+
+fn expect-top() -> Top {
+  //!~ ERROR
+  return fix(nat-to-nat)
+}
+
+fn expect-bot() -> Bot {
+  //! ERROR(sema::expr_ty_mismatch)
+  return fix(nat-to-nat)
+}
+
+fn arg(t : Top, b : Bot) -> Unit {
+  fn check() -> Unit {
+    fn top() -> Top {
+      //! ERROR(sema::expr_ty_mismatch)
+      return fix(t)
+    }
+
+    fn bot() -> Bot {
+      //!~ ERROR
+      return fix(b)
+    }
+
+    return unit
+  }
+
+  fn infer() -> Unit {
+    fn top() -> Unit {
+      //! ERROR(sema::fix_not_fn)
+      return match fix(t) { _ => unit }
+    }
+
+    fn bot() -> Unit {
+      //! ERROR(sema::fix_not_fn)
+      return match fix(b) { _ => unit }
+    }
+
+    return unit
+  }
+
+  return unit
+}
+
+fn ret-sub-param(x : fn(Top) -> Bot) -> Bot {
+  //!~ ERROR
+  return fix(x)
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}

@@ -1,0 +1,55 @@
+language core;
+
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #pattern-ascriptions;
+extend with #type-ascriptions;
+extend with #nested-function-declarations;
+extend with #unit-type;
+extend with #structural-subtyping;
+extend with #top-type;
+extend with #bottom-type;
+
+extend with #tuples;
+
+fn expect-top() -> Top {
+  //!~ ERROR
+  return {0, false}
+}
+
+fn expect-bot() -> Bot {
+  //! ERROR(sema::unexpected_tuple)
+  return {0, false}
+}
+
+fn no-width-subtyping() -> {Nat} {
+  //! ERROR(sema::wrong_tuple_len)
+  return {0, false}
+}
+
+fn covariance(x : {Nat, Bool}) -> {Top, Top} {
+  //!~ ERROR
+  return x
+}
+
+fn bot(x : Bot) -> Unit {
+  fn check() -> Bot {
+    //! ERROR(sema::unexpected_tuple)
+    return {x}
+  }
+
+  fn infer() -> Unit {
+    return match {x} {
+      //! ERROR(sema::illegal_pat_for_ty)
+      _ as Bot => unit
+    | _ => unit
+    }
+  }
+
+  return unit
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}
