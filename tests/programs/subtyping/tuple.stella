@@ -23,9 +23,18 @@ fn expect-bot() -> Bot {
   return {0, false}
 }
 
-fn no-width-subtyping() -> {Nat} {
-  //! ERROR(sema::wrong_tuple_len)
-  return {0, false}
+fn no-width-subtyping() -> Unit {
+  fn too-many() -> {Nat} {
+    //! ERROR(sema::wrong_tuple_len)
+    return {0, false}
+  }
+
+  fn too-few() -> {Nat, Bool, Unit} {
+    //! ERROR(sema::wrong_tuple_len)
+    return {0, false}
+  }
+
+  return unit
 }
 
 fn covariance(x : {Nat, Bool}) -> {Top, Top} {

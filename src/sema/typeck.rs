@@ -386,7 +386,12 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 (TyKind::Bot, _) => Ordering::Less,
                 (_, TyKind::Bot) => Ordering::Greater,
 
-                (&TyKind::Ref(lhs), &TyKind::Ref(rhs)) => self.cmp_tys(lhs, rhs)?,
+                (&TyKind::Ref(lhs), &TyKind::Ref(rhs)) => match self.cmp_tys(lhs, rhs)? {
+                    Ordering::Equal => Ordering::Equal,
+
+                    // references are invariant.
+                    _ => return None,
+                },
 
                 (&TyKind::Sum(ll, lr), &TyKind::Sum(rl, rr)) => {
                     tuple_ordering([self.cmp_tys(ll, rl), self.cmp_tys(lr, rr)])?
@@ -412,20 +417,20 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                     Ordering::Equal
                 }
 
-                // {} <: {f₁ : T₁, ..., fₙ : Tₙ}.
+                // {f₁ : T₁, ..., fₙ : Tₙ} <: {}.
                 (TyKind::Record(_), TyKind::Tuple(rhs))
                     if self.m.is_feature_enabled(FeatureKind::Subtyping)
                         && rhs.elems.is_empty() =>
                 {
-                    Ordering::Greater
+                    Ordering::Less
                 }
 
-                // {} <: {f₁ : T₁, ..., fₙ : Tₙ}.
+                // {} >: {f₁ : T₁, ..., fₙ : Tₙ}.
                 (TyKind::Tuple(lhs), TyKind::Record(_))
                     if self.m.is_feature_enabled(FeatureKind::Subtyping)
                         && lhs.elems.is_empty() =>
                 {
-                    Ordering::Less
+                    Ordering::Greater
                 }
 
                 (TyKind::Record(lhs), TyKind::Record(rhs))

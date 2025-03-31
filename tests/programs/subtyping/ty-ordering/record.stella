@@ -1,0 +1,58 @@
+language core;
+
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #pattern-ascriptions;
+extend with #type-ascriptions;
+extend with #nested-function-declarations;
+extend with #unit-type;
+extend with #structural-subtyping;
+extend with #top-type;
+extend with #bottom-type;
+extend with #panic;
+
+extend with #records;
+
+fn superty-of-bot(x : Bot) -> {x : Nat} {
+  //!~ ERROR
+  return x
+}
+
+fn subty-of-top(x : {x : Nat}) -> Top {
+  //!~ ERROR
+  return x
+}
+
+fn width-subtyping(x : {x : Nat, y : Bool}) -> Unit {
+  fn too-few() -> {x : Nat, y : Bool, z : Unit} {
+    //! ERROR(sema::expr_ty_mismatch)
+    return x
+  }
+
+  fn too-many() -> {x : Nat} {
+    //!~ ERROR
+    return x
+  }
+
+  fn empty() -> {} {
+    //!~ ERROR
+    return x
+  }
+
+  return unit
+}
+
+fn permutation(x : {x : Nat, y : Bool}) -> {y : Bool, x : Nat} {
+  //!~ ERROR
+  return x
+}
+
+fn covariant(x : {x : Nat, y : Bool}) -> {x : Top, y : Top} {
+  //!~ ERROR
+  return x
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}

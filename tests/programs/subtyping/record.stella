@@ -29,9 +29,18 @@ fn record-with-bot(x : Bot) -> Bot {
   return {x = x}
 }
 
-fn width-subtyping() -> {x : Nat} {
-  //!~ ERROR
-  return {x = 0, y = false}
+fn width-subtyping() -> Unit {
+  fn too-many() -> {x : Nat} {
+    //!~ ERROR
+    return {x = 0, y = false}
+  }
+
+  fn too-few() -> {x : Nat, y : Bool, z : Unit} {
+    //! ERROR(sema::missing_record_field)
+    return {x = 0, y = false}
+  }
+
+  return unit
 }
 
 fn extra-fields-are-also-checked() -> {x : Nat} {
@@ -47,6 +56,11 @@ fn infer-in-extra-fields() -> {x : Nat} {
 fn record-is-subtype-of-empty-tuple() -> {} {
   //!~ ERROR
   return {x = 0, y = false, z = unit}
+}
+
+fn permutation() -> {y : Bool, x : Nat} {
+  //!~ ERROR
+  return {x = 0, z = unit, y = false}
 }
 
 fn covariance() -> {x : Top, y : Top} {

@@ -1,0 +1,35 @@
+//! PASS
+language core;
+
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #pattern-ascriptions;
+extend with #type-ascriptions;
+extend with #nested-function-declarations;
+extend with #unit-type;
+extend with #structural-subtyping;
+extend with #top-type;
+extend with #bottom-type;
+extend with #panic;
+
+extend with #lists;
+
+fn superty-of-bot(x : Bot) -> [Bool] {
+  //!~ ERROR
+  return x
+}
+
+fn subty-of-top(x : [Nat]) -> Top {
+  //!~ ERROR
+  return x
+}
+
+fn covariant(x : [Nat]) -> [Top] {
+  //!~ ERROR
+  return x
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}
