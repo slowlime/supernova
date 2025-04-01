@@ -380,7 +380,7 @@ impl PatMat {
                 .find(|c| !present.contains(c)),
 
             TyKind::Fn(_) => None,
-            TyKind::Ref(_) => None,
+            TyKind::Ref(..) => None,
 
             TyKind::Tuple(_) => [Cons::Tuple].into_iter().find(|c| !present.contains(c)),
 

@@ -9,7 +9,7 @@ use crate::diag::{Code, DiagCtx, Diagnostic, IntoDiagnostic, Label};
 use crate::location::Location;
 
 use super::feature::FeatureKind;
-use super::ty::{Ty, TyFn, TyKind, TyRecord, TyTuple, TyVariant};
+use super::ty::{RefMode, Ty, TyFn, TyKind, TyRecord, TyTuple, TyVariant};
 use super::{DeclId, ExcTyDecl, ExprId, Module, PatId, Result, SemaDiag, TyExprId, TyId};
 
 fn tuple_ordering<I>(elems: I) -> Option<Ordering>
@@ -386,7 +386,15 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 (TyKind::Bot, _) => Ordering::Less,
                 (_, TyKind::Bot) => Ordering::Greater,
 
-                (&TyKind::Ref(lhs), &TyKind::Ref(rhs)) => match self.cmp_tys(lhs, rhs)? {
+                (&TyKind::Ref(lhs, _), &TyKind::Ref(rhs, RefMode::Source)) => {
+                    self.cmp_tys(lhs, rhs)?
+                }
+
+                (&TyKind::Ref(lhs, RefMode::Source), &TyKind::Ref(rhs, _)) => {
+                    self.cmp_tys(lhs, rhs)?.reverse()
+                }
+
+                (&TyKind::Ref(lhs, _), &TyKind::Ref(rhs, _)) => match self.cmp_tys(lhs, rhs)? {
                     Ordering::Equal => Ordering::Equal,
 
                     // references are invariant.
@@ -1247,7 +1255,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 result = result.and(self.typeck_ty_expr(&t.ty_expr));
 
                 self.m.ty_exprs[ty_expr.id].ty_id = self.m.add_ty(Ty {
-                    kind: TyKind::Ref(self.m.ty_exprs[t.ty_expr.id].ty_id),
+                    kind: TyKind::Ref(self.m.ty_exprs[t.ty_expr.id].ty_id, RefMode::Ref),
                 });
             }
 
@@ -1495,7 +1503,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         }
 
         match self.m.tys[expected_ty_id].kind {
-            TyKind::Ref(_) => {}
+            TyKind::Ref(_, _) => {}
             TyKind::Top => {}
 
             _ => {
@@ -1820,7 +1828,6 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             return Err(());
         }
 
-        // TODO: so which one is it really? params[0] or ret?
         let ty_id = inner_ty.ret;
 
         if let Some((expected_ty_id, source)) = expected_ty {
@@ -3094,7 +3101,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                         }
 
                         match self.m.tys[expected_ty_id].kind {
-                            TyKind::Ref(ty_id) => ty_id,
+                            TyKind::Ref(ty_id, _) => ty_id,
 
                             _ => {
                                 self.diag.emit(self.augment_error_with_expectation(
@@ -3119,7 +3126,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                     let pointee_ty_id = self.m.exprs[expr.rhs.id].ty_id;
 
                     self.m.exprs[expr_id].ty_id = self.m.add_ty(Ty {
-                        kind: TyKind::Ref(pointee_ty_id),
+                        kind: TyKind::Ref(pointee_ty_id, RefMode::Ref),
                     });
 
                     result
@@ -3133,7 +3140,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                     }
 
                     let arg_ty_id = self.m.add_ty(Ty {
-                        kind: TyKind::Ref(expected_ty_id),
+                        kind: TyKind::Ref(expected_ty_id, RefMode::Source),
                     });
 
                     let result = self.typeck_expr(&expr.rhs, Some((arg_ty_id, source)));
@@ -3147,7 +3154,9 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                     // WARN: may need to be changed when Bot is added.
                     let ty_id = if self.is_untyped(arg_ty_id) {
                         self.m.well_known_tys.error
-                    } else if let TyKind::Ref(ty_id) = self.m.tys[arg_ty_id].kind {
+                    } else if let TyKind::Ref(ty_id, RefMode::Ref | RefMode::Source) =
+                        self.m.tys[arg_ty_id].kind
+                    {
                         ty_id
                     } else {
                         self.diag.emit(SemaDiag::ExprTyNotReference {
@@ -3278,8 +3287,19 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
 
                 let pointee_ty_id = if self.is_untyped(ref_ty_id) {
                     self.m.well_known_tys.error
-                } else if let TyKind::Ref(pointee_ty_id) = self.m.tys[ref_ty_id].kind {
+                } else if let TyKind::Ref(pointee_ty_id, RefMode::Ref) = self.m.tys[ref_ty_id].kind {
                     pointee_ty_id
+                } else if let TyKind::Ref(pointee_ty_id, RefMode::Source) = self.m.tys[ref_ty_id].kind {
+                    let expected_ty_id = self.m.add_ty(Ty {
+                        kind: TyKind::Ref(pointee_ty_id, RefMode::Ref),
+                    });
+                    self.diag.emit(SemaDiag::ExprTyMismatch {
+                        location: self.m.exprs[expr.lhs.id].def.location,
+                        expected_ty: self.m.display_ty(expected_ty_id).to_string(),
+                        actual_ty: self.m.display_ty(ref_ty_id).to_string(),
+                    });
+
+                    return Err(());
                 } else {
                     self.diag.emit(SemaDiag::ExprTyNotReference {
                         location: expr.lhs.location,

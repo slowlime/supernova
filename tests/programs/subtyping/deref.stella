@@ -11,8 +11,10 @@ extend with #structural-subtyping;
 extend with #top-type;
 extend with #bottom-type;
 extend with #panic;
+extend with #lists;
 
 extend with #references;
+extend with #records;
 
 fn expect-top(x : &Bool) -> Top {
   //!~ ERROR
@@ -21,6 +23,11 @@ fn expect-top(x : &Bool) -> Top {
 
 fn expect-bot(x : &Bool) -> Bot {
   //! ERROR(sema::expr_ty_mismatch)
+  return *x
+}
+
+fn subtype(x : &{x : Nat, y : Bool}) -> {x : Nat} {
+  //!~ ERROR
   return *x
 }
 

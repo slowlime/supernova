@@ -44,7 +44,13 @@ impl Module<'_> {
                     TyKind::Bool => write!(f, "Bool")?,
                     TyKind::Nat => write!(f, "Nat")?,
 
-                    TyKind::Ref(ty_id) => write!(f, "&{}", self.0.display_ty_prec(*ty_id, prec))?,
+                    TyKind::Ref(ty_id, RefMode::Source) => {
+                        write!(f, "&(? <: {})", self.0.display_ty_prec(*ty_id, prec))?
+                    }
+
+                    TyKind::Ref(ty_id, RefMode::Ref) => {
+                        write!(f, "&{}", self.0.display_ty_prec(*ty_id, prec))?
+                    }
 
                     TyKind::Sum(lhs_ty_id, rhs_ty_id) => write!(
                         f,
@@ -157,7 +163,7 @@ pub enum TyKind {
     Unit,
     Bool,
     Nat,
-    Ref(TyId),
+    Ref(TyId, RefMode),
     Sum(TyId, TyId),
     Fn(TyFn),
     Tuple(TyTuple),
@@ -172,6 +178,12 @@ impl Default for TyKind {
     fn default() -> Self {
         Self::Untyped { error: true }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum RefMode {
+    Source,
+    Ref,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
