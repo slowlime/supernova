@@ -162,6 +162,7 @@ impl DeconstructedPat {
                     Cons::Bool(v) => write!(f, "{v}"),
                     Cons::Unit => write!(f, "unit"),
                     Cons::Int(n) => write!(f, "{n}"),
+                    Cons::Skip => write!(f, "<no pattern>"),
                     Cons::Wild => write!(f, "_"),
                 }
             }
@@ -185,6 +186,7 @@ enum Cons {
     Bool(bool),
     Unit,
     Int(BigUint),
+    Skip,
 
     #[default]
     Wild,
@@ -228,6 +230,7 @@ impl Cons {
             Cons::Unit => 0,
             Cons::Int(_) => 0,
             Cons::Wild => 0,
+            Cons::Skip => 0,
         }
     }
 
@@ -295,6 +298,7 @@ impl Cons {
             Cons::Bool(_) => vec![],
             Cons::Unit => vec![],
             Cons::Int(_) => vec![],
+            Cons::Skip => vec![],
             Cons::Wild => vec![],
         }
     }
@@ -314,6 +318,11 @@ struct PatMat {
 }
 
 impl PatMat {
+    fn remove_skip_pats(&mut self) {
+        self.rows
+            .retain(|row| row.pats.is_empty() || !matches!(row.pats[0].cons, Cons::Skip));
+    }
+
     fn split_first_conses(&mut self) {
         // natural literals are aliases for iterated `succ`. if the matrix contains both a non-zero
         // literal and a `succ`, we want to split off an implicit `succ` from these literals to
@@ -429,6 +438,7 @@ impl PatMat {
         for row in &self.rows {
             let mut new_row = match &row.pats[0].cons {
                 Cons::Wild => cons.wilds(m, head_ty_id),
+                Cons::Skip => continue, // for safety. the wildcard should cover this, though.
                 c if c == cons => row.pats[0].fields.clone(),
                 _ => continue,
             };
@@ -582,7 +592,9 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             ast::PatKind::Int(p) => (Cons::Int(p.value.clone()), vec![]),
             ast::PatKind::Name(_) => (Cons::Wild, vec![]),
             ast::PatKind::Ascription(p) => return self.deconstruct_pat(p.pat.id),
-            ast::PatKind::Cast(_) => unimplemented!(),
+
+            // ignore cast patterns for the purposes of exhaustiveness checking.
+            ast::PatKind::Cast(_) => (Cons::Skip, vec![]),
         };
 
         DeconstructedPat {
@@ -619,6 +631,8 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
     }
 
     fn do_check_exhaustiveness(&mut self, mut mat: PatMat, arity: usize) -> Option<PatMatRow> {
+        mat.remove_skip_pats();
+
         if arity == 0 {
             return if mat.rows.is_empty() {
                 Some(PatMatRow {
@@ -693,6 +707,7 @@ impl<'ast, D: DiagCtx> DefaultVisitor<'ast, 'ast> for Walker<'ast, '_, '_, D> {
             | ast::ExprKind::Fix(_)
             | ast::ExprKind::Apply(_)
             | ast::ExprKind::Ascription(_)
+            | ast::ExprKind::Cast(_)
             | ast::ExprKind::Fn(_)
             | ast::ExprKind::Tuple(_)
             | ast::ExprKind::Record(_)
@@ -738,7 +753,6 @@ impl<'ast, D: DiagCtx> DefaultVisitor<'ast, 'ast> for Walker<'ast, '_, '_, D> {
             ast::ExprKind::Fold(_) => unimplemented!(),
             ast::ExprKind::Unfold(_) => unimplemented!(),
             ast::ExprKind::TyApply(_) => unimplemented!(),
-            ast::ExprKind::Cast(_) => unimplemented!(),
             ast::ExprKind::Generic(_) => unimplemented!(),
         }
 

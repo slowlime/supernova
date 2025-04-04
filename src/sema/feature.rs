@@ -170,9 +170,9 @@ define_features! {
     Subtyping "subtyping" (ast::Extension::StructuralSubtyping);
     TopType "top type" (ast::Extension::TopType);
     BottomType "bottom type" (ast::Extension::BottomType);
-    CastExprs "cast expressions";
+    CastExprs "cast expressions" (ast::Extension::TypeCast);
     TryCastExprs "try-cast expressions";
-    CastPatterns "cast patterns";
+    CastPatterns "cast patterns" (ast::Extension::TypeCastPatterns);
 
     // Recursive types.
     RecursiveTypes "recursive types";

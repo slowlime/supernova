@@ -25,8 +25,8 @@ pub enum Extension {
     ArithmeticOperators,
     BottomType,
     ComparisonOperators,
-    ExceptionTypeDeclaration,
     Exceptions,
+    ExceptionTypeDeclaration,
     FixpointCombinator,
     LetBindings,
     LetManyBindings,
@@ -53,6 +53,8 @@ pub enum Extension {
     TopType,
     Tuples,
     TypeAscriptions,
+    TypeCast,
+    TypeCastPatterns,
     UnitType,
     Variants,
 }

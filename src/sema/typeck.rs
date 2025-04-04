@@ -92,6 +92,11 @@ pub enum ExpectationSource {
         ty_expr_id: TyExprId,
     },
 
+    CastPat {
+        pat_id: PatId,
+        ty_expr_id: TyExprId,
+    },
+
     FnExprRet(ExprId),
 
     TupleExprElem {
@@ -765,6 +770,20 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 );
             }
 
+            ExpectationSource::CastPat { pat_id, ty_expr_id } => {
+                let pat = self.m.pats[pat_id].def;
+                let ty_expr = &self.m.ty_exprs[ty_expr_id].def;
+
+                diag.add_label(
+                    Label::secondary(ty_expr.location)
+                        .with_msg("expected due to this type cast"),
+                );
+
+                diag.add_label(
+                    Label::secondary(pat.location).with_msg("in this type cast pattern"),
+                );
+            }
+
             ExpectationSource::FnExprRet(expr_id) => {
                 let expr = self.m.exprs[expr_id].def;
 
@@ -1396,7 +1415,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             ast::ExprKind::Apply(e) => self.typeck_expr_apply(expr.id, e, expected_ty),
             ast::ExprKind::TyApply(_) => unimplemented!(),
             ast::ExprKind::Ascription(e) => self.typeck_expr_ascription(expr.id, e, expected_ty),
-            ast::ExprKind::Cast(_) => unimplemented!(),
+            ast::ExprKind::Cast(e) => self.typeck_expr_cast(expr.id, e, expected_ty),
             ast::ExprKind::Fn(e) => self.typeck_expr_fn(expr.id, e, expected_ty),
             ast::ExprKind::Tuple(e) => self.typeck_expr_tuple(expr.id, e, expected_ty),
             ast::ExprKind::Record(e) => self.typeck_expr_record(expr.id, e, expected_ty),
@@ -2331,10 +2350,9 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
 
         if let Some((expected_ty_id, source)) = expected_ty {
             if !self.ty_conforms_to(ty_id, expected_ty_id) {
+                result = Err(());
                 self.diag
                     .emit(self.make_expr_ty_error(expr_id, ty_id, expected_ty_id, source));
-
-                return Err(());
             }
         }
 
@@ -2349,6 +2367,29 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             )),
         ));
 
+        self.m.exprs[expr_id].ty_id = ty_id;
+
+        result
+    }
+
+    fn typeck_expr_cast(
+        &mut self,
+        expr_id: ExprId,
+        expr: &ast::ExprCast<'ast>,
+        expected_ty: Option<ExpectedTy>,
+    ) -> Result {
+        let mut result = self.typeck_ty_expr(&expr.ty_expr);
+        let ty_id = self.m.ty_exprs[expr.ty_expr.id].ty_id;
+
+        if let Some((expected_ty_id, source)) = expected_ty {
+            if !self.ty_conforms_to(ty_id, expected_ty_id) {
+                result = Err(());
+                self.diag
+                    .emit(self.make_expr_ty_error(expr_id, ty_id, expected_ty_id, source));
+            }
+        }
+
+        result = result.and(self.typeck_expr(&expr.expr, None));
         self.m.exprs[expr_id].ty_id = ty_id;
 
         result
@@ -3350,7 +3391,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             ast::PatKind::Int(p) => self.typeck_pat_int(pat.id, p, expected_ty),
             ast::PatKind::Name(p) => self.typeck_pat_name(pat.id, p, expected_ty),
             ast::PatKind::Ascription(p) => self.typeck_pat_ascription(pat.id, p, expected_ty),
-            ast::PatKind::Cast(_) => unimplemented!(),
+            ast::PatKind::Cast(p) => self.typeck_pat_cast(pat.id, p, expected_ty),
         }
     }
 
@@ -4019,6 +4060,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
 
         if let Some((expected_ty_id, source)) = expected_ty {
             if !self.are_tys_equivalent(ty_id, expected_ty_id) {
+                result = Err(());
                 self.diag.emit(self.augment_error_with_expectation(
                     SemaDiag::IllegalPatForTy {
                         location: self.m.pats[pat_id].def.location,
@@ -4026,8 +4068,6 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                     },
                     source,
                 ));
-
-                return Err(());
             }
         }
 
@@ -4043,6 +4083,49 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         ));
 
         self.m.pats[pat_id].ty_id = ty_id;
+
+        result
+    }
+
+    fn typeck_pat_cast(
+        &mut self,
+        pat_id: PatId,
+        pat: &ast::PatCast<'ast>,
+        expected_ty: Option<ExpectedTy>,
+    ) -> Result {
+        let mut result = self.typeck_ty_expr(&pat.ty_expr);
+        let ty_id = self.m.ty_exprs[pat.ty_expr.id].ty_id;
+
+        let pat_ty_id = if let Some((expected_ty_id, source)) = expected_ty {
+            // this is the only place that allows subtypes.
+            if !self.ty_conforms_to(ty_id, expected_ty_id) {
+                result = Err(());
+                self.diag.emit(self.augment_error_with_expectation(
+                    SemaDiag::IllegalPatForTy {
+                        location: self.m.pats[pat_id].def.location,
+                        expected_ty: self.m.display_ty(expected_ty_id).to_string(),
+                    },
+                    source,
+                ));
+            }
+
+            expected_ty_id
+        } else {
+            ty_id
+        };
+
+        result = result.and(self.typeck_pat(
+            &pat.pat,
+            Some((
+                ty_id,
+                ExpectationSource::CastPat {
+                    pat_id,
+                    ty_expr_id: pat.ty_expr.id,
+                },
+            )),
+        ));
+
+        self.m.pats[pat_id].ty_id = pat_ty_id;
 
         result
     }
