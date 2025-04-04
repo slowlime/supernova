@@ -312,6 +312,12 @@ impl Cons {
 }
 
 #[derive(Debug, Clone)]
+enum SigCompleteness {
+    Complete,
+    Incomplete { missing: Option<Cons> },
+}
+
+#[derive(Debug, Clone)]
 struct PatMat {
     rows: Vec<PatMatRow>,
     ty_ids: VecDeque<TyId>,
@@ -352,62 +358,85 @@ impl PatMat {
         }
     }
 
-    fn first_conses<'a>(&'a self, m: &Module<'_>) -> (FxHashSet<&'a Cons>, Option<Cons>) {
+    fn first_conses<'a>(&'a self, m: &Module<'_>) -> (FxHashSet<&'a Cons>, SigCompleteness) {
+        fn missing_to_completeness(missing: Option<Cons>) -> SigCompleteness {
+            match missing {
+                Some(_) => SigCompleteness::Incomplete { missing },
+                None => SigCompleteness::Complete,
+            }
+        }
+
         let mut present = FxHashSet::default();
 
         for row in &self.rows {
-            if row.pats[0].cons != Cons::Wild {
+            if !matches!(row.pats[0].cons, Cons::Wild | Cons::Skip) {
                 present.insert(&row.pats[0].cons);
             }
         }
 
-        let missing = match &m.tys[self.ty_ids[0]].kind {
+        let completeness = match &m.tys[self.ty_ids[0]].kind {
             TyKind::Untyped { .. } => unreachable!(),
 
-            TyKind::Unit => [Cons::Unit].into_iter().find(|c| !present.contains(c)),
+            TyKind::Unit => {
+                missing_to_completeness([Cons::Unit].into_iter().find(|c| !present.contains(c)))
+            }
 
-            TyKind::Bool => [Cons::Bool(false), Cons::Bool(true)]
-                .into_iter()
-                .find(|c| !present.contains(c)),
+            TyKind::Bool => missing_to_completeness(
+                [Cons::Bool(false), Cons::Bool(true)]
+                    .into_iter()
+                    .find(|c| !present.contains(c)),
+            ),
 
             TyKind::Nat if present.contains(&Cons::Succ) => {
                 const ZERO: Cons = Cons::Int(BigUint::ZERO);
 
-                if present.contains(&ZERO) {
+                missing_to_completeness(if present.contains(&ZERO) {
                     None
                 } else {
                     Some(ZERO)
-                }
+                })
             }
 
-            TyKind::Nat => (0usize..)
-                .map(|n| Cons::Int(n.into()))
-                .find(|c| !present.contains(c)),
+            TyKind::Nat => missing_to_completeness(
+                (0usize..)
+                    .map(|n| Cons::Int(n.into()))
+                    .find(|c| !present.contains(c)),
+            ),
 
-            TyKind::Sum(_, _) => [Cons::Inl, Cons::Inr]
-                .into_iter()
-                .find(|c| !present.contains(c)),
+            TyKind::Sum(_, _) => missing_to_completeness(
+                [Cons::Inl, Cons::Inr]
+                    .into_iter()
+                    .find(|c| !present.contains(c)),
+            ),
 
-            TyKind::Fn(_) => None,
-            TyKind::Ref(..) => None,
+            TyKind::Fn(_) => SigCompleteness::Incomplete { missing: None },
+            TyKind::Ref(..) => SigCompleteness::Incomplete { missing: None },
 
-            TyKind::Tuple(_) => [Cons::Tuple].into_iter().find(|c| !present.contains(c)),
+            TyKind::Tuple(_) => {
+                missing_to_completeness([Cons::Tuple].into_iter().find(|c| !present.contains(c)))
+            }
 
-            TyKind::Record(_) => [Cons::Record].into_iter().find(|c| !present.contains(c)),
+            TyKind::Record(_) => {
+                missing_to_completeness([Cons::Record].into_iter().find(|c| !present.contains(c)))
+            }
 
-            TyKind::Variant(ty) => (0..ty.elems.len())
-                .map(Cons::Variant)
-                .find(|c| !present.contains(c)),
+            TyKind::Variant(ty) => missing_to_completeness(
+                (0..ty.elems.len())
+                    .map(Cons::Variant)
+                    .find(|c| !present.contains(c)),
+            ),
 
-            TyKind::List(_) => [Cons::Cons, Cons::EmptyList]
-                .into_iter()
-                .find(|c| !present.contains(c)),
+            TyKind::List(_) => missing_to_completeness(
+                [Cons::Cons, Cons::EmptyList]
+                    .into_iter()
+                    .find(|c| !present.contains(c)),
+            ),
 
-            TyKind::Top => None,
-            TyKind::Bot => None,
+            TyKind::Top => SigCompleteness::Incomplete { missing: None },
+            TyKind::Bot => SigCompleteness::Incomplete { missing: None },
         };
 
-        (present, missing)
+        (present, completeness)
     }
 
     fn make_default(mut self) -> Self {
@@ -645,26 +674,25 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
 
         mat.split_first_conses();
 
-        let (present, missing) = mat.first_conses(self.m);
+        let (present, completeness) = mat.first_conses(self.m);
         let head_ty_id = mat.ty_ids[0];
 
-        if let Some(missing) = missing {
-            let present_empty = present.is_empty();
+        if let SigCompleteness::Incomplete { missing } = completeness {
             let mut subrow = self.do_check_exhaustiveness(mat.make_default(), arity - 1)?;
 
-            if present_empty {
-                subrow.pats.push_front(DeconstructedPat {
-                    ty_id: head_ty_id,
-                    cons: Cons::Wild,
-                    fields: vec![],
-                });
-            } else {
+            if let Some(missing) = missing {
                 let fields = missing.wilds(self.m, head_ty_id);
 
                 subrow.pats.push_front(DeconstructedPat {
                     ty_id: head_ty_id,
                     cons: missing,
                     fields,
+                });
+            } else {
+                subrow.pats.push_front(DeconstructedPat {
+                    ty_id: head_ty_id,
+                    cons: Cons::Wild,
+                    fields: vec![],
                 });
             }
 
