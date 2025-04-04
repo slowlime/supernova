@@ -1,0 +1,32 @@
+language core;
+
+extend with #nullary-functions;
+extend with #nested-function-declarations;
+extend with #structural-patterns;
+extend with #unit-type;
+
+extend with #pairs;
+extend with #type-cast-patterns;
+
+fn test(x : {Bool, Unit}) -> Unit {
+  fn non-exhaustive() -> Unit {
+    //! ERROR(sema::match_non_exhaustive)
+    return match x {
+      _ cast as {Bool, Unit} => unit
+    }
+  }
+
+  fn nested-non-exhaustive() -> Unit {
+    //! ERROR(sema::match_non_exhaustive)
+    return match x {
+      {true cast as Bool, unit} => unit
+    | {false, unit cast as Unit} => unit
+    }
+  }
+
+  return unit
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}

@@ -1,0 +1,35 @@
+language core;
+
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #pattern-ascriptions;
+extend with #nested-function-declarations;
+extend with #unit-type;
+extend with #lists;
+
+extend with #type-cast;
+
+fn bool-cast-bool(x : Bool) -> Bool {
+  //!~ ERROR
+  return x cast as Bool
+}
+
+fn nat-cast-bool(x : Nat) -> Bool {
+  //!~ ERROR
+  return x cast as Bool
+}
+
+fn nat-cast-bool-is-not-nat(x : Nat) -> Nat {
+  //! ERROR(sema::expr_ty_mismatch)
+  return x cast as Bool
+}
+
+fn provides-no-expected-type-to-inner-expr() -> Unit {
+  //! ERROR(sema::ambiguous_list_ty)
+  return match [] cast as [Bool] { _ => unit }
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}

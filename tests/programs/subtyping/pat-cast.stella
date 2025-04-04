@@ -1,0 +1,44 @@
+language core;
+
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #pattern-ascriptions;
+extend with #type-ascriptions;
+extend with #nested-function-declarations;
+extend with #unit-type;
+extend with #structural-subtyping;
+extend with #top-type;
+extend with #bottom-type;
+extend with #records;
+
+extend with #type-cast-patterns;
+
+fn specified-ty-can-be-subty-of-expected(x : Nat) -> Unit {
+  //!~ ERROR
+  return match x { _ cast as Bot => unit | _ => unit }
+}
+
+fn specified-ty-must-be-subty-of-expected(x : Nat) -> Unit {
+  return match x {
+    //! ERROR(sema::illegal_pat_for_ty)
+    _ cast as Bool => unit
+  | _ => unit
+  }
+}
+
+fn inner-pat-must-be-equiv-to-specified-ty(x : Top) -> Unit {
+  return match x {
+    //!~ ERROR
+    {x = x, y = y} cast as {y : Bool, x : Nat} => unit
+
+  | //! ERROR(sema::no_such_record_field)
+    {x = x, y = y} cast as {x : Bool} => unit
+
+  | _ => unit
+  }
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}

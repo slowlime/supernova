@@ -1,0 +1,44 @@
+language core;
+
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #pattern-ascriptions;
+extend with #nested-function-declarations;
+extend with #unit-type;
+extend with #letrec-bindings;
+extend with #let-patterns;
+extend with #letrec-many-bindings;
+extend with #lists;
+
+extend with #type-cast-patterns;
+
+fn bool-cast-bool(x : Bool) -> Unit {
+  //!~ ERROR
+  return match x { _ cast as Bool => unit | _ => unit }
+}
+
+fn nat-cannot-be-cast-to-bool(x : Bool) -> Unit {
+  return match x {
+    //! ERROR(sema::illegal_pat_for_ty)
+    0 cast as Bool => unit
+  | _ => unit
+  }
+}
+
+fn provides-expected-type-to-inner-pat() -> Unit {
+  //!~ ERROR
+  return letrec [] cast as [Bool] = [] in unit
+}
+
+fn specified-type-must-match-expected(x : Nat) -> Unit {
+  return match x {
+    //! ERROR(sema::illegal_pat_for_ty)
+    x cast as Bool => unit
+  | _ => unit
+  }
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}
