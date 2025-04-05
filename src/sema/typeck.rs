@@ -1536,23 +1536,32 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         _expr: &ast::ExprAddress,
         expected_ty: Option<ExpectedTy>,
     ) -> Result {
-        let Some((expected_ty_id, source)) = expected_ty else {
-            self.diag.emit(SemaDiag::AmbiguousAddressExprTy {
-                location: self.m.exprs[expr_id].def.location,
-            });
+        let ty_id = match expected_ty {
+            Some((expected_ty_id, _)) => expected_ty_id,
 
-            return Err(());
+            None if self.m.is_feature_enabled(FeatureKind::AmbiguousTyAsBot) => self.m.add_ty(Ty {
+                kind: TyKind::Ref(self.m.well_known_tys.bot, RefMode::Ref),
+            }),
+
+            None => {
+                self.diag.emit(SemaDiag::AmbiguousAddressExprTy {
+                    location: self.m.exprs[expr_id].def.location,
+                });
+
+                return Err(());
+            }
         };
 
-        if self.is_untyped(expected_ty_id) {
+        if self.is_untyped(ty_id) {
             return Ok(());
         }
 
-        match self.m.tys[expected_ty_id].kind {
+        match self.m.tys[ty_id].kind {
             TyKind::Ref(_, _) => {}
             TyKind::Top => {}
 
             _ => {
+                let (expected_ty_id, source) = expected_ty.unwrap();
                 self.diag.emit(self.augment_error_with_expectation(
                     SemaDiag::UnexpectedAddressExpr {
                         location: self.m.exprs[expr_id].def.location,
@@ -1565,7 +1574,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             }
         }
 
-        self.m.exprs[expr_id].ty_id = expected_ty_id;
+        self.m.exprs[expr_id].ty_id = ty_id;
 
         Ok(())
     }
@@ -1708,15 +1717,23 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         _expr: &ast::ExprPanic,
         expected_ty: Option<ExpectedTy>,
     ) -> Result {
-        let Some((expected_ty_id, _source)) = expected_ty else {
-            self.diag.emit(SemaDiag::AmbiguousPanicExprTy {
-                location: self.m.exprs[expr_id].def.location,
-            });
+        let ty_id = match expected_ty {
+            Some((expected_ty_id, _)) => expected_ty_id,
 
-            return Err(());
+            None if self.m.is_feature_enabled(FeatureKind::AmbiguousTyAsBot) => {
+                self.m.well_known_tys.bot
+            }
+
+            None => {
+                self.diag.emit(SemaDiag::AmbiguousPanicExprTy {
+                    location: self.m.exprs[expr_id].def.location,
+                });
+
+                return Err(());
+            }
         };
 
-        self.m.exprs[expr_id].ty_id = expected_ty_id;
+        self.m.exprs[expr_id].ty_id = ty_id;
 
         Ok(())
     }
@@ -1727,15 +1744,23 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         expr: &ast::ExprThrow<'ast>,
         expected_ty: Option<ExpectedTy>,
     ) -> Result {
-        let Some((expected_ty_id, _source)) = expected_ty else {
-            self.diag.emit(SemaDiag::AmbiguousThrowExprTy {
-                location: self.m.exprs[expr_id].def.location,
-            });
+        let ty_id = match expected_ty {
+            Some((expected_ty_id, _)) => expected_ty_id,
 
-            return Err(());
+            None if self.m.is_feature_enabled(FeatureKind::AmbiguousTyAsBot) => {
+                self.m.well_known_tys.bot
+            }
+
+            None => {
+                self.diag.emit(SemaDiag::AmbiguousThrowExprTy {
+                    location: self.m.exprs[expr_id].def.location,
+                });
+
+                return Err(());
+            }
         };
 
-        self.m.exprs[expr_id].ty_id = expected_ty_id;
+        self.m.exprs[expr_id].ty_id = ty_id;
 
         let Some(exc_ty_id) = self.m.exc_ty_id else {
             self.diag.emit(
@@ -1940,56 +1965,75 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
     ) -> Result {
         match &expr.callee {
             ast::Callee::Builtin { kw: _, builtin } => match builtin {
-                ast::Builtin::Inl | ast::Builtin::Inr => {
-                    let Some((expected_ty_id, source)) = expected_ty else {
+                ast::Builtin::Inl | ast::Builtin::Inr => match expected_ty {
+                    Some((expected_ty_id, source)) => {
+                        if self.is_untyped(expected_ty_id) {
+                            return Ok(());
+                        }
+
+                        if expected_ty_id == self.m.well_known_tys.top {
+                            return self.typeck_expr_apply(expr_id, expr, None);
+                        }
+
+                        let TyKind::Sum(lhs_ty_id, rhs_ty_id) = self.m.tys[expected_ty_id].kind
+                        else {
+                            self.diag.emit(self.augment_error_with_expectation(
+                                SemaDiag::UnexpectedInjection {
+                                    location: self.m.exprs[expr_id].def.location,
+                                    expected_ty: self.m.display_ty(expected_ty_id).to_string(),
+                                },
+                                source,
+                            ));
+
+                            return Err(());
+                        };
+
+                        let (is_left, param_ty_id) = if *builtin == ast::Builtin::Inl {
+                            (true, lhs_ty_id)
+                        } else {
+                            (false, rhs_ty_id)
+                        };
+
+                        self.typeck_application(
+                            expr_id,
+                            vec![Some((
+                                param_ty_id,
+                                ExpectationSource::InjectionArg {
+                                    expr_id,
+                                    is_left,
+                                    sum_ty_id: expected_ty_id,
+                                },
+                            ))],
+                            expected_ty_id,
+                            &expr.args,
+                            Some((expected_ty_id, source)),
+                        )
+                    }
+
+                    None if self.m.is_feature_enabled(FeatureKind::AmbiguousTyAsBot) => {
+                        self.check_application_arg_count(expr_id, expr.args.len(), 1)?;
+                        let result = self.typeck_expr(&expr.args[0], None);
+                        let elem_ty_id = self.m.exprs[expr.args[0].id].ty_id;
+
+                        self.m.exprs[expr_id].ty_id = self.m.add_ty(Ty {
+                            kind: if *builtin == ast::Builtin::Inl {
+                                TyKind::Sum(elem_ty_id, self.m.well_known_tys.bot)
+                            } else {
+                                TyKind::Sum(self.m.well_known_tys.bot, elem_ty_id)
+                            }
+                        });
+
+                        result
+                    }
+
+                    None => {
                         self.diag.emit(SemaDiag::AmbiguousSumTyInExpr {
                             location: self.m.exprs[expr_id].def.location,
                         });
 
-                        return Err(());
-                    };
-
-                    if self.is_untyped(expected_ty_id) {
-                        return Ok(());
+                        Err(())
                     }
-
-                    if expected_ty_id == self.m.well_known_tys.top {
-                        return self.typeck_expr_apply(expr_id, expr, None);
-                    }
-
-                    let TyKind::Sum(lhs_ty_id, rhs_ty_id) = self.m.tys[expected_ty_id].kind else {
-                        self.diag.emit(self.augment_error_with_expectation(
-                            SemaDiag::UnexpectedInjection {
-                                location: self.m.exprs[expr_id].def.location,
-                                expected_ty: self.m.display_ty(expected_ty_id).to_string(),
-                            },
-                            source,
-                        ));
-
-                        return Err(());
-                    };
-
-                    let (is_left, param_ty_id) = if *builtin == ast::Builtin::Inl {
-                        (true, lhs_ty_id)
-                    } else {
-                        (false, rhs_ty_id)
-                    };
-
-                    self.typeck_application(
-                        expr_id,
-                        vec![Some((
-                            param_ty_id,
-                            ExpectationSource::InjectionArg {
-                                expr_id,
-                                is_left,
-                                sum_ty_id: expected_ty_id,
-                            },
-                        ))],
-                        expected_ty_id,
-                        &expr.args,
-                        Some((expected_ty_id, source)),
-                    )
-                }
+                },
 
                 ast::Builtin::Cons => {
                     if let Some((expected_ty_id, source)) = expected_ty {
@@ -3015,11 +3059,19 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
 
             result
         } else if expr.elems.is_empty() {
-            self.diag.emit(SemaDiag::AmbiguousEmptyListExprTy {
-                location: self.m.exprs[expr_id].def.location,
-            });
+            if self.m.is_feature_enabled(FeatureKind::AmbiguousTyAsBot) {
+                self.m.exprs[expr_id].ty_id = self.m.add_ty(Ty {
+                    kind: TyKind::List(self.m.well_known_tys.bot),
+                });
 
-            Err(())
+                Ok(())
+            } else {
+                self.diag.emit(SemaDiag::AmbiguousEmptyListExprTy {
+                    location: self.m.exprs[expr_id].def.location,
+                });
+
+                Err(())
+            }
         } else {
             let mut result = Ok(());
             result = result.and(self.typeck_expr(&expr.elems[0], None));

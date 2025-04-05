@@ -173,6 +173,8 @@ define_features! {
     CastExprs "cast expressions" (ast::Extension::TypeCast);
     TryCastExprs "try-cast expressions" (ast::Extension::TryCastAs);
     CastPatterns "cast patterns" (ast::Extension::TypeCastPatterns);
+    AmbiguousTyAsBot "resolve expression type ambiguity as Bot"
+        (ast::Extension::AmbiguousTypeAsBottom);
 
     // Recursive types.
     RecursiveTypes "recursive types";

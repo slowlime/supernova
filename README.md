@@ -5,6 +5,7 @@ This is a simple type checker for a subset of the Stella language.
 
 In addition to the core language, the following extensions are also supported:
 
+- `#ambiguous-type-as-bottom`
 - `#arithmetic-operators`
 - `#comparison-operators`
 - `#exception-type-declaration`

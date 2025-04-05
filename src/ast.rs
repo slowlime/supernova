@@ -22,11 +22,12 @@ pub struct Program<'src> {
 )]
 #[strum(serialize_all = "kebab-case")]
 pub enum Extension {
+    AmbiguousTypeAsBottom,
     ArithmeticOperators,
     BottomType,
     ComparisonOperators,
-    ExceptionTypeDeclaration,
     Exceptions,
+    ExceptionTypeDeclaration,
     FixpointCombinator,
     LetBindings,
     LetManyBindings,

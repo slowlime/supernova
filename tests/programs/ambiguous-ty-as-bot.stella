@@ -1,0 +1,51 @@
+//! PASS
+language core;
+
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #pattern-ascriptions;
+extend with #nested-function-declarations;
+extend with #unit-type;
+extend with #structural-subtyping;
+extend with #top-type;
+extend with #bottom-type;
+
+extend with #references;
+extend with #lists;
+extend with #sum-types;
+extend with #panic;
+extend with #exceptions;
+extend with #exception-type-declaration;
+
+extend with #ambiguous-type-as-bottom;
+
+exception type = Nat
+
+fn ambiguity-address() -> Unit {
+  return match <0x0> { _ as &Bot => unit }
+}
+
+fn ambiguity-panic() -> Unit {
+  return match panic! { _ as Bot => unit }
+}
+
+fn ambiguity-throw() -> Unit {
+  return match throw(0) { _ as Bot => unit }
+}
+
+fn ambiguity-inl() -> Unit {
+  return match inl(0) { _ as Nat + Bot => unit }
+}
+
+fn ambiguity-inr() -> Unit {
+  return match inr(0) { _ as Bot + Nat => unit }
+}
+
+fn ambiguity-empty-list() -> Unit {
+  return match [] { _ as [Bot] => unit }
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}
