@@ -1,0 +1,32 @@
+language core;
+
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #pattern-ascriptions;
+extend with #nested-function-declarations;
+extend with #unit-type;
+extend with #structural-subtyping;
+extend with #top-type;
+extend with #bottom-type;
+
+extend with #try-cast-as;
+
+fn expect-top() -> Top {
+  //!~ ERROR
+  return try { 0 } cast as Top { _ => 0 } with { 0 }
+}
+
+fn expect-bot() -> Bot {
+  //! ERROR(sema::expr_ty_mismatch)
+  return try { 0 } cast as Top { _ => 0 } with { 0 }
+}
+
+fn try-branches-do-not-join(x : fn(Top) -> Bot, y : fn(Bot) -> Top) -> Unit {
+  //! ERROR(sema::expr_ty_mismatch)
+  return match (try { 0 } cast as Bool { _ => x } with { y }) { _ => unit }
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}

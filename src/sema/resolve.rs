@@ -443,7 +443,22 @@ impl<'ast, D: DiagCtx> Visitor<'ast, 'ast> for Walker<'ast, '_, '_, D> {
                 return;
             }
 
-            ast::ExprKind::TryCast(_) => unimplemented!(),
+            ast::ExprKind::TryCast(e) => {
+                self.visit_expr(&e.try_expr);
+
+                let prev_scope_id = self.enter_new_scope();
+                self.visit_pat(&e.arm.pat);
+                self.enter_new_scope();
+                self.visit_expr(&e.arm.body);
+
+                self.current_scope_id = prev_scope_id;
+                self.enter_new_scope();
+                self.visit_expr(&e.fallback);
+
+                self.current_scope_id = prev_scope_id;
+
+                return;
+            }
 
             ast::ExprKind::Fix(_) => {}
             ast::ExprKind::Fold(_) => {}

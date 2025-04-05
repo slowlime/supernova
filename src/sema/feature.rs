@@ -171,7 +171,7 @@ define_features! {
     TopType "top type" (ast::Extension::TopType);
     BottomType "bottom type" (ast::Extension::BottomType);
     CastExprs "cast expressions" (ast::Extension::TypeCast);
-    TryCastExprs "try-cast expressions";
+    TryCastExprs "try-cast expressions" (ast::Extension::TryCastAs);
     CastPatterns "cast patterns" (ast::Extension::TypeCastPatterns);
 
     // Recursive types.

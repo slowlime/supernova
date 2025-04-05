@@ -31,6 +31,7 @@ In addition to the core language, the following extensions are also supported:
 - `#sequencing`
 - `#structural-patterns`
 - `#sum-types`
+- `#try-cast-as`
 - `#tuples`
 - `#type-ascriptions`
 - `#type-cast-patterns`

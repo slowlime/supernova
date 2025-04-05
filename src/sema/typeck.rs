@@ -194,6 +194,15 @@ pub enum ExpectationSource {
         expr_id: ExprId,
         ty_id: TyId,
     },
+
+    TryCastAnnotation {
+        ty_expr_id: TyExprId,
+    },
+
+    TryCastExpr {
+        expr_id: ExprId,
+        ty_id: TyId,
+    },
 }
 
 type ExpectedTy = (TyId, ExpectationSource);
@@ -623,7 +632,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 let expr = self.m.exprs[expr_id].def;
 
                 diag.add_label(Label::secondary(expr.location).with_msg(format!(
-                    "expected so that the `fix` expression has the type `{}`",
+                    "expected so that the `fix` expression has type `{}`",
                     self.m.display_ty(ty_id),
                 )));
             }
@@ -673,7 +682,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 let arg_expr = self.m.exprs[arg_expr_id].def;
 
                 diag.add_label(Label::secondary(arg_expr.location).with_msg(format!(
-                    "expected because this expression has the type `{}`",
+                    "expected because this expression has type `{}`",
                     self.m.display_ty(elem_ty_id),
                 )));
 
@@ -691,7 +700,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 let arg_pat = self.m.pats[arg_pat_id].def;
 
                 diag.add_label(Label::secondary(arg_pat.location).with_msg(format!(
-                    "expected because this pattern has the type `{}`",
+                    "expected because this pattern has type `{}`",
                     self.m.display_ty(elem_ty_id),
                 )));
 
@@ -729,7 +738,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 )));
 
                 diag.add_label(Label::secondary(callee_expr.location).with_msg(format!(
-                    "the callee has the type `{}`",
+                    "the callee has type `{}`",
                     self.m.display_ty(callee_ty_id),
                 )));
 
@@ -775,8 +784,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 let ty_expr = &self.m.ty_exprs[ty_expr_id].def;
 
                 diag.add_label(
-                    Label::secondary(ty_expr.location)
-                        .with_msg("expected due to this type cast"),
+                    Label::secondary(ty_expr.location).with_msg("expected due to this type cast"),
                 );
 
                 diag.add_label(
@@ -856,7 +864,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 let match_expr = self.m.exprs[match_expr_id].def;
 
                 diag.add_label(Label::secondary(scrutinee.location).with_msg(format!(
-                    "this expression has the type `{}`",
+                    "this expression has type `{}`",
                     self.m.display_ty(scrutinee_ty_id),
                 )));
 
@@ -873,10 +881,10 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 let first_arm = self.m.exprs[first_arm_expr_id].def;
                 let match_expr = self.m.exprs[match_expr_id].def;
 
-                diag.add_label(Label::secondary(first_arm.location).with_msg(format!(
-                    "this arm has the type `{}`",
-                    self.m.display_ty(ty_id),
-                )));
+                diag.add_label(
+                    Label::secondary(first_arm.location)
+                        .with_msg(format!("this arm has type `{}`", self.m.display_ty(ty_id),)),
+                );
 
                 diag.add_label(
                     Label::secondary(match_expr.location).with_msg("in this match expression"),
@@ -892,7 +900,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 let list_expr = self.m.exprs[list_expr_id].def;
 
                 diag.add_label(Label::secondary(first_elem.location).with_msg(format!(
-                    "this element has the type `{}`",
+                    "this element has type `{}`",
                     self.m.display_ty(ty_id),
                 )));
 
@@ -910,7 +918,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 let list_pat = self.m.pats[list_pat_id].def;
 
                 diag.add_label(Label::secondary(first_elem.location).with_msg(format!(
-                    "this element has the type `{}`",
+                    "this element has type `{}`",
                     self.m.display_ty(ty_id),
                 )));
 
@@ -937,7 +945,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 let if_expr = self.m.exprs[if_expr_id].def;
 
                 diag.add_label(Label::secondary(then_expr.location).with_msg(format!(
-                    "expected because this branch has the type `{}`",
+                    "expected because this branch has type `{}`",
                     self.m.display_ty(ty_id),
                 )));
 
@@ -966,7 +974,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 let pat = self.m.pats[pat_id].def;
 
                 diag.add_label(Label::secondary(pat.location).with_msg(format!(
-                    "this pattern has the type `{}`",
+                    "this pattern has type `{}`",
                     self.m.display_ty(ty_id),
                 )));
             }
@@ -978,7 +986,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 let init_expr = self.m.exprs[init_expr_id].def;
 
                 diag.add_label(Label::secondary(init_expr.location).with_msg(format!(
-                    "this expression has the type `{}`",
+                    "this expression has type `{}`",
                     self.m.display_ty(ty_id),
                 )));
             }
@@ -1002,7 +1010,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                         .with_msg("expected because it's an operand to an assignment expression"),
                 );
                 diag.add_label(Label::secondary(lhs_expr.location).with_msg(format!(
-                    "this expression has the type `{}`",
+                    "this expression has type `{}`",
                     self.m.display_ty(ty_id),
                 )));
             }
@@ -1044,7 +1052,26 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 let expr = self.m.exprs[expr_id].def;
 
                 diag.add_label(Label::secondary(expr.location).with_msg(format!(
-                    "expected because this expression has the type `{}`",
+                    "expected because this expression has type `{}`",
+                    self.m.display_ty(ty_id),
+                )));
+            }
+
+            ExpectationSource::TryCastAnnotation { ty_expr_id } => {
+                let ty_expr = self.m.ty_exprs[ty_expr_id].def;
+
+                diag.add_label(
+                    Label::secondary(ty_expr.location).with_msg(
+                        "expected because the try-cast expression specifies the type here",
+                    ),
+                );
+            }
+
+            ExpectationSource::TryCastExpr { expr_id, ty_id } => {
+                let expr = self.m.exprs[expr_id].def;
+
+                diag.add_label(Label::secondary(expr.location).with_msg(format!(
+                    "expected because this expression has type `{}",
                     self.m.display_ty(ty_id),
                 )));
             }
@@ -1408,7 +1435,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             ast::ExprKind::Panic(e) => self.typeck_expr_panic(expr.id, e, expected_ty),
             ast::ExprKind::Throw(e) => self.typeck_expr_throw(expr.id, e, expected_ty),
             ast::ExprKind::Try(e) => self.typeck_expr_try(expr.id, e, expected_ty),
-            ast::ExprKind::TryCast(_) => unimplemented!(),
+            ast::ExprKind::TryCast(e) => self.typeck_expr_try_cast(expr.id, e, expected_ty),
             ast::ExprKind::Fix(e) => self.typeck_expr_fix(expr.id, e, expected_ty),
             ast::ExprKind::Fold(_) => unimplemented!(),
             ast::ExprKind::Unfold(_) => unimplemented!(),
@@ -1767,6 +1794,48 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             }
         }
 
+        self.m.exprs[expr_id].ty_id = ty_id;
+
+        result
+    }
+
+    fn typeck_expr_try_cast(
+        &mut self,
+        expr_id: ExprId,
+        expr: &ast::ExprTryCast<'ast>,
+        expected_ty: Option<ExpectedTy>,
+    ) -> Result {
+        let mut result = Ok(());
+        result = result.and(self.typeck_expr(&expr.try_expr, None));
+        result = result.and(self.typeck_ty_expr(&expr.ty_expr));
+
+        let cast_ty_id = self.m.ty_exprs[expr.ty_expr.id].ty_id;
+        result = result.and(self.typeck_pat(
+            &expr.arm.pat,
+            Some((
+                cast_ty_id,
+                ExpectationSource::TryCastAnnotation {
+                    ty_expr_id: expr.ty_expr.id,
+                },
+            )),
+        ));
+
+        result = result.and(self.typeck_expr(&expr.arm.body, expected_ty.clone()));
+
+        let expected_ty = expected_ty.unwrap_or_else(|| {
+            let ty_id = self.m.exprs[expr.arm.body.id].ty_id;
+
+            (
+                ty_id,
+                ExpectationSource::TryCastExpr {
+                    expr_id: expr.arm.body.id,
+                    ty_id,
+                },
+            )
+        });
+        let ty_id = expected_ty.0;
+
+        result = result.and(self.typeck_expr(&expr.fallback, Some(expected_ty)));
         self.m.exprs[expr_id].ty_id = ty_id;
 
         result

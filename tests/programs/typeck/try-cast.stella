@@ -1,0 +1,56 @@
+language core;
+
+extend with #nullary-functions;
+extend with #multiparameter-functions;
+extend with #structural-patterns;
+extend with #type-ascriptions;
+extend with #pattern-ascriptions;
+extend with #nested-function-declarations;
+extend with #unit-type;
+
+extend with #try-cast-as;
+
+fn check() -> Unit {
+  fn try-cast-as-with-nat-and-nat-is-nat(x : Bool) -> Nat {
+    //!~ ERROR
+    return try { x } cast as Bool { _ => 0 } with { 0 }
+  }
+
+  return unit
+}
+
+fn infer(x : Bool) -> Unit {
+  //!~ ERROR
+  return match (try { x } cast as Bool { _ => 0 } with { 0 }) { _ as Nat => unit }
+}
+
+fn wrong-try-cast-as-ty(x : Bool) -> Unit {
+  return try {
+    x //!<~ ERROR
+  } cast as Bool {
+    x => x //!< ERROR(sema::expr_ty_mismatch)
+  } with {
+    x //!< ERROR(sema::expr_ty_mismatch)
+  }
+}
+
+fn wrong-try-cast-as-with-ty(x : Bool) -> Unit {
+  return match (
+    try {
+      x
+    } cast as Bool {
+      _ => 0
+    } with {
+      unit //!< ERROR(sema::expr_ty_mismatch)
+    }
+  ) { _ => unit }
+}
+
+fn unrelated-cast-ty(x : Bool) -> Unit {
+  //!~ ERROR
+  return try { x } cast as (fn() -> Unit) { _ => unit } with { unit }
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}

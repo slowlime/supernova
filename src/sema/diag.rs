@@ -1263,7 +1263,7 @@ impl IntoDiagnostic for SemaDiag {
                 .with_msg(&self)
                 .with_label(
                     Label::primary(*location)
-                        .with_msg(format!("this expression has the type `{actual_ty}`")),
+                        .with_msg(format!("this expression has type `{actual_ty}`")),
                 )
                 .make(),
 
@@ -1280,7 +1280,7 @@ impl IntoDiagnostic for SemaDiag {
                 .with_msg(&self)
                 .with_label(
                     Label::primary(*location)
-                        .with_msg(format!("this expression has the type `{actual_ty}`")),
+                        .with_msg(format!("this expression has type `{actual_ty}`")),
                 )
                 .make(),
 
@@ -1297,7 +1297,7 @@ impl IntoDiagnostic for SemaDiag {
                 .with_label(Label::primary(*field_location))
                 .with_label(
                     Label::secondary(*base_location)
-                        .with_msg(format!("the record has the type `{record_ty}`")),
+                        .with_msg(format!("the record has type `{record_ty}`")),
                 )
                 .make(),
 
@@ -1314,7 +1314,7 @@ impl IntoDiagnostic for SemaDiag {
                 .with_label(Label::primary(*field_location))
                 .with_label(
                     Label::secondary(*base_location)
-                        .with_msg(format!("this expression has the type `{actual_ty}`")),
+                        .with_msg(format!("this expression has type `{actual_ty}`")),
                 )
                 .make(),
 
@@ -1330,7 +1330,7 @@ impl IntoDiagnostic for SemaDiag {
                 .with_label(Label::primary(*field_location))
                 .with_label(
                     Label::secondary(*base_location)
-                        .with_msg(format!("this expression has the type `{actual_ty}`")),
+                        .with_msg(format!("this expression has type `{actual_ty}`")),
                 )
                 .make(),
 
@@ -1350,7 +1350,7 @@ impl IntoDiagnostic for SemaDiag {
                     .with_label(Label::primary(*field_location))
                     .with_label(
                         Label::secondary(*base_location)
-                            .with_msg(format!("this tuple has the type `{actual_ty}`")),
+                            .with_msg(format!("this tuple has type `{actual_ty}`")),
                     )
                     .make();
 
@@ -1372,7 +1372,7 @@ impl IntoDiagnostic for SemaDiag {
                 .with_label(Label::primary(*location))
                 .with_label(
                     Label::secondary(*inner_location)
-                        .with_msg(format!("this expression has the type `{actual_ty}`")),
+                        .with_msg(format!("this expression has type `{actual_ty}`")),
                 )
                 .make(),
 
@@ -1387,7 +1387,7 @@ impl IntoDiagnostic for SemaDiag {
                 .with_label(Label::primary(*location))
                 .with_label(
                     Label::secondary(*inner_location)
-                        .with_msg(format!("this expression has the type `{actual_ty}`",)),
+                        .with_msg(format!("this expression has type `{actual_ty}`",)),
                 )
                 .make(),
 
@@ -1470,7 +1470,7 @@ impl IntoDiagnostic for SemaDiag {
                 .with_label(Label::primary(*location))
                 .with_label(
                     Label::secondary(*callee_location)
-                        .with_msg(format!("this expression has the type `{actual_ty}`")),
+                        .with_msg(format!("this expression has type `{actual_ty}`")),
                 )
                 .make(),
 
@@ -1510,7 +1510,7 @@ impl IntoDiagnostic for SemaDiag {
                 .with_msg(&self)
                 .with_label(
                     Label::primary(*location)
-                        .with_msg(format!("this parameter has the type `{actual_ty}`")),
+                        .with_msg(format!("this parameter has type `{actual_ty}`")),
                 )
                 .with_label(
                     Label::secondary(*expr_location)
@@ -1706,7 +1706,7 @@ impl IntoDiagnostic for SemaDiag {
                 .with_msg(&self)
                 .with_label(Label::primary(*location))
                 .with_label(Label::secondary(*expr_location).with_msg(format!(
-                    "this variant expression has the type `{expected_ty}`"
+                    "this variant expression has type `{expected_ty}`"
                 )))
                 .make(),
 
@@ -1725,7 +1725,7 @@ impl IntoDiagnostic for SemaDiag {
                 .with_label(Label::primary(*location))
                 .with_label(
                     Label::secondary(*pat_location)
-                        .with_msg(format!("this variant pattern has the type `{expected_ty}`")),
+                        .with_msg(format!("this variant pattern has type `{expected_ty}`")),
                 )
                 .make(),
 
