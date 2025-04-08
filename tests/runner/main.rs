@@ -7,7 +7,7 @@ use std::{fs, mem};
 
 use fxhash::FxHashSet;
 use glob::glob;
-use supernova::diag::{DiagCtx, Diagnostic, IntoDiagnostic, to_report};
+use supernova::diag::{DiagCtx, Diagnostic, IntoDiagnostic, print_to_stderr};
 use supernova::parse::{Cursor, Lexer, Parser};
 use supernova::sema;
 use supernova::sourcemap::SourceMap;
@@ -90,7 +90,7 @@ impl Test {
                 eprintln!("Reported diagnostics:");
 
                 for diag in &run_data.diags {
-                    let _ = to_report(diag, &Default::default()).eprint(source_map.to_cache());
+                    print_to_stderr(diag, &source_map, &Default::default());
                 }
             } else {
                 eprintln!("No diagnostics reported")

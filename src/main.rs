@@ -37,6 +37,7 @@ fn main() -> ExitCode {
 
     let mut diag = StderrDiagCtx::new(&sourcemap);
     diag.set_show_stella_codes(args.stella_error_codes);
+    diag.set_first_error_only(args.first_error_only);
 
     let mut ast = match parser.parse() {
         Ok(ast) => ast,

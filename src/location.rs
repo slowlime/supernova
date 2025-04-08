@@ -71,29 +71,9 @@ impl Span {
     pub fn len(&self) -> usize {
         self.len as usize
     }
-}
 
-impl ariadne::Span for Span {
-    type SourceId = SourceId;
-
-    fn source(&self) -> &SourceId {
-        &self.source_id
-    }
-
-    fn start(&self) -> usize {
-        self.start()
-    }
-
-    fn end(&self) -> usize {
-        self.end()
-    }
-
-    fn len(&self) -> usize {
-        self.len()
-    }
-
-    fn is_empty(&self) -> bool {
-        self.is_empty()
+    pub fn source_id(&self) -> SourceId {
+        self.source_id
     }
 }
 
@@ -157,33 +137,6 @@ impl Ord for Location {
             (_, Self::UserCode(_)) => Ordering::Greater,
             _ => Ordering::Equal,
         }
-    }
-}
-
-impl ariadne::Span for Location {
-    type SourceId = SourceId;
-
-    fn source(&self) -> &SourceId {
-        match self {
-            Self::UserCode(span) => span.source(),
-            Self::Builtin => &SourceId::UNKNOWN,
-        }
-    }
-
-    fn start(&self) -> usize {
-        self.span().map(|span| span.start()).unwrap_or(0)
-    }
-
-    fn end(&self) -> usize {
-        self.span().map(|span| span.end()).unwrap_or(0)
-    }
-
-    fn len(&self) -> usize {
-        self.span().map(|span| span.len()).unwrap_or(0)
-    }
-
-    fn is_empty(&self) -> bool {
-        self.span().map(|span| span.is_empty()).unwrap_or(true)
     }
 }
 

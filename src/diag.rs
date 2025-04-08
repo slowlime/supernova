@@ -1,10 +1,15 @@
 use std::fmt::Display;
 
-use ariadne::{Color, ColorGenerator, IndexType, Report, ReportKind};
+use codespan_reporting::diagnostic::{
+    Diagnostic as CodespanDiagnostic, Label as CodespanLabel, LabelStyle as CodespanLabelStyle,
+    Severity,
+};
+use codespan_reporting::term::Chars;
+use termcolor::{BufferedStandardStream, ColorChoice};
 use yansi::Paint;
 
 use crate::location::Location;
-use crate::sourcemap::SourceMap;
+use crate::sourcemap::{SourceId, SourceMap};
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Code {
@@ -243,52 +248,72 @@ impl Default for ReportOptions {
     }
 }
 
-pub fn to_report(diag: &Diagnostic, opts: &ReportOptions) -> Report<'static, Location> {
-    let mut report = Report::build(
-        match diag.level {
-            Level::Error => ReportKind::Error,
-            Level::Warn => ReportKind::Warning,
-        },
-        diag.location,
-    )
-    .with_config(
-        ariadne::Config::new()
-            .with_tab_width(2)
-            .with_index_type(IndexType::Byte),
-    )
-    .with_code(
+fn to_codespan_diagnostic(diag: &Diagnostic, opts: &ReportOptions) -> CodespanDiagnostic<SourceId> {
+    let mut result = CodespanDiagnostic::new(match diag.level {
+        Level::Warn => Severity::Warning,
+        Level::Error => Severity::Error,
+    });
+
+    result.code = Some(
         if let Some(stella) = opts.show_stella_codes.then_some(diag.code.stella).flatten() {
             format!("{} / {stella}", diag.code.code)
         } else {
             diag.code.code.to_string()
         },
-    )
-    .with_message(&diag.msg);
+    );
 
-    report.with_notes(&diag.notes);
-
-    let mut colors = ColorGenerator::from_state([5737, 74, 31337], 0.5);
+    result.message = diag.msg.clone();
+    result.notes = diag
+        .notes
+        .iter()
+        .map(|note| format!("note: {note}"))
+        .collect();
 
     for label in &diag.labels {
-        let mut report_label = ariadne::Label::new(label.location);
+        let span = label.location.span().unwrap();
 
-        if let Some(msg) = &label.msg {
-            report_label = report_label.with_message(msg);
-        }
-
-        let color = match label.kind {
-            LabelKind::Primary => match diag.level {
-                Level::Error => Color::BrightRed,
-                Level::Warn => Color::BrightYellow,
+        let mut result_label = CodespanLabel::new(
+            match label.kind {
+                LabelKind::Primary => CodespanLabelStyle::Primary,
+                LabelKind::Secondary => CodespanLabelStyle::Secondary,
             },
+            span.source_id(),
+            span.start()..span.end(),
+        );
+        result_label.message = label.msg.clone().unwrap_or_default();
 
-            LabelKind::Secondary => colors.next(),
-        };
-
-        report.add_label(report_label.with_color(color));
+        result.labels.push(result_label);
     }
 
-    report.finish()
+    if let Some(span) = diag.location.span() {
+        let add_synthetic_label = !diag
+            .labels
+            .iter()
+            .any(|label| label.kind == LabelKind::Primary && label.location == diag.location);
+
+        if add_synthetic_label {
+            result.labels.push(CodespanLabel::new(
+                CodespanLabelStyle::Primary,
+                span.source_id(),
+                span.start()..span.end(),
+            ));
+        }
+    }
+
+    result
+}
+
+pub fn print_to_stderr(diag: &Diagnostic, source_map: &SourceMap, opts: &ReportOptions) {
+    let _ = codespan_reporting::term::emit(
+        &mut BufferedStandardStream::stderr(ColorChoice::Auto),
+        &codespan_reporting::term::Config {
+            tab_width: 8,
+            chars: Chars::box_drawing(),
+            ..Default::default()
+        },
+        source_map,
+        &to_codespan_diagnostic(diag, opts),
+    );
 }
 
 pub trait DiagCtx {
@@ -340,7 +365,7 @@ impl<'src> StderrDiagCtx<'src> {
                 let e = ending(errors);
                 let c = copula(errors);
                 eprintln!(
-                    "\n{}",
+                    "{}",
                     format_args!("{errors} more error{e} {c} hidden").bright_red()
                 );
             }
@@ -349,7 +374,7 @@ impl<'src> StderrDiagCtx<'src> {
                 let e = ending(warnings);
                 let c = copula(warnings);
                 eprintln!(
-                    "\n{}",
+                    "{}",
                     format_args!("{warnings} more warning{e} {c} hidden",).bright_yellow()
                 );
             }
@@ -359,7 +384,7 @@ impl<'src> StderrDiagCtx<'src> {
                 let warn_e = ending(warnings);
                 let c = ending(errors + warnings);
                 eprintln!(
-                    "\n{}",
+                    "{}",
                     format_args!("{errors} error{err_e} and {warnings} warning{warn_e} {c} hidden")
                         .bright_red()
                 );
@@ -373,6 +398,8 @@ impl DiagCtx for StderrDiagCtx<'_> {
         let diag = diag.into_diagnostic();
 
         match (diag.level, self.had_error) {
+            _ if !self.first_error_only => {}
+
             (Level::Warn, true) => {
                 self.warnings_hidden += 1;
                 return;
@@ -390,6 +417,6 @@ impl DiagCtx for StderrDiagCtx<'_> {
             _ => {}
         }
 
-        let _ = to_report(&diag, &self.opts).eprint(self.source_map.to_cache());
+        print_to_stderr(&diag, self.source_map, &self.opts);
     }
 }

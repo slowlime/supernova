@@ -1,31 +1,22 @@
-use std::fmt::{Debug, Display};
+use std::fmt::Debug;
+use std::ops::Range;
 
-use ariadne::Source;
 use fxhash::FxHashMap;
+
+use codespan_reporting::files::Error as CodespanError;
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SourceId(u32);
-
-impl SourceId {
-    pub const UNKNOWN: Self = Self(0);
-}
 
 #[derive(Debug, Clone)]
 pub struct SourceFile {
     id: SourceId,
     name: String,
-    source: Source<String>,
+    contents: String,
+    line_starts: Vec<usize>,
 }
 
 impl SourceFile {
-    fn new_unknown() -> Self {
-        Self {
-            id: SourceId::UNKNOWN,
-            name: "<unknown>".into(),
-            source: String::new().into(),
-        }
-    }
-
     pub fn id(&self) -> SourceId {
         self.id
     }
@@ -34,16 +25,12 @@ impl SourceFile {
         &self.name
     }
 
-    pub fn source(&self) -> &Source<String> {
-        &self.source
-    }
-
     pub fn contents(&self) -> &str {
-        self.source.text()
+        &self.contents
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct SourceMap {
     files: Vec<SourceFile>,
     file_names: FxHashMap<String, usize>,
@@ -61,10 +48,12 @@ impl SourceMap {
         );
 
         let id = SourceId(self.files.len() as u32);
+        let line_starts = codespan_reporting::files::line_starts(&contents).collect();
         let file = SourceFile {
             id,
             name: name.clone(),
-            source: contents.into(),
+            contents,
+            line_starts,
         };
 
         self.file_names.insert(name, self.files.len());
@@ -82,36 +71,49 @@ impl SourceMap {
     pub fn get_by_id(&self, source_id: SourceId) -> &SourceFile {
         &self.files[source_id.0 as usize]
     }
-
-    pub fn to_cache(&self) -> SourceMapCache<'_> {
-        SourceMapCache { source_map: self }
-    }
 }
 
-impl Default for SourceMap {
-    fn default() -> Self {
-        Self {
-            files: vec![SourceFile::new_unknown()],
-            file_names: Default::default(),
-        }
-    }
-}
+impl<'a> codespan_reporting::files::Files<'a> for SourceMap {
+    type FileId = SourceId;
+    type Name = &'a str;
+    type Source = &'a str;
 
-#[derive(Debug, Clone, Copy)]
-pub struct SourceMapCache<'src> {
-    source_map: &'src SourceMap,
-}
-
-impl ariadne::Cache<SourceId> for SourceMapCache<'_> {
-    type Storage = String;
-
-    fn fetch(&mut self, id: &SourceId) -> Result<&Source<String>, Box<dyn Debug + '_>> {
-        Ok(self.source_map.files[id.0 as usize].source())
+    fn name(&'a self, id: Self::FileId) -> Result<Self::Name, CodespanError> {
+        Ok(self.get_by_id(id).name())
     }
 
-    fn display<'a>(&self, id: &'a SourceId) -> Option<Box<dyn Display + 'a>> {
-        Some(Box::new(
-            self.source_map.files.get(id.0 as usize)?.name.clone(),
-        ))
+    fn source(&'a self, id: Self::FileId) -> Result<Self::Source, CodespanError> {
+        Ok(self.get_by_id(id).contents())
+    }
+
+    fn line_index(&'a self, id: Self::FileId, byte_index: usize) -> Result<usize, CodespanError> {
+        Ok(self
+            .get_by_id(id)
+            .line_starts
+            .binary_search(&byte_index)
+            .unwrap_or_else(|n| n - 1))
+    }
+
+    fn line_range(
+        &'a self,
+        id: Self::FileId,
+        line_index: usize,
+    ) -> Result<Range<usize>, CodespanError> {
+        let source = self.get_by_id(id);
+
+        let Some(&start) = source.line_starts.get(line_index) else {
+            return Err(CodespanError::LineTooLarge {
+                given: line_index,
+                max: source.line_starts.len() - 1,
+            });
+        };
+
+        let end = source
+            .line_starts
+            .get(line_index + 1)
+            .copied()
+            .unwrap_or(source.contents.len());
+
+        Ok(start..end)
     }
 }
