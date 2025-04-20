@@ -51,6 +51,11 @@ fn not-covariant-in-params() -> fn(Top) -> Nat {
   return fn(x : Nat) { return x }
 }
 
+fn double-contravariance(x : fn(fn(Bot) -> Top) -> Top) -> fn(fn(Top) -> Top) -> Top {
+  //!~ ERROR
+  return x
+}
+
 fn main(x : Nat) -> Nat {
   return x
 }
