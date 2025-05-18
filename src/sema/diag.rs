@@ -1777,7 +1777,7 @@ impl IntoDiagnostic for SemaDiag {
                 .at(*location)
                 .with_code(code!(
                     sema::match_non_exhaustive
-                    as "ERROR_NON_EXHAUSTIVE_MATCH_PATTERNS"
+                    as "ERROR_NONEXHAUSTIVE_MATCH_PATTERNS"
                 ))
                 .with_msg(&self)
                 .with_label(
@@ -1790,7 +1790,7 @@ impl IntoDiagnostic for SemaDiag {
                 .at(*location)
                 .with_code(code!(
                     sema::non_irrefutable_let_pat
-                    as "ERROR_NON_EXHAUSTIVE_MATCH_PATTERNS"
+                    as "ERROR_NONEXHAUSTIVE_MATCH_PATTERNS"
                 ))
                 .with_msg(&self)
                 .with_label(
