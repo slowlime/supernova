@@ -183,8 +183,9 @@ define_features! {
 
     // Universal types.
     TypeParameters "type parameters";
+    UniversalTypes "universal types" (ast::Extension::UniversalTypes) => TypeParameters;
+
     TypeInference "type inference";
-    UniversalTypes "universal types" => TypeParameters;
 }
 
 #[derive(Debug, Clone)]
@@ -203,7 +204,48 @@ impl Feature {
             FeatureKind::ExceptionTypeDeclaration,
             FeatureKind::OpenVariantExceptions,
         ],
+        &[
+            FeatureKind::UniversalTypes,
+            FeatureKind::TypeInference,
+            FeatureKind::Subtyping,
+        ],
     ];
+
+    pub fn disallowed_features_for(feature: FeatureKind) -> &'static [FeatureKind] {
+        static DISALLOWED_FEATURES: LazyLock<FxHashMap<FeatureKind, &[FeatureKind]>> =
+            LazyLock::new(|| {
+                use FeatureKind::*;
+
+                const SECOND_STAGE_FEATURES: &[FeatureKind] = &[
+                    Sequencing,
+                    References,
+                    Panic,
+                    Exceptions,
+                    ExceptionTypeDeclaration,
+                    OpenVariantExceptions,
+                    Subtyping,
+                    CastExprs,
+                    CastPatterns,
+                    TryCastExprs,
+                    AmbiguousTyAsBot,
+                    TopType,
+                    BottomType,
+                ];
+
+                let mut result = FxHashMap::default();
+                result.extend([
+                    (UniversalTypes, SECOND_STAGE_FEATURES),
+                    (TypeInference, SECOND_STAGE_FEATURES),
+                ]);
+
+                result
+            });
+
+        DISALLOWED_FEATURES
+            .get(&feature)
+            .copied()
+            .unwrap_or_default()
+    }
 
     pub fn from_extension(extension: ast::Extension, location: Location) -> Option<Self> {
         FeatureKind::from_extension(extension).map(|kind| Self {

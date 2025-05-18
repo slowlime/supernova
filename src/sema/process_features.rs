@@ -82,6 +82,22 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         }
     }
 
+    fn emit_feature_conflict(&mut self, conflicting_features: Vec<(FeatureKind, EnableReason)>) {
+        let location = conflicting_features
+            .iter()
+            .filter_map(|(_, reason)| match reason {
+                EnableReason::Extension(location) => Some(*location),
+                _ => None,
+            })
+            .max()
+            .unwrap_or(self.m.location);
+
+        self.diag.emit(SemaDiag::ConflictingFeatures {
+            location,
+            features: conflicting_features,
+        });
+    }
+
     fn check_feature_conflicts(&mut self) -> Result {
         let mut result = Ok(());
 
@@ -103,20 +119,33 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 }
             }
 
-            let location = conflicting_features
-                .iter()
-                .filter_map(|(_, reason)| match reason {
-                    EnableReason::Extension(location) => Some(*location),
-                    _ => None,
-                })
-                .max()
-                .unwrap_or(self.m.location);
-
             result = Err(());
-            self.diag.emit(SemaDiag::ConflictingFeatures {
-                location,
-                features: conflicting_features,
-            });
+            self.emit_feature_conflict(conflicting_features);
+        }
+
+        let mut conflicts = vec![];
+
+        for (&kind, feature) in &self.m.features {
+            let mut conflicting_features = vec![];
+
+            for &conflicting_feature in Feature::disallowed_features_for(kind) {
+                if let Some(f) = self.m.features.get(&conflicting_feature) {
+                    if conflicting_features.is_empty() {
+                        conflicting_features.push((kind, feature.reason.clone()));
+                    }
+
+                    conflicting_features.push((conflicting_feature, f.reason.clone()));
+                }
+            }
+
+            if !conflicting_features.is_empty() {
+                conflicts.push(conflicting_features);
+                result = Err(());
+            }
+        }
+
+        for conflict in conflicts {
+            self.emit_feature_conflict(conflict);
         }
 
         result

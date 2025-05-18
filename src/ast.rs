@@ -58,6 +58,7 @@ pub enum Extension {
     TypeCast,
     TypeCastPatterns,
     UnitType,
+    UniversalTypes,
     Variants,
 }
 
