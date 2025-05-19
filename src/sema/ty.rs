@@ -133,14 +133,14 @@ impl Module<'_> {
                     }
 
                     TyKind::ForAll(binding_ids, inner_ty_id) => {
-                        write!(f, "forall ")?;
+                        write!(f, "forall")?;
 
                         for (idx, binding_id) in binding_ids.iter().enumerate() {
                             if idx > 0 {
-                                write!(f, ", ")?;
+                                write!(f, ",")?;
                             }
 
-                            write!(f, "{}", self.0.bindings[*binding_id].name)?;
+                            write!(f, " {}", self.0.bindings[*binding_id].name)?;
                         }
 
                         write!(f, ". {}", self.0.display_ty_prec(*inner_ty_id, prec))?;
@@ -195,6 +195,27 @@ pub enum TyKind {
     Bot,
     Var(BindingId),
     ForAll(Vec<BindingId>, TyId),
+}
+
+impl TyKind {
+    /// Returns `true` if it's not a variable nor contains subtypes.
+    pub fn is_atomic(&self) -> bool {
+        match self {
+            Self::Untyped { .. } | Self::Unit | Self::Bool | Self::Nat | Self::Top | Self::Bot => {
+                true
+            }
+
+            Self::Ref(..)
+            | Self::Sum(..)
+            | Self::Fn(..)
+            | Self::Tuple(..)
+            | Self::Record(..)
+            | Self::Variant(..)
+            | Self::List(..)
+            | Self::Var(..)
+            | Self::ForAll(..) => false,
+        }
+    }
 }
 
 impl Default for TyKind {

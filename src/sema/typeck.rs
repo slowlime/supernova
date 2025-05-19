@@ -2,7 +2,6 @@ use std::cmp::Ordering;
 use std::fmt::Write;
 
 use fxhash::{FxHashMap, FxHashSet};
-use slotmap::SparseSecondaryMap;
 
 use crate::ast;
 use crate::diag::{Code, DiagCtx, Diagnostic, IntoDiagnostic, Label};
@@ -17,8 +16,8 @@ use super::{
 
 #[derive(Debug, Clone, Default)]
 struct TyCmpCtx {
-    lhs_binders: SparseSecondaryMap<BindingId, usize>,
-    rhs_binders: SparseSecondaryMap<BindingId, usize>,
+    lhs_binders: FxHashMap<BindingId, usize>,
+    rhs_binders: FxHashMap<BindingId, usize>,
     binder_level: usize,
 }
 
@@ -448,7 +447,10 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
 
     /// Returns the ordering between two types induced by the subtype relation.
     fn cmp_tys(&self, lhs_ty_id: TyId, rhs_ty_id: TyId, ctx: &mut TyCmpCtx) -> Option<Ordering> {
-        if ctx.binder_level == 0 && lhs_ty_id == rhs_ty_id {
+        if lhs_ty_id == rhs_ty_id
+            && (ctx.binder_level == 0
+                || self.m.tys[lhs_ty_id].kind.is_atomic() && self.m.tys[rhs_ty_id].kind.is_atomic())
+        {
             return Some(Ordering::Equal);
         }
 
@@ -631,8 +633,8 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 (&TyKind::List(l), &TyKind::List(r)) => self.cmp_tys(l, r, ctx)?,
 
                 (&TyKind::Var(lhs_binding_id), &TyKind::Var(rhs_binding_id)) => {
-                    let lhs_level = ctx.lhs_binders.get(lhs_binding_id).copied();
-                    let rhs_level = ctx.rhs_binders.get(rhs_binding_id).copied();
+                    let lhs_level = ctx.lhs_binders.get(&lhs_binding_id).copied();
+                    let rhs_level = ctx.rhs_binders.get(&rhs_binding_id).copied();
 
                     let eq = match (lhs_level, rhs_level) {
                         (None, None) => lhs_binding_id == rhs_binding_id,
@@ -678,7 +680,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                         if let Some(prev_lhs_level) = prev_lhs_level {
                             ctx.lhs_binders.insert(lhs_binding_ids[idx], prev_lhs_level);
                         } else {
-                            ctx.lhs_binders.remove(lhs_binding_ids[idx]);
+                            ctx.lhs_binders.remove(&lhs_binding_ids[idx]);
                         }
                     }
 
@@ -686,7 +688,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                         if let Some(prev_rhs_level) = prev_rhs_level {
                             ctx.rhs_binders.insert(rhs_binding_ids[idx], prev_rhs_level);
                         } else {
-                            ctx.rhs_binders.remove(rhs_binding_ids[idx]);
+                            ctx.rhs_binders.remove(&rhs_binding_ids[idx]);
                         }
                     }
 
@@ -1547,8 +1549,19 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 }
 
                 let fn_ty_id = self.m.bindings[d.binding.id].ty_id;
-                let TyKind::Fn(fn_ty) = &self.m.tys[fn_ty_id].kind else {
-                    unreachable!();
+
+                let fn_ty = match &self.m.tys[fn_ty_id].kind {
+                    TyKind::Fn(fn_ty) => fn_ty,
+
+                    TyKind::ForAll(_, inner_ty_id) => {
+                        let TyKind::Fn(fn_ty) = &self.m.tys[*inner_ty_id].kind else {
+                            unreachable!();
+                        };
+
+                        fn_ty
+                    }
+
+                    _ => unreachable!(),
                 };
 
                 result = result.and(self.typeck_expr(
@@ -3574,6 +3587,11 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         expected_ty: Option<ExpectedTy>,
     ) -> Result {
         let mut result = Ok(());
+
+        for binding in &expr.generics {
+            self.m.bindings[binding.id].ty_id = self.m.add_ty(TyKind::Var(binding.id));
+        }
+
         result = result.and(self.typeck_expr(&expr.expr, None));
         let inner_ty_id = self.m.exprs[expr.expr.id].ty_id;
         let binding_ids = expr.generics.iter().map(|binding| binding.id).collect();
@@ -3582,12 +3600,8 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         if let Some((expected_ty_id, source)) = expected_ty {
             if !self.ty_conforms_to(ty_id, expected_ty_id) {
                 result = Err(());
-                self.diag.emit(self.make_expr_ty_error(
-                    expr_id,
-                    ty_id,
-                    expected_ty_id,
-                    source,
-                ));
+                self.diag
+                    .emit(self.make_expr_ty_error(expr_id, ty_id, expected_ty_id, source));
             }
         }
 

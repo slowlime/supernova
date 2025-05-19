@@ -149,6 +149,12 @@ impl<'src> AstRecurse<'src> for DeclFn<'src> {
     {
         visitor.visit_binding(&self.binding);
 
+        if let Some(generics) = &self.generics {
+            for binding in generics {
+                visitor.visit_binding(binding);
+            }
+        }
+
         for param in &self.params {
             param.recurse(visitor);
         }
@@ -173,6 +179,12 @@ impl<'src> AstRecurse<'src> for DeclFn<'src> {
         'src: 'ast,
     {
         visitor.visit_binding(&mut self.binding);
+
+        if let Some(generics) = &mut self.generics {
+            for binding in generics {
+                visitor.visit_binding(binding);
+            }
+        }
 
         for param in &mut self.params {
             param.recurse_mut(visitor);
@@ -1620,6 +1632,10 @@ impl<'src> AstRecurse<'src> for ExprGeneric<'src> {
     where
         'src: 'ast,
     {
+        for binding in &self.generics {
+            visitor.visit_binding(binding);
+        }
+
         visitor.visit_expr(&self.expr);
     }
 
@@ -1627,6 +1643,10 @@ impl<'src> AstRecurse<'src> for ExprGeneric<'src> {
     where
         'src: 'ast,
     {
+        for binding in &mut self.generics {
+            visitor.visit_binding(binding);
+        }
+
         visitor.visit_expr(&mut self.expr);
     }
 }
