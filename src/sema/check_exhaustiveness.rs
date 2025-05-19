@@ -434,6 +434,8 @@ impl PatMat {
 
             TyKind::Top => SigCompleteness::Incomplete { missing: None },
             TyKind::Bot => SigCompleteness::Incomplete { missing: None },
+            TyKind::Var(_) => SigCompleteness::Incomplete { missing: None },
+            TyKind::ForAll(..) => SigCompleteness::Incomplete { missing: None },
         };
 
         (present, completeness)

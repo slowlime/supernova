@@ -782,10 +782,10 @@ impl<'src> Parser<'src> {
             name: self.parse_name("a function name")?,
         };
 
-        let mut generics = vec![];
-
-        if generic_kw.is_some() {
+        let generics = if generic_kw.is_some() {
             self.expect_with_message(Symbol::LBracket, "a generic parameter list")?;
+
+            let mut generics = vec![];
 
             loop {
                 generics.push(ast::Binding {
@@ -797,7 +797,11 @@ impl<'src> Parser<'src> {
                     break;
                 }
             }
-        }
+
+            Some(generics)
+        } else {
+            None
+        };
 
         let mut params = vec![];
         self.expect_with_message(Symbol::LParen, "a parameter list")?;
@@ -1070,35 +1074,32 @@ impl<'src> Parser<'src> {
         let forall_kw = self.expect(Symbol::Forall)?;
         let mut bindings = vec![];
 
-        while self.consume(Symbol::Dot)?.is_none() {
-            bindings.push(ast::Binding {
-                id: Default::default(),
-                name: self.parse_name(|| {
-                    [
-                        Cow::from("a type variable name"),
-                        Cow::from(Symbol::Dot.to_string()),
-                    ]
-                })?,
-            });
+        if self.consume(Symbol::Dot)?.is_none() {
+            loop {
+                bindings.push(ast::Binding {
+                    id: Default::default(),
+                    name: self.parse_name("a type variable name")?,
+                });
+
+                if Symbol::Dot.matches(&self.expect([Symbol::Dot, Symbol::Comma])?) {
+                    break;
+                }
+            }
         }
 
         let ty_expr = self.parse_ty_expr_impl(prec)?;
         let location = forall_kw.span.convex_hull(&self.last_token_location());
 
-        Ok(bindings
-            .into_iter()
-            .enumerate()
-            .rfold(ty_expr, |ty_expr, (idx, binding)| ast::TyExpr {
-                id: Default::default(),
-                location,
-                kind: ast::TyExprForAll {
-                    forall_location: forall_kw.span.into(),
-                    synthetic: idx != 0,
-                    binding,
-                    ty_expr: Box::new(ty_expr),
-                }
-                .into(),
-            }))
+        Ok(ast::TyExpr {
+            id: Default::default(),
+            location,
+            kind: ast::TyExprForAll {
+                forall_location: forall_kw.span.into(),
+                bindings,
+                ty_expr: Box::new(ty_expr),
+            }
+            .into(),
+        })
     }
 
     fn parse_ty_expr_mu(&mut self, prec: u8) -> Result<ast::TyExpr<'src>, ParserError<'src>> {

@@ -185,7 +185,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                     decl.fn_kw.as_ref().map(|token| token.span).into(),
                 ));
 
-                if (decl.generic_kw.is_some() || !decl.generics.is_empty())
+                if decl.generics.is_some()
                     && !self.m.is_feature_enabled(FeatureKind::TypeParameters)
                 {
                     result = Err(());
@@ -359,10 +359,8 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 result = result.and(self.check_fn_param_count(ty_expr.params.len(), def.location));
             }
 
-            ast::TyExprKind::ForAll(ty_expr) => {
-                // the `.synthetic` check is to avoid spamming for things like `forall a b c`,
-                // which are split into separate `forall` type expressions.
-                if !ty_expr.synthetic && !self.m.is_feature_enabled(FeatureKind::UniversalTypes) {
+            ast::TyExprKind::ForAll(_) => {
+                if !self.m.is_feature_enabled(FeatureKind::UniversalTypes) {
                     result = Err(());
                     self.diag.emit(make_feature_disabled_error(
                         SemaDiag::UniversalTyNotAllowed {

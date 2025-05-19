@@ -1,9 +1,9 @@
 use std::fmt::{self, Display};
 use std::hash::{Hash, Hasher};
 
-use fxhash::FxHashMap;
+use fxhash::{FxHashMap, FxHashSet};
 
-use super::{Module, TyId};
+use super::{BindingId, Module, TyId};
 
 impl Module<'_> {
     pub fn display_ty(&self, ty_id: TyId) -> impl Display {
@@ -31,6 +31,8 @@ impl Module<'_> {
                     TyKind::List(..) => 3,
                     TyKind::Top => 3,
                     TyKind::Bot => 3,
+                    TyKind::Var(..) => 3,
+                    TyKind::ForAll(..) => 1,
                 };
 
                 if prec < self.2 {
@@ -125,6 +127,24 @@ impl Module<'_> {
 
                     TyKind::Top => write!(f, "Top")?,
                     TyKind::Bot => write!(f, "Bot")?,
+
+                    TyKind::Var(binding_id) => {
+                        write!(f, "{}", self.0.bindings[*binding_id].name)?;
+                    }
+
+                    TyKind::ForAll(binding_ids, inner_ty_id) => {
+                        write!(f, "forall ")?;
+
+                        for (idx, binding_id) in binding_ids.iter().enumerate() {
+                            if idx > 0 {
+                                write!(f, ", ")?;
+                            }
+
+                            write!(f, "{}", self.0.bindings[*binding_id].name)?;
+                        }
+
+                        write!(f, ". {}", self.0.display_ty_prec(*inner_ty_id, prec))?;
+                    }
                 }
 
                 if prec < self.2 {
@@ -154,6 +174,7 @@ pub struct WellKnownTys {
 #[derive(Debug, Clone)]
 pub struct Ty {
     pub kind: TyKind,
+    pub vars: FxHashSet<BindingId>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -172,6 +193,8 @@ pub enum TyKind {
     List(TyId),
     Top,
     Bot,
+    Var(BindingId),
+    ForAll(Vec<BindingId>, TyId),
 }
 
 impl Default for TyKind {

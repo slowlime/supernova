@@ -1,16 +1,26 @@
 use std::cmp::Ordering;
 use std::fmt::Write;
-use std::mem;
 
 use fxhash::{FxHashMap, FxHashSet};
+use slotmap::SparseSecondaryMap;
 
 use crate::ast;
 use crate::diag::{Code, DiagCtx, Diagnostic, IntoDiagnostic, Label};
 use crate::location::Location;
+use crate::sema::{BindingInfo, BindingKind};
 
 use super::feature::FeatureKind;
 use super::ty::{RefMode, Ty, TyFn, TyKind, TyRecord, TyTuple, TyVariant};
-use super::{DeclId, ExcTyDecl, ExprId, Module, PatId, Result, SemaDiag, TyExprId, TyId};
+use super::{
+    BindingId, DeclId, ExcTyDecl, ExprId, Module, PatId, Result, SemaDiag, TyExprId, TyId,
+};
+
+#[derive(Debug, Clone, Default)]
+struct TyCmpCtx {
+    lhs_binders: SparseSecondaryMap<BindingId, usize>,
+    rhs_binders: SparseSecondaryMap<BindingId, usize>,
+    binder_level: usize,
+}
 
 fn tuple_ordering<I>(elems: I) -> Option<Ordering>
 where
@@ -212,11 +222,72 @@ impl Module<'_> {
         Pass::new(self, diag).run()
     }
 
-    fn add_ty(&mut self, mut ty: Ty) -> TyId {
-        *self
-            .ty_dedup
-            .entry(mem::take(&mut ty.kind))
-            .or_insert_with_key(|kind| self.tys.insert(Ty { kind: kind.clone() }))
+    pub fn add_ty(&mut self, ty: TyKind) -> TyId {
+        *self.ty_dedup.entry(ty).or_insert_with_key(|ty| {
+            let mut vars = FxHashSet::default();
+
+            match ty {
+                TyKind::Untyped { .. } => {}
+                TyKind::Unit => {}
+                TyKind::Bool => {}
+                TyKind::Nat => {}
+                TyKind::Ref(ty_id, _) => vars.extend(&self.tys[*ty_id].vars),
+
+                TyKind::Sum(lhs_ty_id, rhs_ty_id) => {
+                    vars.extend(&self.tys[*lhs_ty_id].vars);
+                    vars.extend(&self.tys[*rhs_ty_id].vars);
+                }
+
+                TyKind::Fn(ty) => {
+                    for &param_ty_id in &ty.params {
+                        vars.extend(&self.tys[param_ty_id].vars);
+                    }
+
+                    vars.extend(&self.tys[ty.ret].vars);
+                }
+
+                TyKind::Tuple(ty) => {
+                    for &elem_ty_id in &ty.elems {
+                        vars.extend(&self.tys[elem_ty_id].vars);
+                    }
+                }
+
+                TyKind::Record(ty) => {
+                    for &(_, elem_ty_id) in &ty.elems {
+                        vars.extend(&self.tys[elem_ty_id].vars);
+                    }
+                }
+
+                TyKind::Variant(ty) => {
+                    for &(_, elem_ty_id) in &ty.elems {
+                        if let Some(elem_ty_id) = elem_ty_id {
+                            vars.extend(&self.tys[elem_ty_id].vars);
+                        }
+                    }
+                }
+
+                TyKind::List(elem_ty_id) => vars.extend(&self.tys[*elem_ty_id].vars),
+                TyKind::Top => {}
+                TyKind::Bot => {}
+
+                TyKind::Var(binding_id) => {
+                    vars.insert(*binding_id);
+                }
+
+                TyKind::ForAll(binding_ids, inner_ty_id) => {
+                    vars.extend(&self.tys[*inner_ty_id].vars);
+
+                    for binding_id in binding_ids {
+                        vars.remove(binding_id);
+                    }
+                }
+            }
+
+            self.tys.insert(Ty {
+                kind: ty.clone(),
+                vars,
+            })
+        })
     }
 }
 
@@ -307,20 +378,14 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
     }
 
     fn add_well_known_tys(&mut self) {
-        self.m.well_known_tys.error = self.m.add_ty(Ty {
-            kind: TyKind::Untyped { error: true },
-        });
-        self.m.well_known_tys.untyped = self.m.add_ty(Ty {
-            kind: TyKind::Untyped { error: false },
-        });
-        self.m.well_known_tys.unit = self.m.add_ty(Ty { kind: TyKind::Unit });
-        self.m.well_known_tys.bool = self.m.add_ty(Ty { kind: TyKind::Bool });
-        self.m.well_known_tys.nat = self.m.add_ty(Ty { kind: TyKind::Nat });
-        self.m.well_known_tys.empty_tuple = self.m.add_ty(Ty {
-            kind: TyKind::Tuple(TyTuple { elems: vec![] }),
-        });
-        self.m.well_known_tys.top = self.m.add_ty(Ty { kind: TyKind::Top });
-        self.m.well_known_tys.bot = self.m.add_ty(Ty { kind: TyKind::Bot });
+        self.m.well_known_tys.error = self.m.add_ty(TyKind::Untyped { error: true });
+        self.m.well_known_tys.untyped = self.m.add_ty(TyKind::Untyped { error: false });
+        self.m.well_known_tys.unit = self.m.add_ty(TyKind::Unit);
+        self.m.well_known_tys.bool = self.m.add_ty(TyKind::Bool);
+        self.m.well_known_tys.nat = self.m.add_ty(TyKind::Nat);
+        self.m.well_known_tys.empty_tuple = self.m.add_ty(TyKind::Tuple(TyTuple { elems: vec![] }));
+        self.m.well_known_tys.top = self.m.add_ty(TyKind::Top);
+        self.m.well_known_tys.bot = self.m.add_ty(TyKind::Bot);
     }
 
     fn set_all_tys_to_error(&mut self) {
@@ -364,7 +429,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         matches!(self.m.tys[ty_id].kind, TyKind::Untyped { .. })
     }
 
-    fn cmp_ty_tuple<L, R>(&self, lhs: L, rhs: R) -> Option<Ordering>
+    fn cmp_ty_tuple<L, R>(&self, lhs: L, rhs: R, ctx: &mut TyCmpCtx) -> Option<Ordering>
     where
         L: IntoIterator<Item = TyId>,
         L::IntoIter: ExactSizeIterator,
@@ -378,12 +443,12 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             return None;
         }
 
-        tuple_ordering(lhs.zip(rhs).map(|(l, r)| self.cmp_tys(l, r)))
+        tuple_ordering(lhs.zip(rhs).map(|(l, r)| self.cmp_tys(l, r, ctx)))
     }
 
     /// Returns the ordering between two types induced by the subtype relation.
-    fn cmp_tys(&self, lhs_ty_id: TyId, rhs_ty_id: TyId) -> Option<Ordering> {
-        if lhs_ty_id == rhs_ty_id {
+    fn cmp_tys(&self, lhs_ty_id: TyId, rhs_ty_id: TyId, ctx: &mut TyCmpCtx) -> Option<Ordering> {
+        if ctx.binder_level == 0 && lhs_ty_id == rhs_ty_id {
             return Some(Ordering::Equal);
         }
 
@@ -401,35 +466,41 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 (_, TyKind::Bot) => Ordering::Greater,
 
                 (&TyKind::Ref(lhs, _), &TyKind::Ref(rhs, RefMode::Source)) => {
-                    self.cmp_tys(lhs, rhs)?
+                    self.cmp_tys(lhs, rhs, ctx)?
                 }
 
                 (&TyKind::Ref(lhs, RefMode::Source), &TyKind::Ref(rhs, _)) => {
-                    self.cmp_tys(lhs, rhs)?.reverse()
+                    self.cmp_tys(lhs, rhs, ctx)?.reverse()
                 }
 
-                (&TyKind::Ref(lhs, _), &TyKind::Ref(rhs, _)) => match self.cmp_tys(lhs, rhs)? {
-                    Ordering::Equal => Ordering::Equal,
+                (&TyKind::Ref(lhs, _), &TyKind::Ref(rhs, _)) => {
+                    match self.cmp_tys(lhs, rhs, ctx)? {
+                        Ordering::Equal => Ordering::Equal,
 
-                    // references are invariant.
-                    _ => return None,
-                },
+                        // references are invariant.
+                        _ => return None,
+                    }
+                }
 
                 (&TyKind::Sum(ll, lr), &TyKind::Sum(rl, rr)) => {
-                    tuple_ordering([self.cmp_tys(ll, rl), self.cmp_tys(lr, rr)])?
+                    tuple_ordering([self.cmp_tys(ll, rl, ctx), self.cmp_tys(lr, rr, ctx)])?
                 }
 
                 (TyKind::Fn(lhs), TyKind::Fn(rhs)) => {
                     tuple_ordering([
-                        self.cmp_ty_tuple(lhs.params.iter().copied(), rhs.params.iter().copied())
-                            // fn is contravariant in parameters.
-                            .map(Ordering::reverse),
-                        self.cmp_tys(lhs.ret, rhs.ret),
+                        self.cmp_ty_tuple(
+                            lhs.params.iter().copied(),
+                            rhs.params.iter().copied(),
+                            ctx,
+                        )
+                        // fn is contravariant in parameters.
+                        .map(Ordering::reverse),
+                        self.cmp_tys(lhs.ret, rhs.ret, ctx),
                     ])?
                 }
 
                 (TyKind::Tuple(lhs), TyKind::Tuple(rhs)) => {
-                    self.cmp_ty_tuple(lhs.elems.iter().copied(), rhs.elems.iter().copied())?
+                    self.cmp_ty_tuple(lhs.elems.iter().copied(), rhs.elems.iter().copied(), ctx)?
                 }
 
                 // {} means both an empty record type and an empty tuple.
@@ -477,7 +548,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                             let lhs_idx = lhs.fields[name.as_str()];
                             let rhs_idx = rhs.fields[name.as_str()];
 
-                            self.cmp_tys(lhs.elems[lhs_idx].1, rhs.elems[rhs_idx].1)
+                            self.cmp_tys(lhs.elems[lhs_idx].1, rhs.elems[rhs_idx].1, ctx)
                         },
                     )))?
                 }
@@ -499,6 +570,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                     self.cmp_ty_tuple(
                         lhs.elems.iter().map(|&(_, l)| l),
                         rhs.elems.iter().map(|&(_, r)| r),
+                        ctx,
                     )?
                 }
 
@@ -525,7 +597,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                             let rhs_idx = rhs.labels[name.as_str()];
 
                             match (lhs.elems[lhs_idx].1, rhs.elems[rhs_idx].1) {
-                                (Some(l), Some(r)) => self.cmp_tys(l, r),
+                                (Some(l), Some(r)) => self.cmp_tys(l, r, ctx),
                                 (None, None) => Some(Ordering::Equal),
                                 _ => None,
                             }
@@ -549,14 +621,77 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
 
                     tuple_ordering(lhs.elems.iter().zip(&rhs.elems).map(
                         |(&(_, l), &(_, r))| match (l, r) {
-                            (Some(l), Some(r)) => self.cmp_tys(l, r),
+                            (Some(l), Some(r)) => self.cmp_tys(l, r, ctx),
                             (None, None) => Some(Ordering::Equal),
                             _ => None,
                         },
                     ))?
                 }
 
-                (&TyKind::List(l), &TyKind::List(r)) => self.cmp_tys(l, r)?,
+                (&TyKind::List(l), &TyKind::List(r)) => self.cmp_tys(l, r, ctx)?,
+
+                (&TyKind::Var(lhs_binding_id), &TyKind::Var(rhs_binding_id)) => {
+                    let lhs_level = ctx.lhs_binders.get(lhs_binding_id).copied();
+                    let rhs_level = ctx.rhs_binders.get(rhs_binding_id).copied();
+
+                    let eq = match (lhs_level, rhs_level) {
+                        (None, None) => lhs_binding_id == rhs_binding_id,
+                        (Some(l), Some(r)) => l == r,
+                        _ => false,
+                    };
+
+                    if eq {
+                        Ordering::Equal
+                    } else {
+                        return None;
+                    }
+                }
+
+                (TyKind::ForAll(lhs_binding_ids, l), TyKind::ForAll(rhs_binding_ids, r)) => {
+                    if lhs_binding_ids.len() != rhs_binding_ids.len() {
+                        return None;
+                    }
+
+                    let binding_count = lhs_binding_ids.len();
+                    let prev_lhs_levels = lhs_binding_ids
+                        .iter()
+                        .enumerate()
+                        .map(|(idx, &binding_id)| {
+                            ctx.lhs_binders.insert(binding_id, ctx.binder_level + idx)
+                        })
+                        .collect::<Vec<_>>();
+                    let prev_rhs_levels = rhs_binding_ids
+                        .iter()
+                        .enumerate()
+                        .map(|(idx, &binding_id)| {
+                            ctx.rhs_binders.insert(binding_id, ctx.binder_level + idx)
+                        })
+                        .collect::<Vec<_>>();
+
+                    let prev_level = ctx.binder_level;
+                    ctx.binder_level += binding_count;
+                    let result = self.cmp_tys(*l, *r, ctx);
+
+                    ctx.binder_level = prev_level;
+
+                    for (idx, prev_lhs_level) in prev_lhs_levels.into_iter().enumerate() {
+                        if let Some(prev_lhs_level) = prev_lhs_level {
+                            ctx.lhs_binders.insert(lhs_binding_ids[idx], prev_lhs_level);
+                        } else {
+                            ctx.lhs_binders.remove(lhs_binding_ids[idx]);
+                        }
+                    }
+
+                    for (idx, prev_rhs_level) in prev_rhs_levels.into_iter().enumerate() {
+                        if let Some(prev_rhs_level) = prev_rhs_level {
+                            ctx.rhs_binders.insert(rhs_binding_ids[idx], prev_rhs_level);
+                        } else {
+                            ctx.rhs_binders.remove(rhs_binding_ids[idx]);
+                        }
+                    }
+
+                    result?
+                }
 
                 (
                     // why not `_`?
@@ -570,7 +705,9 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                     | TyKind::Record(..)
                     | TyKind::Variant(..)
                     | TyKind::List(..)
-                    | TyKind::Ref(..),
+                    | TyKind::Ref(..)
+                    | TyKind::Var(..)
+                    | TyKind::ForAll(..),
                     _,
                 ) => return None,
             },
@@ -586,12 +723,149 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             return true;
         }
 
-        self.cmp_tys(ty_id, expected_ty_id)
+        self.cmp_tys(ty_id, expected_ty_id, &mut Default::default())
             .is_some_and(|ord| ord <= Ordering::Equal)
     }
 
     fn are_tys_equivalent(&self, lhs_ty_id: TyId, rhs_ty_id: TyId) -> bool {
-        self.cmp_tys(lhs_ty_id, rhs_ty_id) == Some(Ordering::Equal)
+        self.cmp_tys(lhs_ty_id, rhs_ty_id, &mut Default::default()) == Some(Ordering::Equal)
+    }
+
+    fn ty_subst(&mut self, ty_id: TyId, subst: &FxHashMap<BindingId, TyId>) -> TyId {
+        fn do_subst<D>(
+            this: &mut Pass<'_, '_, D>,
+            ty_id: TyId,
+            subst: &FxHashMap<BindingId, TyId>,
+            vars: &FxHashSet<BindingId>,
+        ) -> TyId {
+            match &this.m.tys[ty_id].kind {
+                TyKind::Untyped { .. } => ty_id,
+                TyKind::Unit => ty_id,
+                TyKind::Bool => ty_id,
+                TyKind::Nat => ty_id,
+
+                &TyKind::Ref(ty_id, ref_mode) => {
+                    let ty_id = do_subst(this, ty_id, subst, vars);
+
+                    this.m.add_ty(TyKind::Ref(ty_id, ref_mode))
+                }
+
+                &TyKind::Sum(lhs_ty_id, rhs_ty_id) => {
+                    let lhs_ty_id = do_subst(this, lhs_ty_id, subst, vars);
+                    let rhs_ty_id = do_subst(this, rhs_ty_id, subst, vars);
+
+                    this.m.add_ty(TyKind::Sum(lhs_ty_id, rhs_ty_id))
+                }
+
+                TyKind::Fn(ty) => {
+                    let mut ty = ty.clone();
+
+                    for param_ty_id in &mut ty.params {
+                        *param_ty_id = do_subst(this, *param_ty_id, subst, vars);
+                    }
+
+                    ty.ret = do_subst(this, ty.ret, subst, vars);
+
+                    this.m.add_ty(TyKind::Fn(ty))
+                }
+
+                TyKind::Tuple(ty) => {
+                    let mut ty = ty.clone();
+
+                    for elem_ty_id in &mut ty.elems {
+                        *elem_ty_id = do_subst(this, *elem_ty_id, subst, vars);
+                    }
+
+                    this.m.add_ty(TyKind::Tuple(ty))
+                }
+
+                TyKind::Record(ty) => {
+                    let mut ty = ty.clone();
+
+                    for (_, elem_ty_id) in &mut ty.elems {
+                        *elem_ty_id = do_subst(this, *elem_ty_id, subst, vars);
+                    }
+
+                    this.m.add_ty(TyKind::Record(ty))
+                }
+
+                TyKind::Variant(ty) => {
+                    let mut ty = ty.clone();
+
+                    for (_, elem_ty_id) in &mut ty.elems {
+                        if let Some(elem_ty_id) = elem_ty_id {
+                            *elem_ty_id = do_subst(this, *elem_ty_id, subst, vars);
+                        }
+                    }
+
+                    this.m.add_ty(TyKind::Variant(ty))
+                }
+
+                TyKind::List(elem_ty_id) => {
+                    let elem_ty_id = do_subst(this, *elem_ty_id, subst, vars);
+
+                    this.m.add_ty(TyKind::List(elem_ty_id))
+                }
+
+                TyKind::Top => ty_id,
+                TyKind::Bot => ty_id,
+
+                TyKind::Var(binding_id) => subst.get(binding_id).copied().unwrap_or(ty_id),
+
+                TyKind::ForAll(binding_ids, inner_ty_id) => {
+                    let inner_ty_id = *inner_ty_id;
+                    let mut binding_ids = binding_ids.clone();
+
+                    let mut to_rename = binding_ids
+                        .iter()
+                        .filter(|binding_id| vars.contains(binding_id))
+                        .copied()
+                        .map(|old_binding_id| (old_binding_id, TyId::default()))
+                        .collect::<FxHashMap<_, _>>();
+
+                    for (&old_binding_id, ty_id) in &mut to_rename {
+                        let old_binding = &this.m.bindings[old_binding_id];
+                        let new_binding_id = this.m.bindings.insert(BindingInfo {
+                            location: old_binding.location,
+                            name: format!("{}'", old_binding.name),
+                            ty_id: Default::default(),
+                            kind: Default::default(),
+                        });
+                        *ty_id = this.m.add_ty(TyKind::Var(new_binding_id));
+                        this.m.bindings[new_binding_id].ty_id = *ty_id;
+                        this.m.bindings[new_binding_id].kind = BindingKind::Ty(*ty_id);
+                    }
+
+                    let inner_ty_id = if to_rename.is_empty() {
+                        inner_ty_id
+                    } else {
+                        do_subst(this, inner_ty_id, &to_rename, &Default::default())
+                    };
+
+                    for old_binding_id in &mut binding_ids {
+                        if let Some(&new_ty_id) = to_rename.get(old_binding_id) {
+                            let TyKind::Var(new_binding_id) = this.m.tys[new_ty_id].kind else {
+                                unreachable!();
+                            };
+
+                            *old_binding_id = new_binding_id;
+                        }
+                    }
+
+                    let inner_ty_id = do_subst(this, inner_ty_id, subst, vars);
+
+                    this.m.add_ty(TyKind::ForAll(binding_ids, inner_ty_id))
+                }
+            }
+        }
+
+        let vars = subst
+            .values()
+            .flat_map(|&ty_id| &self.m.tys[ty_id].vars)
+            .copied()
+            .collect::<FxHashSet<_>>();
+
+        do_subst(self, ty_id, subst, &vars)
     }
 
     fn augment_error_with_expectation(
@@ -1158,9 +1432,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                     })
                     .collect();
 
-                Some(self.m.add_ty(Ty {
-                    kind: TyKind::Variant(TyVariant::new(elems)),
-                }))
+                Some(self.m.add_ty(TyKind::Variant(TyVariant::new(elems))))
             }
 
             ExcTyDecl::Decl(decl_id) => {
@@ -1208,7 +1480,11 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             ast::DeclKind::Dummy => {}
 
             ast::DeclKind::Fn(d) => {
-                assert!(d.generics.is_empty());
+                if let Some(generics) = &d.generics {
+                    for binding in generics {
+                        self.m.bindings[binding.id].ty_id = self.m.add_ty(TyKind::Var(binding.id));
+                    }
+                }
 
                 let mut param_ty_ids = Vec::with_capacity(d.params.len());
 
@@ -1231,12 +1507,19 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
 
                 assert!(d.throws.is_empty());
 
-                self.m.bindings[d.binding.id].ty_id = self.m.add_ty(Ty {
-                    kind: TyKind::Fn(TyFn {
-                        params: param_ty_ids,
-                        ret: ret_ty_id,
-                    }),
-                });
+                let ty_id = self.m.add_ty(TyKind::Fn(TyFn {
+                    params: param_ty_ids,
+                    ret: ret_ty_id,
+                }));
+
+                self.m.bindings[d.binding.id].ty_id = if let Some(generics) = &d.generics {
+                    self.m.add_ty(TyKind::ForAll(
+                        generics.iter().map(|binding| binding.id).collect(),
+                        ty_id,
+                    ))
+                } else {
+                    ty_id
+                };
 
                 for subdecl in &d.decls {
                     result = result.and(self.typeck_decl_early(subdecl));
@@ -1300,21 +1583,20 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             ast::TyExprKind::Ref(t) => {
                 result = result.and(self.typeck_ty_expr(&t.ty_expr));
 
-                self.m.ty_exprs[ty_expr.id].ty_id = self.m.add_ty(Ty {
-                    kind: TyKind::Ref(self.m.ty_exprs[t.ty_expr.id].ty_id, RefMode::Ref),
-                });
+                self.m.ty_exprs[ty_expr.id].ty_id = self.m.add_ty(TyKind::Ref(
+                    self.m.ty_exprs[t.ty_expr.id].ty_id,
+                    RefMode::Ref,
+                ));
             }
 
             ast::TyExprKind::Sum(t) => {
                 result = result.and(self.typeck_ty_expr(&t.lhs));
                 result = result.and(self.typeck_ty_expr(&t.rhs));
 
-                self.m.ty_exprs[ty_expr.id].ty_id = self.m.add_ty(Ty {
-                    kind: TyKind::Sum(
-                        self.m.ty_exprs[t.lhs.id].ty_id,
-                        self.m.ty_exprs[t.rhs.id].ty_id,
-                    ),
-                });
+                self.m.ty_exprs[ty_expr.id].ty_id = self.m.add_ty(TyKind::Sum(
+                    self.m.ty_exprs[t.lhs.id].ty_id,
+                    self.m.ty_exprs[t.rhs.id].ty_id,
+                ));
             }
 
             ast::TyExprKind::Fn(t) => {
@@ -1328,15 +1610,25 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 result = result.and(self.typeck_ty_expr(&t.ret));
                 let ret_ty_id = self.m.ty_exprs[t.ret.id].ty_id;
 
-                self.m.ty_exprs[ty_expr.id].ty_id = self.m.add_ty(Ty {
-                    kind: TyKind::Fn(TyFn {
-                        params: param_ty_ids,
-                        ret: ret_ty_id,
-                    }),
-                });
+                self.m.ty_exprs[ty_expr.id].ty_id = self.m.add_ty(TyKind::Fn(TyFn {
+                    params: param_ty_ids,
+                    ret: ret_ty_id,
+                }));
             }
 
-            ast::TyExprKind::ForAll(_) => unimplemented!(),
+            ast::TyExprKind::ForAll(t) => {
+                for binding in &t.bindings {
+                    self.m.bindings[binding.id].ty_id = self.m.add_ty(TyKind::Var(binding.id));
+                }
+
+                result = result.and(self.typeck_ty_expr(&t.ty_expr));
+
+                self.m.ty_exprs[ty_expr.id].ty_id = self.m.add_ty(TyKind::ForAll(
+                    t.bindings.iter().map(|binding| binding.id).collect(),
+                    self.m.ty_exprs[t.ty_expr.id].ty_id,
+                ));
+            }
+
             ast::TyExprKind::Mu(_) => unimplemented!(),
 
             ast::TyExprKind::Tuple(t) => {
@@ -1347,9 +1639,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                     elems.push(self.m.ty_exprs[elem.id].ty_id);
                 }
 
-                self.m.ty_exprs[ty_expr.id].ty_id = self.m.add_ty(Ty {
-                    kind: TyKind::Tuple(TyTuple { elems }),
-                });
+                self.m.ty_exprs[ty_expr.id].ty_id = self.m.add_ty(TyKind::Tuple(TyTuple { elems }));
             }
 
             ast::TyExprKind::Record(t) if t.fields.is_empty() => {
@@ -1367,9 +1657,8 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                     ));
                 }
 
-                self.m.ty_exprs[ty_expr.id].ty_id = self.m.add_ty(Ty {
-                    kind: TyKind::Record(TyRecord::new(elems)),
-                });
+                self.m.ty_exprs[ty_expr.id].ty_id =
+                    self.m.add_ty(TyKind::Record(TyRecord::new(elems)));
             }
 
             ast::TyExprKind::Variant(t) => {
@@ -1386,17 +1675,16 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                     ));
                 }
 
-                self.m.ty_exprs[ty_expr.id].ty_id = self.m.add_ty(Ty {
-                    kind: TyKind::Variant(TyVariant::new(elems)),
-                });
+                self.m.ty_exprs[ty_expr.id].ty_id =
+                    self.m.add_ty(TyKind::Variant(TyVariant::new(elems)));
             }
 
             ast::TyExprKind::List(t) => {
                 result = result.and(self.typeck_ty_expr(&t.ty_expr));
 
-                self.m.ty_exprs[ty_expr.id].ty_id = self.m.add_ty(Ty {
-                    kind: TyKind::List(self.m.ty_exprs[t.ty_expr.id].ty_id),
-                });
+                self.m.ty_exprs[ty_expr.id].ty_id = self
+                    .m
+                    .add_ty(TyKind::List(self.m.ty_exprs[t.ty_expr.id].ty_id));
             }
 
             ast::TyExprKind::Unit(_) => {
@@ -1440,7 +1728,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             ast::ExprKind::Fold(_) => unimplemented!(),
             ast::ExprKind::Unfold(_) => unimplemented!(),
             ast::ExprKind::Apply(e) => self.typeck_expr_apply(expr.id, e, expected_ty),
-            ast::ExprKind::TyApply(_) => unimplemented!(),
+            ast::ExprKind::TyApply(e) => self.typeck_expr_ty_apply(expr.id, e, expected_ty),
             ast::ExprKind::Ascription(e) => self.typeck_expr_ascription(expr.id, e, expected_ty),
             ast::ExprKind::Cast(e) => self.typeck_expr_cast(expr.id, e, expected_ty),
             ast::ExprKind::Fn(e) => self.typeck_expr_fn(expr.id, e, expected_ty),
@@ -1539,9 +1827,9 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         let ty_id = match expected_ty {
             Some((expected_ty_id, _)) => expected_ty_id,
 
-            None if self.m.is_feature_enabled(FeatureKind::AmbiguousTyAsBot) => self.m.add_ty(Ty {
-                kind: TyKind::Ref(self.m.well_known_tys.bot, RefMode::Ref),
-            }),
+            None if self.m.is_feature_enabled(FeatureKind::AmbiguousTyAsBot) => self
+                .m
+                .add_ty(TyKind::Ref(self.m.well_known_tys.bot, RefMode::Ref)),
 
             None => {
                 self.diag.emit(SemaDiag::AmbiguousAddressExprTy {
@@ -1874,13 +2162,11 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
     ) -> Result {
         let inner_expected_ty = expected_ty.as_ref().map(|&(expected_ty_id, _)| {
             (
-                self.m.add_ty(Ty {
-                    kind: TyKind::Fn(TyFn {
-                        // don't check the parameter type because we'll do it later anyway.
-                        params: vec![self.m.well_known_tys.untyped],
-                        ret: expected_ty_id,
-                    }),
-                }),
+                self.m.add_ty(TyKind::Fn(TyFn {
+                    // don't check the parameter type because we'll do it later anyway.
+                    params: vec![self.m.well_known_tys.untyped],
+                    ret: expected_ty_id,
+                })),
                 ExpectationSource::FixArg {
                     expr_id,
                     ty_id: expected_ty_id,
@@ -1924,12 +2210,10 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         }
 
         if !self.ty_conforms_to(inner_ty.ret, inner_ty.params[0]) {
-            let expected_ty = self.m.add_ty(Ty {
-                kind: TyKind::Fn(TyFn {
-                    params: vec![inner_ty.params[0]],
-                    ret: inner_ty.params[0],
-                }),
-            });
+            let expected_ty = self.m.add_ty(TyKind::Fn(TyFn {
+                params: vec![inner_ty.params[0]],
+                ret: inner_ty.params[0],
+            }));
 
             self.diag.emit(self.make_expr_ty_error(
                 expr.expr.id,
@@ -2015,13 +2299,12 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                         let result = self.typeck_expr(&expr.args[0], None);
                         let elem_ty_id = self.m.exprs[expr.args[0].id].ty_id;
 
-                        self.m.exprs[expr_id].ty_id = self.m.add_ty(Ty {
-                            kind: if *builtin == ast::Builtin::Inl {
+                        self.m.exprs[expr_id].ty_id =
+                            self.m.add_ty(if *builtin == ast::Builtin::Inl {
                                 TyKind::Sum(elem_ty_id, self.m.well_known_tys.bot)
                             } else {
                                 TyKind::Sum(self.m.well_known_tys.bot, elem_ty_id)
-                            }
-                        });
+                            });
 
                         result
                     }
@@ -2071,9 +2354,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                         self.check_application_arg_count(expr_id, expr.args.len(), 2)?;
                         let mut result = self.typeck_expr(&expr.args[0], None);
                         let elem_ty_id = self.m.exprs[expr.args[0].id].ty_id;
-                        let ty_id = self.m.add_ty(Ty {
-                            kind: TyKind::List(elem_ty_id),
-                        });
+                        let ty_id = self.m.add_ty(TyKind::List(elem_ty_id));
 
                         result = result.and(self.typeck_expr(
                             &expr.args[1],
@@ -2099,9 +2380,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                             return Ok(());
                         }
 
-                        let list_ty_id = self.m.add_ty(Ty {
-                            kind: TyKind::List(expected_ty_id),
-                        });
+                        let list_ty_id = self.m.add_ty(TyKind::List(expected_ty_id));
 
                         self.typeck_application(
                             expr_id,
@@ -2283,18 +2562,14 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                             return Ok(());
                         }
 
-                        let inner_fn_ty_id = self.m.add_ty(Ty {
-                            kind: TyKind::Fn(TyFn {
-                                params: vec![expected_ty_id],
-                                ret: expected_ty_id,
-                            }),
-                        });
-                        let fn_ty_id = self.m.add_ty(Ty {
-                            kind: TyKind::Fn(TyFn {
-                                params: vec![self.m.well_known_tys.nat],
-                                ret: inner_fn_ty_id,
-                            }),
-                        });
+                        let inner_fn_ty_id = self.m.add_ty(TyKind::Fn(TyFn {
+                            params: vec![expected_ty_id],
+                            ret: expected_ty_id,
+                        }));
+                        let fn_ty_id = self.m.add_ty(TyKind::Fn(TyFn {
+                            params: vec![self.m.well_known_tys.nat],
+                            ret: inner_fn_ty_id,
+                        }));
 
                         let arg_source = ExpectationSource::BuiltinArg {
                             expr_id,
@@ -2329,18 +2604,14 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                         result = result.and(self.typeck_expr(&expr.args[1], None));
 
                         let z_ty_id = self.m.exprs[expr.args[1].id].ty_id;
-                        let inner_fn_ty_id = self.m.add_ty(Ty {
-                            kind: TyKind::Fn(TyFn {
-                                params: vec![z_ty_id],
-                                ret: z_ty_id,
-                            }),
-                        });
-                        let fn_ty_id = self.m.add_ty(Ty {
-                            kind: TyKind::Fn(TyFn {
-                                params: vec![self.m.well_known_tys.nat],
-                                ret: inner_fn_ty_id,
-                            }),
-                        });
+                        let inner_fn_ty_id = self.m.add_ty(TyKind::Fn(TyFn {
+                            params: vec![z_ty_id],
+                            ret: z_ty_id,
+                        }));
+                        let fn_ty_id = self.m.add_ty(TyKind::Fn(TyFn {
+                            params: vec![self.m.well_known_tys.nat],
+                            ret: inner_fn_ty_id,
+                        }));
 
                         result = result.and(self.typeck_expr(
                             &expr.args[2],
@@ -2450,6 +2721,66 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         } else {
             Ok(())
         }
+    }
+
+    fn typeck_expr_ty_apply(
+        &mut self,
+        expr_id: ExprId,
+        expr: &ast::ExprTyApply<'ast>,
+        expected_ty: Option<ExpectedTy>,
+    ) -> Result {
+        let mut result = self.typeck_expr(&expr.callee, None);
+        let ty_id = self.m.exprs[expr.callee.id].ty_id;
+
+        let (binding_ids, inner_ty_id) = match &self.m.tys[ty_id].kind {
+            TyKind::Untyped { .. } => return result,
+            TyKind::ForAll(binding_ids, inner_ty_id) => (binding_ids.clone(), *inner_ty_id),
+
+            _ => {
+                result = Err(());
+                self.diag.emit(SemaDiag::TyApplyNotForAll {
+                    location: self.m.exprs[expr_id].def.location,
+                    actual_ty: self.m.display_ty(ty_id).to_string(),
+                    callee_location: expr.callee.location,
+                });
+
+                return result;
+            }
+        };
+
+        if expr.args.len() != binding_ids.len() {
+            result = Err(());
+            self.diag.emit(SemaDiag::WrongTyArgCount {
+                location: self.m.exprs[expr_id].def.location,
+                expected: binding_ids.len(),
+                actual: expr.args.len(),
+                callee_location: expr.callee.location,
+                callee_ty: self.m.display_ty(ty_id).to_string(),
+            });
+
+            return result;
+        }
+
+        let mut subst = FxHashMap::default();
+
+        for (&binding_id, ty_expr) in binding_ids.iter().zip(&expr.args) {
+            result = result.and(self.typeck_ty_expr(ty_expr));
+            subst.insert(binding_id, self.m.ty_exprs[ty_expr.id].ty_id);
+        }
+
+        let ty_id = self.ty_subst(inner_ty_id, &subst);
+
+        if let Some((expected_ty_id, source)) = expected_ty {
+            if !self.ty_conforms_to(ty_id, expected_ty_id) {
+                result = Err(());
+                self.diag
+                    .emit(self.make_expr_ty_error(expr_id, ty_id, expected_ty_id, source));
+            }
+        }
+
+        self.m.exprs[expr_id].ty_id = ty_id;
+
+        result
     }
 
     fn typeck_expr_ascription(
@@ -2598,12 +2929,10 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             result = result.and(self.typeck_expr(&expr.body.ret, None));
             let ret_ty_id = self.m.exprs[expr.body.ret.id].ty_id;
 
-            self.m.exprs[expr_id].ty_id = self.m.add_ty(Ty {
-                kind: TyKind::Fn(TyFn {
-                    params: param_ty_ids,
-                    ret: ret_ty_id,
-                }),
-            });
+            self.m.exprs[expr_id].ty_id = self.m.add_ty(TyKind::Fn(TyFn {
+                params: param_ty_ids,
+                ret: ret_ty_id,
+            }));
 
             result
         }
@@ -2700,9 +3029,8 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 elem_ty_ids.push(self.m.exprs[elem.id].ty_id);
             }
 
-            self.m.exprs[expr_id].ty_id = self.m.add_ty(Ty {
-                kind: TyKind::Tuple(TyTuple { elems: elem_ty_ids }),
-            });
+            self.m.exprs[expr_id].ty_id =
+                self.m.add_ty(TyKind::Tuple(TyTuple { elems: elem_ty_ids }));
 
             result
         }
@@ -2833,9 +3161,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             self.m.exprs[expr_id].ty_id = if elems.is_empty() {
                 self.m.well_known_tys.empty_tuple
             } else {
-                self.m.add_ty(Ty {
-                    kind: TyKind::Record(TyRecord::new(elems)),
-                })
+                self.m.add_ty(TyKind::Record(TyRecord::new(elems)))
             };
 
             result
@@ -2939,12 +3265,10 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 .map(|inner| self.typeck_expr(inner, None))
                 .unwrap_or(Ok(()));
 
-            self.m.exprs[expr_id].ty_id = self.m.add_ty(Ty {
-                kind: TyKind::Variant(TyVariant::new(vec![(
-                    expr.label.as_str().into(),
-                    expr.expr.as_ref().map(|inner| self.m.exprs[inner.id].ty_id),
-                )])),
-            });
+            self.m.exprs[expr_id].ty_id = self.m.add_ty(TyKind::Variant(TyVariant::new(vec![(
+                expr.label.as_str().into(),
+                expr.expr.as_ref().map(|inner| self.m.exprs[inner.id].ty_id),
+            )])));
 
             result
         } else {
@@ -3060,9 +3384,8 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             result
         } else if expr.elems.is_empty() {
             if self.m.is_feature_enabled(FeatureKind::AmbiguousTyAsBot) {
-                self.m.exprs[expr_id].ty_id = self.m.add_ty(Ty {
-                    kind: TyKind::List(self.m.well_known_tys.bot),
-                });
+                self.m.exprs[expr_id].ty_id =
+                    self.m.add_ty(TyKind::List(self.m.well_known_tys.bot));
 
                 Ok(())
             } else {
@@ -3091,9 +3414,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 ));
             }
 
-            self.m.exprs[expr_id].ty_id = self.m.add_ty(Ty {
-                kind: TyKind::List(elem_ty_id),
-            });
+            self.m.exprs[expr_id].ty_id = self.m.add_ty(TyKind::List(elem_ty_id));
 
             result
         }
@@ -3287,9 +3608,8 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                     let result = self.typeck_expr(&expr.rhs, None);
                     let pointee_ty_id = self.m.exprs[expr.rhs.id].ty_id;
 
-                    self.m.exprs[expr_id].ty_id = self.m.add_ty(Ty {
-                        kind: TyKind::Ref(pointee_ty_id, RefMode::Ref),
-                    });
+                    self.m.exprs[expr_id].ty_id =
+                        self.m.add_ty(TyKind::Ref(pointee_ty_id, RefMode::Ref));
 
                     result
                 }
@@ -3301,9 +3621,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                         return Ok(());
                     }
 
-                    let arg_ty_id = self.m.add_ty(Ty {
-                        kind: TyKind::Ref(expected_ty_id, RefMode::Source),
-                    });
+                    let arg_ty_id = self.m.add_ty(TyKind::Ref(expected_ty_id, RefMode::Source));
 
                     let result = self.typeck_expr(&expr.rhs, Some((arg_ty_id, source)));
                     self.m.exprs[expr_id].ty_id = expected_ty_id;
@@ -3452,9 +3770,9 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 } else if let TyKind::Ref(pointee_ty_id, RefMode::Ref) = self.m.tys[ref_ty_id].kind {
                     pointee_ty_id
                 } else if let TyKind::Ref(pointee_ty_id, RefMode::Source) = self.m.tys[ref_ty_id].kind {
-                    let expected_ty_id = self.m.add_ty(Ty {
-                        kind: TyKind::Ref(pointee_ty_id, RefMode::Ref),
-                    });
+                    let expected_ty_id = self.m.add_ty(
+                         TyKind::Ref(pointee_ty_id, RefMode::Ref),
+                    );
                     self.diag.emit(SemaDiag::ExprTyMismatch {
                         location: self.m.exprs[expr.lhs.id].def.location,
                         expected_ty: self.m.display_ty(expected_ty_id).to_string(),
@@ -3610,12 +3928,10 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 .map(|inner| self.typeck_pat(inner, None))
                 .unwrap_or(Ok(()));
 
-            self.m.pats[pat_id].ty_id = self.m.add_ty(Ty {
-                kind: TyKind::Variant(TyVariant::new(vec![(
-                    pat.label.as_str().into(),
-                    pat.pat.as_ref().map(|inner| self.m.pats[inner.id].ty_id),
-                )])),
-            });
+            self.m.pats[pat_id].ty_id = self.m.add_ty(TyKind::Variant(TyVariant::new(vec![(
+                pat.label.as_str().into(),
+                pat.pat.as_ref().map(|inner| self.m.pats[inner.id].ty_id),
+            )])));
 
             result
         } else {
@@ -3716,9 +4032,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                     self.check_pat_cons_arg_count(pat_id, pat.args.len(), 2)?;
                     let mut result = self.typeck_pat(&pat.args[0], None);
                     let elem_ty_id = self.m.pats[pat.args[0].id].ty_id;
-                    let ty_id = self.m.add_ty(Ty {
-                        kind: TyKind::List(elem_ty_id),
-                    });
+                    let ty_id = self.m.add_ty(TyKind::List(elem_ty_id));
 
                     result = result.and(self.typeck_pat(
                         &pat.args[1],
@@ -3877,9 +4191,8 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 elem_ty_ids.push(self.m.pats[elem.id].ty_id);
             }
 
-            self.m.pats[pat_id].ty_id = self.m.add_ty(Ty {
-                kind: TyKind::Tuple(TyTuple { elems: elem_ty_ids }),
-            });
+            self.m.pats[pat_id].ty_id =
+                self.m.add_ty(TyKind::Tuple(TyTuple { elems: elem_ty_ids }));
 
             result
         }
@@ -3999,9 +4312,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             self.m.pats[pat_id].ty_id = if elems.is_empty() {
                 self.m.well_known_tys.empty_tuple
             } else {
-                self.m.add_ty(Ty {
-                    kind: TyKind::Record(TyRecord::new(elems)),
-                })
+                self.m.add_ty(TyKind::Record(TyRecord::new(elems)))
             };
 
             result
@@ -4067,9 +4378,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 ));
             }
 
-            self.m.pats[pat_id].ty_id = self.m.add_ty(Ty {
-                kind: TyKind::List(elem_ty_id),
-            });
+            self.m.pats[pat_id].ty_id = self.m.add_ty(TyKind::List(elem_ty_id));
 
             result
         }

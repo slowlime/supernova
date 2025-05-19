@@ -132,7 +132,7 @@ pub struct DeclFn<'src> {
     pub generic_kw: Option<Token<'src>>,
     pub fn_kw: Option<Token<'src>>,
     pub binding: Binding<'src>,
-    pub generics: Vec<Binding<'src>>,
+    pub generics: Option<Vec<Binding<'src>>>,
     pub params: Vec<Param<'src>>,
     pub ret_token: Option<Token<'src>>,
     pub ret: Option<TyExpr<'src>>,
@@ -544,8 +544,7 @@ impl<'src> AstRecurse<'src> for TyExprFn<'src> {
 #[derive(Debug, Clone)]
 pub struct TyExprForAll<'src> {
     pub forall_location: Location,
-    pub synthetic: bool,
-    pub binding: Binding<'src>,
+    pub bindings: Vec<Binding<'src>>,
     pub ty_expr: Box<TyExpr<'src>>,
 }
 
@@ -554,7 +553,10 @@ impl<'src> AstRecurse<'src> for TyExprForAll<'src> {
     where
         'src: 'ast,
     {
-        visitor.visit_binding(&self.binding);
+        for binding in &self.bindings {
+            visitor.visit_binding(binding);
+        }
+
         visitor.visit_ty_expr(&self.ty_expr);
     }
 
@@ -562,7 +564,10 @@ impl<'src> AstRecurse<'src> for TyExprForAll<'src> {
     where
         'src: 'ast,
     {
-        visitor.visit_binding(&mut self.binding);
+        for binding in &mut self.bindings {
+            visitor.visit_binding(binding);
+        }
+
         visitor.visit_ty_expr(&mut self.ty_expr);
     }
 }

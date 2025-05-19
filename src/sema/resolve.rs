@@ -6,6 +6,7 @@ use crate::ast;
 use crate::ast::visit::{AstRecurse, Visitor};
 use crate::diag::DiagCtx;
 
+use super::ty::TyKind;
 use super::{
     BindingId, BindingKind, DeclId, ExcTyDecl, Module, Namespace, Result, Scope, ScopeId, SemaDiag,
 };
@@ -272,7 +273,19 @@ impl<'ast, D: DiagCtx> Visitor<'ast, 'ast> for Walker<'ast, '_, '_, D> {
 
             ast::DeclKind::Fn(d) => {
                 let prev_scope_id = self.enter_new_scope();
-                assert!(d.generics.is_empty());
+
+                if let Some(generics) = &d.generics {
+                    for binding in generics {
+                        self.pass.m.bindings[binding.id].kind =
+                            BindingKind::Ty(self.pass.m.add_ty(TyKind::Var(binding.id)));
+                        self.result = self.result.and(self.pass.add_binding(
+                            Namespace::Ty,
+                            self.current_scope_id,
+                            binding.name.as_str().into(),
+                            binding.id,
+                        ));
+                    }
+                }
 
                 for (idx, param) in d.params.iter().enumerate() {
                     self.pass.m.bindings[param.binding.id].kind =
@@ -329,7 +342,28 @@ impl<'ast, D: DiagCtx> Visitor<'ast, 'ast> for Walker<'ast, '_, '_, D> {
             ast::TyExprKind::Ref(_) => {}
             ast::TyExprKind::Sum(_) => {}
             ast::TyExprKind::Fn(_) => {}
-            ast::TyExprKind::ForAll(_) => unimplemented!(),
+
+            ast::TyExprKind::ForAll(t) => {
+                let prev_scope_id = self.enter_new_scope();
+
+                for binding in &t.bindings {
+                    self.pass.m.bindings[binding.id].kind =
+                        BindingKind::Ty(self.pass.m.add_ty(TyKind::Var(binding.id)));
+                    self.result = self.result.and(self.pass.add_binding(
+                        Namespace::Ty,
+                        self.current_scope_id,
+                        binding.name.as_str().into(),
+                        binding.id,
+                    ));
+                }
+
+                self.visit_ty_expr(&t.ty_expr);
+
+                self.current_scope_id = prev_scope_id;
+
+                return;
+            }
+
             ast::TyExprKind::Mu(_) => unimplemented!(),
             ast::TyExprKind::Tuple(_) => {}
 
@@ -562,7 +596,26 @@ impl<'ast, D: DiagCtx> Visitor<'ast, 'ast> for Walker<'ast, '_, '_, D> {
                 return;
             }
 
-            ast::ExprKind::Generic(_) => unimplemented!(),
+            ast::ExprKind::Generic(e) => {
+                let prev_scope_id = self.enter_new_scope();
+
+                for binding in &e.generics {
+                    self.pass.m.bindings[binding.id].kind =
+                        BindingKind::Ty(self.pass.m.add_ty(TyKind::Var(binding.id)));
+                    self.result = self.result.and(self.pass.add_binding(
+                        Namespace::Ty,
+                        self.current_scope_id,
+                        binding.name.as_str().into(),
+                        binding.id,
+                    ));
+                }
+
+                self.visit_expr(&e.expr);
+
+                self.current_scope_id = prev_scope_id;
+
+                return;
+            }
 
             ast::ExprKind::Unary(_) => {}
             ast::ExprKind::Binary(_) => {}

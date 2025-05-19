@@ -388,6 +388,17 @@ pub enum SemaDiag {
         actual: usize,
     },
 
+    #[error(
+        "the expression has a wrong number of type arguments: expected {expected}, got {actual}"
+    )]
+    WrongTyArgCount {
+        location: Location,
+        expected: usize,
+        actual: usize,
+        callee_location: Location,
+        callee_ty: String,
+    },
+
     #[error("the expression has a wrong type: expected `{expected_ty}`, got a sum type")]
     UnexpectedInjection {
         location: Location,
@@ -414,6 +425,15 @@ pub enum SemaDiag {
 
     #[error("cannot apply arguments to an expression of a non-function type `{actual_ty}`")]
     ApplyNotFn {
+        location: Location,
+        actual_ty: String,
+        callee_location: Location,
+    },
+
+    #[error(
+        "cannot apply type arguments to an expression of a non-universally-quantified type `{actual_ty}`"
+    )]
+    TyApplyNotForAll {
         location: Location,
         actual_ty: String,
         callee_location: Location,
@@ -1202,7 +1222,7 @@ impl IntoDiagnostic for SemaDiag {
 
             Self::UndefinedTy { name: _, location } => Diagnostic::error()
                 .at(*location)
-                .with_code(code!(sema::undefined_ty))
+                .with_code(code!(sema::undefined_ty as "ERROR_UNDEFINED_TYPE_VARIABLE"))
                 .with_msg(&self)
                 .with_label(Label::primary(*location))
                 .make(),
@@ -1413,6 +1433,26 @@ impl IntoDiagnostic for SemaDiag {
                 .with_label(Label::primary(*location))
                 .make(),
 
+            Self::WrongTyArgCount {
+                location,
+                expected: _,
+                actual: _,
+                callee_location,
+                callee_ty,
+            } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(
+                    sema::wrong_ty_arg_count
+                    as "ERROR_INCORRECT_NUMBER_OF_TYPE_ARGUMENTS"
+                ))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .with_label(
+                    Label::secondary(*callee_location)
+                        .with_msg(format!("this expression has type `{callee_ty}`")),
+                )
+                .make(),
+
             Self::UnexpectedInjection {
                 location,
                 expected_ty: _,
@@ -1466,6 +1506,21 @@ impl IntoDiagnostic for SemaDiag {
             } => Diagnostic::error()
                 .at(*location)
                 .with_code(code!(sema::apply_not_fn as "ERROR_NOT_A_FUNCTION"))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
+                .with_label(
+                    Label::secondary(*callee_location)
+                        .with_msg(format!("this expression has type `{actual_ty}`")),
+                )
+                .make(),
+
+            Self::TyApplyNotForAll {
+                location,
+                actual_ty,
+                callee_location,
+            } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(self::ty_apply_not_forall as "ERROR_NOT_A_GENERIC_FUNCTION"))
                 .with_msg(&self)
                 .with_label(Label::primary(*location))
                 .with_label(
@@ -1705,9 +1760,10 @@ impl IntoDiagnostic for SemaDiag {
                 ))
                 .with_msg(&self)
                 .with_label(Label::primary(*location))
-                .with_label(Label::secondary(*expr_location).with_msg(format!(
-                    "this variant expression has type `{expected_ty}`"
-                )))
+                .with_label(
+                    Label::secondary(*expr_location)
+                        .with_msg(format!("this variant expression has type `{expected_ty}`")),
+                )
                 .make(),
 
             Self::UnexpectedNullaryVariantPat {
