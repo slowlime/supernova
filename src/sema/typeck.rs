@@ -412,7 +412,16 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             unreachable!()
         };
 
-        if decl.params.len() == 1 {
+        let ty_id = self.m.bindings[decl.binding.id].ty_id;
+
+        if !matches!(self.m.tys[ty_id].kind, TyKind::Fn(..)) {
+            self.diag.emit(SemaDiag::WrongMainTy {
+                location: decl.binding.location(),
+                actual_ty: self.m.display_ty(ty_id).to_string(),
+            });
+
+            Err(())
+        } else if decl.params.len() == 1 {
             Ok(())
         } else {
             self.diag.emit(SemaDiag::WrongMainParamCount {

@@ -787,14 +787,16 @@ impl<'src> Parser<'src> {
 
             let mut generics = vec![];
 
-            loop {
-                generics.push(ast::Binding {
-                    id: Default::default(),
-                    name: self.parse_name("a generic parameter")?,
-                });
+            if self.consume(Symbol::RBracket)?.is_none() {
+                loop {
+                    generics.push(ast::Binding {
+                        id: Default::default(),
+                        name: self.parse_name("a generic parameter")?,
+                    });
 
-                if Symbol::RBracket.matches(&self.expect([Symbol::RBracket, Symbol::Comma])?) {
-                    break;
+                    if Symbol::RBracket.matches(&self.expect([Symbol::RBracket, Symbol::Comma])?) {
+                        break;
+                    }
                 }
             }
 

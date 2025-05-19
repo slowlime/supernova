@@ -620,6 +620,12 @@ pub enum SemaDiag {
     #[error("expected the `main` function to have one parameter, got {actual}")]
     WrongMainParamCount { location: Location, actual: usize },
 
+    #[error("the `main` function has a wrong type: expected a unary function, got `{actual_ty}`")]
+    WrongMainTy {
+        location: Location,
+        actual_ty: String,
+    },
+
     #[error("could not determine the type of a memory address literal expression")]
     AmbiguousAddressExprTy { location: Location },
 
@@ -1863,6 +1869,19 @@ impl IntoDiagnostic for SemaDiag {
                 .with_code(code!(sema::wrong_main_param_count as "ERROR_INCORRECT_ARITY_OF_MAIN"))
                 .with_msg(&self)
                 .with_label(Label::primary(*location))
+                .make(),
+
+            Self::WrongMainTy {
+                location,
+                actual_ty,
+            } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::wrong_main_ty as "ERROR_INCORRECT_TYPE_OF_MAIN"))
+                .with_msg(&self)
+                .with_label(
+                    Label::primary(*location)
+                        .with_msg(format!("this binding has type `{actual_ty}`")),
+                )
                 .make(),
 
             Self::AmbiguousAddressExprTy { location } => Diagnostic::error()
