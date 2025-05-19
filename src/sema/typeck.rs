@@ -1740,7 +1740,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             ast::ExprKind::If(e) => self.typeck_expr_if(expr.id, e, expected_ty),
             ast::ExprKind::Seq(e) => self.typeck_expr_seq(expr.id, e, expected_ty),
             ast::ExprKind::Let(e) => self.typeck_expr_let(expr.id, e, expected_ty),
-            ast::ExprKind::Generic(_) => unimplemented!(),
+            ast::ExprKind::Generic(e) => self.typeck_expr_generic(expr.id, e, expected_ty),
             ast::ExprKind::Unary(e) => self.typeck_expr_unary(expr.id, e, expected_ty),
             ast::ExprKind::Binary(e) => self.typeck_expr_binary(expr.id, e, expected_ty),
         }
@@ -3563,6 +3563,35 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
 
         result = result.and(self.typeck_expr(&expr.body, expected_ty));
         self.m.exprs[expr_id].ty_id = self.m.exprs[expr.body.id].ty_id;
+
+        result
+    }
+
+    fn typeck_expr_generic(
+        &mut self,
+        expr_id: ExprId,
+        expr: &ast::ExprGeneric<'ast>,
+        expected_ty: Option<ExpectedTy>,
+    ) -> Result {
+        let mut result = Ok(());
+        result = result.and(self.typeck_expr(&expr.expr, None));
+        let inner_ty_id = self.m.exprs[expr.expr.id].ty_id;
+        let binding_ids = expr.generics.iter().map(|binding| binding.id).collect();
+        let ty_id = self.m.add_ty(TyKind::ForAll(binding_ids, inner_ty_id));
+
+        if let Some((expected_ty_id, source)) = expected_ty {
+            if !self.ty_conforms_to(ty_id, expected_ty_id) {
+                result = Err(());
+                self.diag.emit(self.make_expr_ty_error(
+                    expr_id,
+                    ty_id,
+                    expected_ty_id,
+                    source,
+                ));
+            }
+        }
+
+        self.m.exprs[expr_id].ty_id = ty_id;
 
         result
     }

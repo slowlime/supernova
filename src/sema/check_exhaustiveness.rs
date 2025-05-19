@@ -747,7 +747,9 @@ impl<'ast, D: DiagCtx> DefaultVisitor<'ast, 'ast> for Walker<'ast, '_, '_, D> {
             | ast::ExprKind::If(_)
             | ast::ExprKind::Seq(_)
             | ast::ExprKind::Unary(_)
-            | ast::ExprKind::Binary(_) => {}
+            | ast::ExprKind::Binary(_)
+            | ast::ExprKind::TyApply(_)
+            | ast::ExprKind::Generic(_) => {}
 
             ast::ExprKind::Match(e) => {
                 let pat_ids = e.arms.iter().map(|arm| arm.pat.id).collect::<Vec<_>>();
@@ -782,8 +784,6 @@ impl<'ast, D: DiagCtx> DefaultVisitor<'ast, 'ast> for Walker<'ast, '_, '_, D> {
 
             ast::ExprKind::Fold(_) => unimplemented!(),
             ast::ExprKind::Unfold(_) => unimplemented!(),
-            ast::ExprKind::TyApply(_) => unimplemented!(),
-            ast::ExprKind::Generic(_) => unimplemented!(),
         }
 
         expr.recurse(self);
