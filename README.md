@@ -38,6 +38,7 @@ In addition to the core language, the following extensions are also supported:
 - `#type-cast-patterns`
 - `#type-cast`
 - `#unit-type`
+- `#universal-types`
 - `#variants`
 
 ## Building
