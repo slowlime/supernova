@@ -1526,7 +1526,7 @@ impl IntoDiagnostic for SemaDiag {
                 callee_location,
             } => Diagnostic::error()
                 .at(*location)
-                .with_code(code!(self::ty_apply_not_forall as "ERROR_NOT_A_GENERIC_FUNCTION"))
+                .with_code(code!(sema::ty_apply_not_forall as "ERROR_NOT_A_GENERIC_FUNCTION"))
                 .with_msg(&self)
                 .with_label(Label::primary(*location))
                 .with_label(

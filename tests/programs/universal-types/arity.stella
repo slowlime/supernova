@@ -1,0 +1,54 @@
+language core;
+
+extend with #nested-function-declarations;
+extend with #multiparameter-functions;
+
+extend with #universal-types;
+
+generic fn nullary[](x : Nat) -> Nat {
+  fn still-generic(y : Nat) -> fn(Nat) -> Nat {
+    //! ERROR(sema::expr_ty_mismatch)
+    return nullary
+  }
+
+  //!~ ERROR
+  return nullary[](x)
+}
+
+generic fn n-ary[A, B, C](x : A) -> fn(B, C) -> A {
+  fn no-currying(z : Nat) -> forall X, Y. fn(B) -> fn(X, Y) -> B {
+    //! ERROR(sema::wrong_ty_arg_count)
+    return n-ary[B]
+  }
+
+  //!~ ERROR
+  return fn(b : B, c : C) { return x }
+}
+
+generic fn no-extra-quantifiers[A, B](x : A, y : B) -> Nat {
+  fn test(z : Nat) -> forall X, Y, Z. fn(X, Y) -> Nat {
+    //! ERROR(sema::expr_ty_mismatch)
+    return no-extra-quantifiers
+  }
+
+  return 0
+}
+
+fn generic-expr(n : Nat) -> forall X, Y. fn(X, Y) -> Nat {
+  //!~ ERROR
+  return generic[X, Y] fn(x : X, y : Y) { return n }
+}
+
+generic fn outer-capture[A, B](b : B) -> forall X, Y, Z. fn(A, X) -> fn(Y, Z) -> B {
+  generic fn inner[Y1, Z1](y : Y1, z : Z1) -> B {
+    //!~ ERROR
+    return b
+  }
+
+  //!~ ERROR
+  return generic[S, T, U] fn(a : A, x : S) { return inner[T, U] }
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}

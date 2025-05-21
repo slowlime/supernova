@@ -1,0 +1,12 @@
+language core;
+
+extend with #universal-types;
+
+generic fn id[X](x : X) -> X {
+  return x
+}
+
+fn main(x : Nat) -> Nat {
+  //! ERROR(sema::apply_not_fn)
+  return id(x)
+}

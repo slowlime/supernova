@@ -1,0 +1,20 @@
+language core;
+
+extend with #nested-function-declarations;
+extend with #multiparameter-functions;
+
+extend with #universal-types;
+
+generic fn outer-capture[A, B](b : B) -> forall X, Y, Z. fn(A, X) -> fn(Y, Z) -> B {
+  generic fn inner[Y1, Z1](y : Y1, z : Z1) -> B {
+    //!~ ERROR
+    return b
+  }
+
+  //!~ ERROR
+  return generic[S, T, U] fn(a : A, x : S) { return inner[T, U] }
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}

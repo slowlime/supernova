@@ -1,0 +1,8 @@
+language core;
+
+extend with #universal-types;
+
+//! ERROR(sema::wrong_main_ty)
+generic fn main[](x : Nat) -> Nat {
+  return x
+}

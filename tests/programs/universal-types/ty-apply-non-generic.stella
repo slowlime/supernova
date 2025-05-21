@@ -1,0 +1,8 @@
+language core;
+
+extend with #universal-types;
+
+fn main(x : Nat) -> Nat {
+  //! ERROR(sema::ty_apply_not_forall)
+  return main[Nat](x)
+}

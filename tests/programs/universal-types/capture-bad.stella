@@ -1,0 +1,16 @@
+language core;
+
+extend with #universal-types;
+
+generic fn test[B](x : Nat) -> forall X. fn(X) -> fn(X) -> Nat {
+  //! ERROR(sema::expr_ty_mismatch)
+  return (generic[A] generic[B] fn(x : A) {
+    return fn(y : B) {
+      return 0
+    }
+  })[B]
+}
+
+fn main(x : Nat) -> Nat {
+  return x
+}
