@@ -185,7 +185,11 @@ define_features! {
     TypeParameters "type parameters";
     UniversalTypes "universal types" (ast::Extension::UniversalTypes) => TypeParameters;
 
-    TypeInference "type inference";
+    // Type reconstruction.
+    TypeReconstruction "type reconstruction" (ast::Extension::TypeReconstruction);
+    NoRetTy "optional return type specification";
+    NoRetTyAsAuto "infer `auto` for missing return type" => NoRetTy;
+    NoRetTyAsUnit "infer `Unit` for missing return type" => NoRetTy;
 }
 
 #[derive(Debug, Clone)]
@@ -206,8 +210,12 @@ impl Feature {
         ],
         &[
             FeatureKind::UniversalTypes,
-            FeatureKind::TypeInference,
+            FeatureKind::TypeReconstruction,
             FeatureKind::Subtyping,
+        ],
+        &[
+            FeatureKind::NoRetTyAsAuto,
+            FeatureKind::NoRetTyAsUnit,
         ],
     ];
 
@@ -235,7 +243,7 @@ impl Feature {
                 let mut result = FxHashMap::default();
                 result.extend([
                     (UniversalTypes, SECOND_STAGE_FEATURES),
-                    (TypeInference, SECOND_STAGE_FEATURES),
+                    (TypeReconstruction, SECOND_STAGE_FEATURES),
                 ]);
 
                 result

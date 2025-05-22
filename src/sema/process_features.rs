@@ -202,14 +202,26 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                     ));
                 }
 
-                if decl.ret.is_none() && !self.m.is_feature_enabled(FeatureKind::TypeInference) {
-                    result = Err(());
-                    self.diag.emit(make_feature_disabled_error(
-                        SemaDiag::TyInferenceNotAvailable {
-                            location: decl.fn_kw.as_ref().map(|token| token.span).into(),
-                        },
-                        FeatureKind::TypeInference,
-                    ));
+                if decl.ret.is_none() {
+                    if !self.m.is_feature_enabled(FeatureKind::NoRetTy) {
+                        result = Err(());
+                        self.diag.emit(make_feature_disabled_error(
+                            SemaDiag::NoFnRetTy {
+                                location: decl.fn_kw.as_ref().map(|token| token.span).into(),
+                            },
+                            FeatureKind::NoRetTy,
+                        ));
+                    } else if self.m.is_feature_enabled(FeatureKind::NoRetTyAsAuto)
+                        && !self.m.is_feature_enabled(FeatureKind::TypeReconstruction)
+                    {
+                        result = Err(());
+                        self.diag.emit(make_feature_disabled_error(
+                            SemaDiag::TyInferenceNotAvailable {
+                                location: decl.fn_kw.as_ref().map(|token| token.span).into(),
+                            },
+                            FeatureKind::TypeReconstruction,
+                        ));
+                    }
                 }
 
                 if (decl.throws_kw.is_some() || !decl.throws.is_empty())
@@ -467,13 +479,13 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             }
 
             ast::TyExprKind::Auto(_) => {
-                if !self.m.is_feature_enabled(FeatureKind::TypeInference) {
+                if !self.m.is_feature_enabled(FeatureKind::TypeReconstruction) {
                     result = Err(());
                     self.diag.emit(make_feature_disabled_error(
                         SemaDiag::TyInferenceNotAvailable {
                             location: def.location,
                         },
-                        FeatureKind::TypeInference,
+                        FeatureKind::TypeReconstruction,
                     ));
                 }
             }

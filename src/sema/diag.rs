@@ -56,6 +56,9 @@ pub enum SemaDiag {
         generic_kw_location: Location,
     },
 
+    #[error("the function declaration is missing a return type specification")]
+    NoFnRetTy { location: Location },
+
     #[error("the function cannot have exception specifiers")]
     FnHasThrows {
         location: Location,
@@ -738,6 +741,13 @@ impl IntoDiagnostic for SemaDiag {
                 .with_code(code!(sema::fn_has_ty_params))
                 .with_msg(&self)
                 .with_label(Label::primary(*generic_kw_location))
+                .make(),
+
+            Self::NoFnRetTy { location } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(sema::no_fn_ret_ty))
+                .with_msg(&self)
+                .with_label(Label::primary(*location))
                 .make(),
 
             Self::FnHasThrows {

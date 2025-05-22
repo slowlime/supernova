@@ -293,11 +293,16 @@ impl Module<'_> {
 struct Pass<'ast, 'm, D> {
     m: &'m mut Module<'ast>,
     diag: &'m mut D,
+    next_auto_var_id: usize,
 }
 
 impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
     fn new(m: &'m mut Module<'ast>, diag: &'m mut D) -> Self {
-        Self { m, diag }
+        Self {
+            m,
+            diag,
+            next_auto_var_id: 0,
+        }
     }
 
     fn run(mut self) -> Result {
@@ -435,6 +440,25 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
 
     fn is_untyped(&self, ty_id: TyId) -> bool {
         matches!(self.m.tys[ty_id].kind, TyKind::Untyped { .. })
+    }
+
+    fn make_auto_var(&mut self, location: Location) -> TyId {
+        let var_id = self.next_auto_var_id;
+        self.next_auto_var_id += 1;
+        let name = format!("?T{var_id}");
+
+        let binding_id = self.m.bindings.insert(BindingInfo {
+            location,
+            name,
+            ty_id: Default::default(),
+            kind: Default::default(),
+        });
+
+        let ty_id = self.m.add_ty(TyKind::Var(binding_id));
+        self.m.bindings[binding_id].ty_id = ty_id;
+        self.m.bindings[binding_id].kind = BindingKind::Ty(ty_id);
+
+        ty_id
     }
 
     fn cmp_ty_tuple<L, R>(&self, lhs: L, rhs: R, ctx: &mut TyCmpCtx) -> Option<Ordering>
@@ -1506,15 +1530,23 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                     param_ty_ids.push(param_ty_id);
                 }
 
-                let ret_ty_id = d
-                    .ret
-                    .as_ref()
-                    .map(|ty_expr| {
+                let ret_ty_id = match &d.ret {
+                    Some(ty_expr) => {
                         result = result.and(self.typeck_ty_expr(ty_expr));
 
                         self.m.ty_exprs[ty_expr.id].ty_id
-                    })
-                    .expect("inferring return types in early typeck stage is unsupported");
+                    }
+
+                    None if self.m.is_feature_enabled(FeatureKind::NoRetTyAsUnit) => {
+                        self.m.well_known_tys.unit
+                    }
+
+                    None if self.m.is_feature_enabled(FeatureKind::NoRetTyAsAuto) => {
+                        self.make_auto_var(d.binding.location())
+                    }
+
+                    _ => panic!("missing return type specification"),
+                };
 
                 assert!(d.throws.is_empty());
 
@@ -1721,7 +1753,9 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 self.m.ty_exprs[ty_expr.id].ty_id = self.m.well_known_tys.bot;
             }
 
-            ast::TyExprKind::Auto(_) => unimplemented!(),
+            ast::TyExprKind::Auto(_) => {
+                self.m.ty_exprs[ty_expr.id].ty_id = self.make_auto_var(ty_expr.location);
+            }
 
             ast::TyExprKind::Name(_) => {
                 if let Some(&binding_id) = self.m.ty_name_exprs.get(ty_expr.id) {
