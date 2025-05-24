@@ -1,7 +1,10 @@
+use std::cell::RefCell;
 use std::cmp::Ordering;
 use std::fmt::Write;
+use std::iter;
 
 use fxhash::{FxHashMap, FxHashSet};
+use slotmap::SecondaryMap;
 
 use crate::ast;
 use crate::diag::{Code, DiagCtx, Diagnostic, IntoDiagnostic, Label};
@@ -294,6 +297,7 @@ struct Pass<'ast, 'm, D> {
     m: &'m mut Module<'ast>,
     diag: &'m mut D,
     next_auto_var_id: usize,
+    parent_tys: RefCell<SecondaryMap<TyId, TyId>>,
 }
 
 impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
@@ -302,6 +306,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             m,
             diag,
             next_auto_var_id: 0,
+            parent_tys: Default::default(),
         }
     }
 
@@ -459,6 +464,118 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         self.m.bindings[binding_id].kind = BindingKind::Ty(ty_id);
 
         ty_id
+    }
+
+    fn find_ty_repr(&self, mut ty_id: TyId) -> TyId {
+        let mut parent_tys = self.parent_tys.borrow_mut();
+        parent_tys.entry(ty_id).unwrap().or_insert(ty_id);
+
+        while parent_tys[ty_id] != ty_id {
+            parent_tys[ty_id] = parent_tys[parent_tys[ty_id]];
+            ty_id = parent_tys[ty_id];
+        }
+
+        ty_id
+    }
+
+    /// Sets the parent of `lhs_ty_id` to `rhs_ty_id`.
+    fn make_union(&mut self, lhs_ty_id: TyId, rhs_ty_id: TyId) {
+        let lhs_ty_id = self.find_ty_repr(lhs_ty_id);
+        let rhs_ty_id = self.find_ty_repr(rhs_ty_id);
+
+        if lhs_ty_id == rhs_ty_id {
+            return;
+        }
+
+        let parent_tys = self.parent_tys.get_mut();
+        parent_tys[lhs_ty_id] = rhs_ty_id;
+    }
+
+    fn occurs(&self, binding_id: BindingId, ty_id: TyId) -> bool {
+        let var_ty_id = self.m.bindings[binding_id].ty_id;
+
+        self.m.tys[ty_id]
+            .vars
+            .iter()
+            .any(|&var| self.find_ty_repr(self.m.bindings[var].ty_id) == var_ty_id)
+    }
+
+    fn retrieve_ty(&mut self, ty_id: TyId) -> TyId {
+        let ty_id = self.find_ty_repr(ty_id);
+
+        match &self.m.tys[ty_id].kind {
+            TyKind::Untyped { .. } => ty_id,
+            TyKind::Unit => ty_id,
+            TyKind::Bool => ty_id,
+            TyKind::Nat => ty_id,
+
+            &TyKind::Ref(inner_ty_id, mode) => {
+                let inner_ty_id = self.retrieve_ty(inner_ty_id);
+
+                self.m.add_ty(TyKind::Ref(inner_ty_id, mode))
+            }
+
+            &TyKind::Sum(lhs_ty_id, rhs_ty_id) => {
+                let lhs_ty_id = self.retrieve_ty(lhs_ty_id);
+                let rhs_ty_id = self.retrieve_ty(rhs_ty_id);
+
+                self.m.add_ty(TyKind::Sum(lhs_ty_id, rhs_ty_id))
+            }
+
+            TyKind::Fn(ty) => {
+                let mut ty = ty.clone();
+
+                for ty_id in ty.params.iter_mut().chain(iter::once(&mut ty.ret)) {
+                    *ty_id = self.retrieve_ty(*ty_id);
+                }
+
+                self.m.add_ty(TyKind::Fn(ty))
+            }
+
+            TyKind::Tuple(ty) => {
+                let mut ty = ty.clone();
+
+                for ty_id in &mut ty.elems {
+                    *ty_id = self.retrieve_ty(*ty_id);
+                }
+
+                self.m.add_ty(TyKind::Tuple(ty))
+            }
+
+            TyKind::Record(ty) => {
+                let mut ty = ty.clone();
+
+                for (_, ty_id) in &mut ty.elems {
+                    *ty_id = self.retrieve_ty(*ty_id);
+                }
+
+                self.m.add_ty(TyKind::Record(ty))
+            }
+
+            TyKind::Variant(ty) => {
+                let mut ty = ty.clone();
+
+                for (_, ty_id) in &mut ty.elems {
+                    if let Some(ty_id) = ty_id {
+                        *ty_id = self.retrieve_ty(*ty_id);
+                    }
+                }
+
+                self.m.add_ty(TyKind::Variant(ty))
+            }
+
+            &TyKind::List(elem_ty_id) => {
+                let elem_ty_id = self.retrieve_ty(elem_ty_id);
+
+                self.m.add_ty(TyKind::List(elem_ty_id))
+            }
+
+            TyKind::Top => ty_id,
+            TyKind::Bot => ty_id,
+            TyKind::Var(_) => ty_id,
+
+            TyKind::ForAll(..) => unimplemented!(),
+        }
     }
 
     fn cmp_ty_tuple<L, R>(&self, lhs: L, rhs: R, ctx: &mut TyCmpCtx) -> Option<Ordering>
@@ -901,6 +1018,206 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             .collect::<FxHashSet<_>>();
 
         do_subst(self, ty_id, subst, &vars)
+    }
+
+    fn unify(&mut self, lhs_ty_id: TyId, rhs_ty_id: TyId, location: Location) -> Result<TyId> {
+        let lhs_ty_id = self.find_ty_repr(lhs_ty_id);
+        let rhs_ty_id = self.find_ty_repr(rhs_ty_id);
+
+        if lhs_ty_id == rhs_ty_id {
+            return Ok(lhs_ty_id);
+        }
+
+        match (&self.m.tys[lhs_ty_id].kind, &self.m.tys[rhs_ty_id].kind) {
+            (TyKind::Untyped { .. }, _) | (_, TyKind::Untyped { .. }) => {
+                self.make_union(lhs_ty_id, rhs_ty_id);
+            }
+
+            (TyKind::Unit, TyKind::Unit)
+            | (TyKind::Bool, TyKind::Bool)
+            | (TyKind::Nat, TyKind::Nat)
+            | (TyKind::Top, TyKind::Top)
+            | (TyKind::Bot, TyKind::Bot) => {}
+
+            (&TyKind::Ref(l, lhs_mode), &TyKind::Ref(r, rhs_mode)) if lhs_mode == rhs_mode => {
+                self.unify(l, r, location)?;
+            }
+
+            (&TyKind::Sum(l1, l2), &TyKind::Sum(r1, r2)) => {
+                self.unify(l1, r1, location)?;
+                self.unify(l2, r2, location)?;
+            }
+
+            (TyKind::Fn(l), TyKind::Fn(r)) => {
+                if l.params.len() != r.params.len() {
+                    self.diag.emit(SemaDiag::WrongArgCountInExpr {
+                        location,
+                        actual: l.params.len(),
+                        expected: r.params.len(),
+                    });
+
+                    return Err(());
+                }
+
+                let l = l.clone();
+                let r = r.clone();
+
+                for (&l, &r) in l.params.iter().zip(&r.params) {
+                    self.unify(l, r, location)?;
+                }
+
+                self.unify(l.ret, r.ret, location)?;
+            }
+
+            (TyKind::Tuple(l), TyKind::Tuple(r)) => {
+                if l.elems.len() != r.elems.len() {
+                    self.diag.emit(SemaDiag::WrongTupleLengthInExpr {
+                        location,
+                        actual: l.elems.len(),
+                        expected: r.elems.len(),
+                    });
+
+                    return Err(());
+                }
+
+                let l = l.clone();
+                let r = r.clone();
+
+                for (&l, &r) in l.elems.iter().zip(&r.elems) {
+                    self.unify(l, r, location)?;
+                }
+            }
+
+            (TyKind::Record(l), TyKind::Record(r)) => {
+                for (name, _) in &r.elems {
+                    if l.fields.contains_key(name) {
+                        continue;
+                    }
+
+                    let name = name.clone();
+                    let expected_ty = self.retrieve_ty(rhs_ty_id);
+                    self.diag.emit(SemaDiag::MissingRecordFieldInExpr {
+                        location,
+                        name,
+                        expected_ty: self.m.display_ty(expected_ty).to_string(),
+                    });
+
+                    return Err(());
+                }
+
+                for (name, _) in &l.elems {
+                    if r.fields.contains_key(name) {
+                        continue;
+                    }
+
+                    let name = name.clone();
+                    let expected_ty = self.retrieve_ty(rhs_ty_id);
+                    self.diag.emit(SemaDiag::NoSuchRecordFieldInExpr {
+                        location,
+                        name,
+                        expected_ty: self.m.display_ty(expected_ty).to_string(),
+                        expr_location: Default::default(),
+                    });
+
+                    return Err(());
+                }
+            }
+
+            (TyKind::Record(l), TyKind::Tuple(r)) if r.elems.is_empty() => {
+                if let Some((name, _)) = l.elems.first() {
+                    let name = name.clone();
+                    let expected_ty = self.retrieve_ty(rhs_ty_id);
+                    self.diag.emit(SemaDiag::NoSuchRecordFieldInExpr {
+                        location,
+                        name,
+                        expected_ty: self.m.display_ty(expected_ty).to_string(),
+                        expr_location: Default::default(),
+                    });
+                }
+            }
+
+            (TyKind::Tuple(l), TyKind::Record(r)) if l.elems.is_empty() => {
+                if let Some((name, _)) = r.elems.first() {
+                    let name = name.clone();
+                    let expected_ty = self.retrieve_ty(rhs_ty_id);
+                    self.diag.emit(SemaDiag::MissingRecordFieldInExpr {
+                        location,
+                        name,
+                        expected_ty: self.m.display_ty(expected_ty).to_string(),
+                    });
+
+                    return Err(());
+                }
+            }
+
+            (TyKind::Variant(_), _) | (_, TyKind::Variant(_)) => unimplemented!(),
+
+            (&TyKind::List(l), &TyKind::List(r)) => {
+                self.unify(l, r, location)?;
+            }
+
+            (&TyKind::Var(binding_id), _) => {
+                if self.occurs(binding_id, rhs_ty_id) {
+                    let ty = self.retrieve_ty(rhs_ty_id);
+                    self.diag.emit(SemaDiag::OccursCheckFailed {
+                        location,
+                        ty_var: self.m.bindings[binding_id].name.clone(),
+                        ty: self.m.display_ty(ty).to_string(),
+                    });
+
+                    return Err(());
+                }
+
+                self.make_union(lhs_ty_id, rhs_ty_id);
+
+                return Ok(rhs_ty_id);
+            }
+
+            (_, &TyKind::Var(binding_id)) => {
+                if self.occurs(binding_id, lhs_ty_id) {
+                    let ty = self.retrieve_ty(rhs_ty_id);
+                    self.diag.emit(SemaDiag::OccursCheckFailed {
+                        location,
+                        ty_var: self.m.bindings[binding_id].name.clone(),
+                        ty: self.m.display_ty(ty).to_string(),
+                    });
+
+                    return Err(());
+                }
+
+                // make sure the type variable is at the left.
+                self.make_union(rhs_ty_id, lhs_ty_id);
+            }
+
+            (TyKind::ForAll(..), _) | (_, TyKind::ForAll(..)) => unimplemented!(),
+
+            (
+                TyKind::Unit
+                | TyKind::Bool
+                | TyKind::Nat
+                | TyKind::Ref(..)
+                | TyKind::Sum(..)
+                | TyKind::Fn(..)
+                | TyKind::Tuple(..)
+                | TyKind::Record(..)
+                | TyKind::List(..)
+                | TyKind::Top
+                | TyKind::Bot,
+                _,
+            ) => {
+                let lhs_ty = self.retrieve_ty(lhs_ty_id);
+                let rhs_ty = self.retrieve_ty(rhs_ty_id);
+                self.diag.emit(SemaDiag::UnificationFailed {
+                    location,
+                    lhs_ty: self.m.display_ty(lhs_ty).to_string(),
+                    rhs_ty: self.m.display_ty(rhs_ty).to_string(),
+                });
+
+                return Err(());
+            }
+        }
+
+        Ok(lhs_ty_id)
     }
 
     fn augment_error_with_expectation(

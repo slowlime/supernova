@@ -658,6 +658,22 @@ pub enum SemaDiag {
 
     #[error("the exception type is not declared")]
     ExceptionTyNotDeclared { location: Location },
+
+    #[error("cannot unify `{lhs_ty}` with `{rhs_ty}`")]
+    UnificationFailed {
+        location: Location,
+        lhs_ty: String,
+        rhs_ty: String,
+    },
+
+    #[error(
+        "cannot unify a variable `{ty_var}` with a type `{ty}` containing the variable because it leads to a recursive type"
+    )]
+    OccursCheckFailed {
+        location: Location,
+        ty_var: String,
+        ty: String,
+    },
 }
 
 impl IntoDiagnostic for SemaDiag {
@@ -1971,6 +1987,31 @@ impl IntoDiagnostic for SemaDiag {
                 ))
                 .with_msg(&self)
                 .with_label(Label::primary(*location))
+                .make(),
+
+            Self::UnificationFailed { location, .. } => Diagnostic::error()
+                .at(*location)
+                .with_code(
+                    code!(sema::unification_failed as "ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION"),
+                )
+                .with_msg(&self)
+                .with_label(
+                    Label::primary(*location)
+                        .with_msg("the error occurred while type-checking this expression"),
+                )
+                .make(),
+
+            Self::OccursCheckFailed { location, .. } => Diagnostic::error()
+                .at(*location)
+                .with_code(code!(
+                    sema::occurs_check_failed
+                    as "ERROR_OCCURS_CHECK_INFINITE_TYPE"
+                ))
+                .with_msg(&self)
+                .with_label(
+                    Label::primary(*location)
+                        .with_msg("the error occured while type-checking this expression"),
+                )
                 .make(),
         }
     }

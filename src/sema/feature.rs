@@ -213,10 +213,7 @@ impl Feature {
             FeatureKind::TypeReconstruction,
             FeatureKind::Subtyping,
         ],
-        &[
-            FeatureKind::NoRetTyAsAuto,
-            FeatureKind::NoRetTyAsUnit,
-        ],
+        &[FeatureKind::NoRetTyAsAuto, FeatureKind::NoRetTyAsUnit],
     ];
 
     pub fn disallowed_features_for(feature: FeatureKind) -> &'static [FeatureKind] {
@@ -224,26 +221,16 @@ impl Feature {
             LazyLock::new(|| {
                 use FeatureKind::*;
 
-                const SECOND_STAGE_FEATURES: &[FeatureKind] = &[
-                    Sequencing,
-                    References,
-                    Panic,
-                    Exceptions,
-                    ExceptionTypeDeclaration,
-                    OpenVariantExceptions,
-                    Subtyping,
-                    CastExprs,
-                    CastPatterns,
-                    TryCastExprs,
-                    AmbiguousTyAsBot,
-                    TopType,
-                    BottomType,
-                ];
-
                 let mut result = FxHashMap::default();
                 result.extend([
-                    (UniversalTypes, SECOND_STAGE_FEATURES),
-                    (TypeReconstruction, SECOND_STAGE_FEATURES),
+                    (
+                        UniversalTypes,
+                        [Subtyping, AmbiguousTyAsBot, TopType, BottomType].as_slice(),
+                    ),
+                    (
+                        TypeReconstruction,
+                        [Variants, Subtyping, AmbiguousTyAsBot, TopType, BottomType].as_slice(),
+                    ),
                 ]);
 
                 result
