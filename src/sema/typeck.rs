@@ -90,7 +90,7 @@ pub enum ExpectationSource {
     FnArg {
         expr_id: ExprId,
         arg_idx: usize,
-        callee_expr_id: ExprId,
+        callee_location: Location,
         callee_ty_id: TyId,
     },
 
@@ -190,7 +190,7 @@ pub enum ExpectationSource {
         ty_id: TyId,
     },
 
-    BinOp {
+    Op {
         op_location: Location,
     },
 
@@ -447,7 +447,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         matches!(self.m.tys[ty_id].kind, TyKind::Untyped { .. })
     }
 
-    fn make_auto_var(&mut self, location: Location) -> TyId {
+    fn make_fresh_var(&mut self, location: Location) -> TyId {
         let var_id = self.next_auto_var_id;
         self.next_auto_var_id += 1;
         let name = format!("?T{var_id}");
@@ -467,6 +467,10 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
     }
 
     fn find_ty_repr(&self, mut ty_id: TyId) -> TyId {
+        if !self.m.is_feature_enabled(FeatureKind::TypeReconstruction) {
+            return ty_id;
+        }
+
         let mut parent_tys = self.parent_tys.borrow_mut();
         parent_tys.entry(ty_id).unwrap().or_insert(ty_id);
 
@@ -867,6 +871,9 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
     }
 
     fn ty_conforms_to(&self, ty_id: TyId, expected_ty_id: TyId) -> bool {
+        let ty_id = self.find_ty_repr(ty_id);
+        let expected_ty_id = self.find_ty_repr(expected_ty_id);
+
         if self.is_untyped(ty_id) || self.is_untyped(expected_ty_id) {
             return true;
         }
@@ -880,6 +887,9 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
     }
 
     fn are_tys_equivalent(&self, lhs_ty_id: TyId, rhs_ty_id: TyId) -> bool {
+        let lhs_ty_id = self.find_ty_repr(lhs_ty_id);
+        let rhs_ty_id = self.find_ty_repr(rhs_ty_id);
+
         self.cmp_tys(lhs_ty_id, rhs_ty_id, &mut Default::default()) == Some(Ordering::Equal)
     }
 
@@ -1220,6 +1230,49 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         Ok(lhs_ty_id)
     }
 
+    fn unify_with_expectation(
+        &mut self,
+        lhs_ty_id: TyId,
+        expected_ty: Option<ExpectedTy>,
+        location: Location,
+    ) -> Result<TyId> {
+        if let Some((expected_ty_id, _)) = expected_ty {
+            self.unify(lhs_ty_id, expected_ty_id, location)
+        } else {
+            Ok(lhs_ty_id)
+        }
+    }
+
+    fn unify_expr_with_expectation(
+        &mut self,
+        expr_id: ExprId,
+        expected_ty: Option<ExpectedTy>,
+    ) -> Result<TyId> {
+        let expr = &self.m.exprs[expr_id];
+        let result = self.unify_with_expectation(expr.ty_id, expected_ty, expr.def.location);
+
+        if let Ok(ty_id) = result {
+            self.m.exprs[expr_id].ty_id = ty_id;
+        }
+
+        result
+    }
+
+    fn unify_pat_with_expectation(
+        &mut self,
+        pat_id: PatId,
+        expected_ty: Option<ExpectedTy>,
+    ) -> Result<TyId> {
+        let pat = &self.m.pats[pat_id];
+        let result = self.unify_with_expectation(pat.ty_id, expected_ty, pat.def.location);
+
+        if let Ok(ty_id) = result {
+            self.m.pats[pat_id].ty_id = ty_id;
+        }
+
+        result
+    }
+
     fn augment_error_with_expectation(
         &self,
         diag: impl IntoDiagnostic,
@@ -1352,18 +1405,17 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             ExpectationSource::FnArg {
                 expr_id,
                 arg_idx,
-                callee_expr_id,
+                callee_location,
                 callee_ty_id,
             } => {
                 let expr = self.m.exprs[expr_id].def;
-                let callee_expr = self.m.exprs[callee_expr_id].def;
 
-                diag.add_label(Label::secondary(callee_expr.location).with_msg(format!(
+                diag.add_label(Label::secondary(callee_location).with_msg(format!(
                     "expected as an argument #{} to this function",
                     arg_idx + 1,
                 )));
 
-                diag.add_label(Label::secondary(callee_expr.location).with_msg(format!(
+                diag.add_label(Label::secondary(callee_location).with_msg(format!(
                     "the callee has type `{}`",
                     self.m.display_ty(callee_ty_id),
                 )));
@@ -1617,7 +1669,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 )));
             }
 
-            ExpectationSource::BinOp { op_location } => {
+            ExpectationSource::Op { op_location } => {
                 diag.add_label(
                     Label::secondary(op_location)
                         .with_msg("expected because it's an operand to this operator"),
@@ -1859,7 +1911,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                     }
 
                     None if self.m.is_feature_enabled(FeatureKind::NoRetTyAsAuto) => {
-                        self.make_auto_var(d.binding.location())
+                        self.make_fresh_var(d.binding.location())
                     }
 
                     _ => panic!("missing return type specification"),
@@ -2071,7 +2123,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             }
 
             ast::TyExprKind::Auto(_) => {
-                self.m.ty_exprs[ty_expr.id].ty_id = self.make_auto_var(ty_expr.location);
+                self.m.ty_exprs[ty_expr.id].ty_id = self.make_fresh_var(ty_expr.location);
             }
 
             ast::TyExprKind::Name(_) => {
@@ -2125,6 +2177,13 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         _expr: &ast::ExprBool,
         expected_ty: Option<ExpectedTy>,
     ) -> Result {
+        if self.m.is_feature_enabled(FeatureKind::TypeReconstruction) {
+            self.m.exprs[expr_id].ty_id = self.m.well_known_tys.bool;
+            self.unify_expr_with_expectation(expr_id, expected_ty)?;
+
+            return Ok(());
+        }
+
         if let Some((expected_ty_id, source)) = expected_ty {
             if !self.ty_conforms_to(self.m.well_known_tys.bool, expected_ty_id) {
                 self.diag.emit(self.make_expr_ty_error(
@@ -2149,6 +2208,13 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         _expr: &ast::ExprUnit,
         expected_ty: Option<ExpectedTy>,
     ) -> Result {
+        if self.m.is_feature_enabled(FeatureKind::TypeReconstruction) {
+            self.m.exprs[expr_id].ty_id = self.m.well_known_tys.unit;
+            self.unify_expr_with_expectation(expr_id, expected_ty)?;
+
+            return Ok(());
+        }
+
         if let Some((expected_ty_id, source)) = expected_ty {
             if !self.ty_conforms_to(self.m.well_known_tys.unit, expected_ty_id) {
                 self.diag.emit(self.make_expr_ty_error(
@@ -2173,6 +2239,13 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         _expr: &ast::ExprInt,
         expected_ty: Option<ExpectedTy>,
     ) -> Result {
+        if self.m.is_feature_enabled(FeatureKind::TypeReconstruction) {
+            self.m.exprs[expr_id].ty_id = self.m.well_known_tys.nat;
+            self.unify_expr_with_expectation(expr_id, expected_ty)?;
+
+            return Ok(());
+        }
+
         if let Some((expected_ty_id, source)) = expected_ty {
             if !self.ty_conforms_to(self.m.well_known_tys.nat, expected_ty_id) {
                 self.diag.emit(self.make_expr_ty_error(
@@ -2197,6 +2270,14 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         _expr: &ast::ExprAddress,
         expected_ty: Option<ExpectedTy>,
     ) -> Result {
+        if self.m.is_feature_enabled(FeatureKind::TypeReconstruction) {
+            let inner_ty_id = self.make_fresh_var(self.m.exprs[expr_id].def.location);
+            self.m.exprs[expr_id].ty_id = self.m.add_ty(TyKind::Ref(inner_ty_id, RefMode::Ref));
+            self.unify_expr_with_expectation(expr_id, expected_ty)?;
+
+            return Ok(());
+        }
+
         let ty_id = match expected_ty {
             Some((expected_ty_id, _)) => expected_ty_id,
 
@@ -2249,6 +2330,13 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         let binding_id = self.m.name_exprs[expr_id];
         let ty_id = self.m.bindings[binding_id].ty_id;
 
+        if self.m.is_feature_enabled(FeatureKind::TypeReconstruction) {
+            self.m.exprs[expr_id].ty_id = ty_id;
+            self.unify_expr_with_expectation(expr_id, expected_ty)?;
+
+            return Ok(());
+        }
+
         if let Some((expected_ty_id, source)) = expected_ty {
             if !self.ty_conforms_to(ty_id, expected_ty_id) {
                 let mut report = self.make_expr_ty_error(expr_id, ty_id, expected_ty_id, source);
@@ -2300,16 +2388,32 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                     return Err(());
                 }
 
-                let TyKind::Record(ty) = &self.m.tys[base_ty_id].kind else {
-                    self.diag.emit(SemaDiag::ExtractingFieldOfNonRecordTy {
-                        location: self.m.exprs[expr_id].def.location,
-                        field: name.as_str().into(),
-                        actual_ty: self.m.display_ty(base_ty_id).to_string(),
-                        base_location: expr.base.location,
-                        field_location: name.location(),
-                    });
+                let ty = match &self.m.tys[base_ty_id].kind {
+                    TyKind::Record(ty) => ty,
 
-                    return Err(());
+                    _ if self.m.is_feature_enabled(FeatureKind::TypeReconstruction) => {
+                        let field_ty_id = self.make_fresh_var(expr.base.location);
+                        let ty = TyRecord::new(vec![(name.as_str().into(), field_ty_id)]);
+                        let ty_id = self.m.add_ty(TyKind::Record(ty));
+                        self.unify(base_ty_id, ty_id, expr.base.location)?;
+                        let TyKind::Record(ty) = &self.m.tys[ty_id].kind else {
+                            unreachable!()
+                        };
+
+                        ty
+                    }
+
+                    _ => {
+                        self.diag.emit(SemaDiag::ExtractingFieldOfNonRecordTy {
+                            location: self.m.exprs[expr_id].def.location,
+                            field: name.as_str().into(),
+                            actual_ty: self.m.display_ty(base_ty_id).to_string(),
+                            base_location: expr.base.location,
+                            field_location: name.location(),
+                        });
+
+                        return Err(());
+                    }
                 };
 
                 let Some(&idx) = ty.fields.get(name.as_str()) else {
@@ -2328,15 +2432,42 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             }
 
             &ast::ExprFieldName::Index(location, idx) => {
-                let TyKind::Tuple(ty) = &self.m.tys[base_ty_id].kind else {
-                    self.diag.emit(SemaDiag::IndexingNonTupleTy {
-                        location: self.m.exprs[expr_id].def.location,
-                        actual_ty: self.m.display_ty(base_ty_id).to_string(),
-                        base_location: expr.base.location,
-                        field_location: location,
-                    });
+                let ty = match &self.m.tys[base_ty_id].kind {
+                    TyKind::Tuple(ty) => ty,
 
-                    return Err(());
+                    _ if self.m.is_feature_enabled(FeatureKind::TypeReconstruction) => {
+                        let n = if !self.m.is_feature_enabled(FeatureKind::Tuples) {
+                            debug_assert!(self.m.is_feature_enabled(FeatureKind::Pairs));
+
+                            2
+                        } else {
+                            idx
+                        };
+
+                        let ty = TyTuple {
+                            elems: iter::repeat_with(|| self.make_fresh_var(expr.base.location))
+                                .take(n)
+                                .collect(),
+                        };
+                        let ty_id = self.m.add_ty(TyKind::Tuple(ty));
+                        self.unify(base_ty_id, ty_id, expr.base.location)?;
+                        let TyKind::Tuple(ty) = &self.m.tys[ty_id].kind else {
+                            unreachable!()
+                        };
+
+                        ty
+                    }
+
+                    _ => {
+                        self.diag.emit(SemaDiag::IndexingNonTupleTy {
+                            location: self.m.exprs[expr_id].def.location,
+                            actual_ty: self.m.display_ty(base_ty_id).to_string(),
+                            base_location: expr.base.location,
+                            field_location: location,
+                        });
+
+                        return Err(());
+                    }
                 };
 
                 match idx.checked_sub(1).and_then(|idx| ty.elems.get(idx)) {
@@ -2358,6 +2489,13 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             }
         };
 
+        if self.m.is_feature_enabled(FeatureKind::TypeReconstruction) {
+            self.m.exprs[expr_id].ty_id = ty_id;
+            self.unify_expr_with_expectation(expr_id, expected_ty)?;
+
+            return Ok(());
+        }
+
         if let Some((expected_ty_id, source)) = expected_ty {
             if !self.ty_conforms_to(ty_id, expected_ty_id) {
                 self.diag
@@ -2378,6 +2516,14 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         _expr: &ast::ExprPanic,
         expected_ty: Option<ExpectedTy>,
     ) -> Result {
+        if self.m.is_feature_enabled(FeatureKind::TypeReconstruction) {
+            let ty_id = self.make_fresh_var(self.m.exprs[expr_id].def.location);
+            self.m.exprs[expr_id].ty_id = ty_id;
+            self.unify_expr_with_expectation(expr_id, expected_ty)?;
+
+            return Ok(());
+        }
+
         let ty_id = match expected_ty {
             Some((expected_ty_id, _)) => expected_ty_id,
 
@@ -2405,6 +2551,27 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         expr: &ast::ExprThrow<'ast>,
         expected_ty: Option<ExpectedTy>,
     ) -> Result {
+        if self.m.is_feature_enabled(FeatureKind::TypeReconstruction) {
+            let Some(exc_ty_id) = self.m.exc_ty_id else {
+                self.diag.emit(
+                    self.make_exception_ty_not_declared_error(self.m.exprs[expr_id].def.location),
+                );
+
+                return Err(());
+            };
+
+            self.typeck_expr(
+                &expr.exc,
+                Some((exc_ty_id, ExpectationSource::ExceptionTyDecl)),
+            )?;
+
+            let ty_id = self.make_fresh_var(self.m.exprs[expr_id].def.location);
+            self.m.exprs[expr_id].ty_id = ty_id;
+            self.unify_expr_with_expectation(expr_id, expected_ty)?;
+
+            return Ok(());
+        }
+
         let ty_id = match expected_ty {
             Some((expected_ty_id, _)) => expected_ty_id,
 
@@ -2533,6 +2700,23 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         expr: &ast::ExprFix<'ast>,
         expected_ty: Option<ExpectedTy>,
     ) -> Result {
+        if self.m.is_feature_enabled(FeatureKind::TypeReconstruction) {
+            let ty_id = self.make_fresh_var(self.m.exprs[expr_id].def.location);
+            let inner_ty = self.m.add_ty(TyKind::Fn(TyFn {
+                params: vec![ty_id],
+                ret: ty_id,
+            }));
+            self.typeck_expr(
+                &expr.expr,
+                Some((inner_ty, ExpectationSource::FixArg { expr_id, ty_id })),
+            )?;
+
+            self.m.exprs[expr_id].ty_id = ty_id;
+            self.unify_expr_with_expectation(expr_id, expected_ty)?;
+
+            return Ok(());
+        }
+
         let inner_expected_ty = expected_ty.as_ref().map(|&(expected_ty_id, _)| {
             (
                 self.m.add_ty(TyKind::Fn(TyFn {
@@ -2620,6 +2804,176 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         expr: &ast::ExprApply<'ast>,
         expected_ty: Option<ExpectedTy>,
     ) -> Result {
+        if self.m.is_feature_enabled(FeatureKind::TypeReconstruction) {
+            let fn_ty_id = match &expr.callee {
+                ast::Callee::Builtin { kw: _, builtin } => match builtin {
+                    ast::Builtin::Inl => {
+                        let lhs_ty_id = self.make_fresh_var(self.m.exprs[expr_id].def.location);
+                        let rhs_ty_id = self.make_fresh_var(self.m.exprs[expr_id].def.location);
+                        let ret = self.m.add_ty(TyKind::Sum(lhs_ty_id, rhs_ty_id));
+
+                        self.m.add_ty(TyKind::Fn(TyFn {
+                            params: vec![lhs_ty_id],
+                            ret,
+                        }))
+                    }
+
+                    ast::Builtin::Inr => {
+                        let lhs_ty_id = self.make_fresh_var(self.m.exprs[expr_id].def.location);
+                        let rhs_ty_id = self.make_fresh_var(self.m.exprs[expr_id].def.location);
+                        let ret = self.m.add_ty(TyKind::Sum(lhs_ty_id, rhs_ty_id));
+
+                        self.m.add_ty(TyKind::Fn(TyFn {
+                            params: vec![rhs_ty_id],
+                            ret,
+                        }))
+                    }
+
+                    ast::Builtin::Cons => {
+                        let elem_ty_id = self.make_fresh_var(self.m.exprs[expr_id].def.location);
+                        let list_ty_id = self.m.add_ty(TyKind::List(elem_ty_id));
+
+                        self.m.add_ty(TyKind::Fn(TyFn {
+                            params: vec![elem_ty_id, list_ty_id],
+                            ret: list_ty_id,
+                        }))
+                    }
+
+                    ast::Builtin::ListHead => {
+                        let elem_ty_id = self.make_fresh_var(self.m.exprs[expr_id].def.location);
+                        let list_ty_id = self.m.add_ty(TyKind::List(elem_ty_id));
+
+                        self.m.add_ty(TyKind::Fn(TyFn {
+                            params: vec![list_ty_id],
+                            ret: elem_ty_id,
+                        }))
+                    }
+
+                    ast::Builtin::ListIsEmpty => {
+                        let elem_ty_id = self.make_fresh_var(self.m.exprs[expr_id].def.location);
+                        let list_ty_id = self.m.add_ty(TyKind::List(elem_ty_id));
+
+                        self.m.add_ty(TyKind::Fn(TyFn {
+                            params: vec![list_ty_id],
+                            ret: self.m.well_known_tys.bool,
+                        }))
+                    }
+
+                    ast::Builtin::ListTail => {
+                        let elem_ty_id = self.make_fresh_var(self.m.exprs[expr_id].def.location);
+                        let list_ty_id = self.m.add_ty(TyKind::List(elem_ty_id));
+
+                        self.m.add_ty(TyKind::Fn(TyFn {
+                            params: vec![list_ty_id],
+                            ret: list_ty_id,
+                        }))
+                    }
+
+                    ast::Builtin::Succ => self.m.add_ty(TyKind::Fn(TyFn {
+                        params: vec![self.m.well_known_tys.nat],
+                        ret: self.m.well_known_tys.nat,
+                    })),
+
+                    ast::Builtin::Not => self.m.add_ty(TyKind::Fn(TyFn {
+                        params: vec![self.m.well_known_tys.bool],
+                        ret: self.m.well_known_tys.bool,
+                    })),
+
+                    ast::Builtin::NatPred => self.m.add_ty(TyKind::Fn(TyFn {
+                        params: vec![self.m.well_known_tys.nat],
+                        ret: self.m.well_known_tys.nat,
+                    })),
+
+                    ast::Builtin::NatIsZero => self.m.add_ty(TyKind::Fn(TyFn {
+                        params: vec![self.m.well_known_tys.nat],
+                        ret: self.m.well_known_tys.bool,
+                    })),
+
+                    ast::Builtin::NatRec => {
+                        let ty_id = self.make_fresh_var(self.m.exprs[expr_id].def.location);
+                        let succ_ty_id = self.m.add_ty(TyKind::Fn(TyFn {
+                            params: vec![ty_id],
+                            ret: ty_id,
+                        }));
+                        let succ_ty_id = self.m.add_ty(TyKind::Fn(TyFn {
+                            params: vec![self.m.well_known_tys.nat],
+                            ret: succ_ty_id,
+                        }));
+
+                        self.m.add_ty(TyKind::Fn(TyFn {
+                            params: vec![self.m.well_known_tys.nat, ty_id, succ_ty_id],
+                            ret: ty_id,
+                        }))
+                    }
+                },
+
+                ast::Callee::Expr(expr) => {
+                    self.typeck_expr(expr, None)?;
+
+                    self.m.exprs[expr.id].ty_id
+                }
+            };
+
+            let fn_ty = match &self.m.tys[self.find_ty_repr(fn_ty_id)].kind {
+                TyKind::Fn(ty) => ty,
+
+                TyKind::Var(_) => {
+                    let ret_ty_id = self.make_fresh_var(self.m.exprs[expr_id].def.location);
+                    let params = expr
+                        .args
+                        .iter()
+                        .map(|arg| self.make_fresh_var(arg.location))
+                        .collect();
+                    let ty_id = self.m.add_ty(TyKind::Fn(TyFn {
+                        params,
+                        ret: ret_ty_id,
+                    }));
+                    self.unify(fn_ty_id, ty_id, self.m.exprs[expr_id].def.location)?;
+                    let TyKind::Fn(ty) = &self.m.tys[ty_id].kind else {
+                        unreachable!()
+                    };
+
+                    ty
+                }
+
+                _ => {
+                    let actual_ty = self.retrieve_ty(self.find_ty_repr(fn_ty_id));
+
+                    self.diag.emit(SemaDiag::ApplyNotFn {
+                        location: self.m.exprs[expr_id].def.location,
+                        actual_ty: self.m.display_ty(actual_ty).to_string(),
+                        callee_location: expr.callee.location(),
+                    });
+
+                    return Err(());
+                }
+            };
+
+            let fn_ty = fn_ty.clone();
+            self.check_application_arg_count(expr_id, expr.args.len(), fn_ty.params.len())?;
+
+            for (arg_idx, (arg, &expected_ty_id)) in expr.args.iter().zip(&fn_ty.params).enumerate()
+            {
+                self.typeck_expr(
+                    arg,
+                    Some((
+                        expected_ty_id,
+                        ExpectationSource::FnArg {
+                            expr_id,
+                            arg_idx,
+                            callee_location: expr.callee.location(),
+                            callee_ty_id: fn_ty_id,
+                        },
+                    )),
+                )?;
+            }
+
+            self.m.exprs[expr_id].ty_id = fn_ty.ret;
+            self.unify_expr_with_expectation(expr_id, expected_ty)?;
+
+            return Ok(());
+        }
+
         match &expr.callee {
             ast::Callee::Builtin { kw: _, builtin } => match builtin {
                 ast::Builtin::Inl | ast::Builtin::Inr => match expected_ty {
@@ -3033,8 +3387,8 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                                 param_ty_id,
                                 ExpectationSource::FnArg {
                                     expr_id,
-                                    callee_expr_id: callee.id,
                                     arg_idx,
+                                    callee_location: expr.callee.location(),
                                     callee_ty_id,
                                 },
                             ))
@@ -3102,6 +3456,10 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         expr: &ast::ExprTyApply<'ast>,
         expected_ty: Option<ExpectedTy>,
     ) -> Result {
+        if self.m.is_feature_enabled(FeatureKind::TypeReconstruction) {
+            unimplemented!();
+        }
+
         let mut result = self.typeck_expr(&expr.callee, None);
         let ty_id = self.m.exprs[expr.callee.id].ty_id;
 
@@ -3165,6 +3523,23 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         let mut result = self.typeck_ty_expr(&expr.ty_expr);
         let ty_id = self.m.ty_exprs[expr.ty_expr.id].ty_id;
 
+        if self.m.is_feature_enabled(FeatureKind::TypeReconstruction) {
+            self.m.exprs[expr_id].ty_id = ty_id;
+            self.unify_expr_with_expectation(expr_id, expected_ty)?;
+            self.typeck_expr(
+                &expr.expr,
+                Some((
+                    ty_id,
+                    ExpectationSource::AscriptionExpr {
+                        expr_id,
+                        ty_expr_id: expr.ty_expr.id,
+                    },
+                )),
+            )?;
+
+            return Ok(());
+        }
+
         if let Some((expected_ty_id, source)) = expected_ty {
             if !self.ty_conforms_to(ty_id, expected_ty_id) {
                 result = Err(());
@@ -3198,6 +3573,14 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         let mut result = self.typeck_ty_expr(&expr.ty_expr);
         let ty_id = self.m.ty_exprs[expr.ty_expr.id].ty_id;
 
+        if self.m.is_feature_enabled(FeatureKind::TypeReconstruction) {
+            self.m.exprs[expr_id].ty_id = ty_id;
+            self.unify_expr_with_expectation(expr_id, expected_ty)?;
+            self.typeck_expr(&expr.expr, None)?;
+
+            return Ok(());
+        }
+
         if let Some((expected_ty_id, source)) = expected_ty {
             if !self.ty_conforms_to(ty_id, expected_ty_id) {
                 result = Err(());
@@ -3218,6 +3601,28 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         expr: &ast::ExprFn<'ast>,
         expected_ty: Option<ExpectedTy>,
     ) -> Result {
+        if self.m.is_feature_enabled(FeatureKind::TypeReconstruction) {
+            let mut param_ty_ids = Vec::with_capacity(expr.params.len());
+
+            for param in &expr.params {
+                self.typeck_ty_expr(&param.ty_expr)?;
+                let param_ty_id = self.m.ty_exprs[param.ty_expr.id].ty_id;
+                self.m.bindings[param.binding.id].ty_id = param_ty_id;
+                param_ty_ids.push(param_ty_id);
+            }
+
+            self.typeck_expr(&expr.body.ret, None)?;
+            let ret_ty_id = self.m.exprs[expr.body.ret.id].ty_id;
+
+            self.m.exprs[expr_id].ty_id = self.m.add_ty(TyKind::Fn(TyFn {
+                params: param_ty_ids,
+                ret: ret_ty_id,
+            }));
+            self.unify_expr_with_expectation(expr_id, expected_ty)?;
+
+            return Ok(());
+        }
+
         if let Some((expected_ty_id, source)) = expected_ty {
             if self.is_untyped(expected_ty_id) {
                 return Ok(());
@@ -3317,6 +3722,21 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         expr: &ast::ExprTuple<'ast>,
         expected_ty: Option<ExpectedTy>,
     ) -> Result {
+        if self.m.is_feature_enabled(FeatureKind::TypeReconstruction) {
+            let mut elem_ty_ids = Vec::with_capacity(expr.elems.len());
+
+            for elem in &expr.elems {
+                self.typeck_expr(elem, None)?;
+                elem_ty_ids.push(self.m.exprs[elem.id].ty_id);
+            }
+
+            self.m.exprs[expr_id].ty_id =
+                self.m.add_ty(TyKind::Tuple(TyTuple { elems: elem_ty_ids }));
+            self.unify_expr_with_expectation(expr_id, expected_ty)?;
+
+            return Ok(());
+        }
+
         if let Some((expected_ty_id, source)) = expected_ty {
             if self.is_untyped(expected_ty_id) {
                 return self.typeck_expr_tuple(expr_id, expr, None);
@@ -3415,6 +3835,28 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         expr: &ast::ExprRecord<'ast>,
         expected_ty: Option<ExpectedTy>,
     ) -> Result {
+        if self.m.is_feature_enabled(FeatureKind::TypeReconstruction) {
+            let mut elems = Vec::with_capacity(expr.fields.len());
+
+            for field in &expr.fields {
+                self.typeck_expr(&field.expr, None)?;
+                elems.push((
+                    field.name.as_str().into(),
+                    self.m.exprs[field.expr.id].ty_id,
+                ));
+            }
+
+            self.m.exprs[expr_id].ty_id = if elems.is_empty() {
+                self.m.well_known_tys.empty_tuple
+            } else {
+                self.m.add_ty(TyKind::Record(TyRecord::new(elems)))
+            };
+
+            self.unify_expr_with_expectation(expr_id, expected_ty)?;
+
+            return Ok(());
+        }
+
         if let Some((expected_ty_id, source)) = expected_ty {
             if self.is_untyped(expected_ty_id) {
                 return self.typeck_expr_record(expr_id, expr, None);
@@ -3547,6 +3989,10 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         expr: &ast::ExprVariant<'ast>,
         expected_ty: Option<ExpectedTy>,
     ) -> Result {
+        if self.m.is_feature_enabled(FeatureKind::TypeReconstruction) {
+            unimplemented!()
+        }
+
         if let Some((expected_ty_id, source)) = expected_ty {
             if self.is_untyped(expected_ty_id) {
                 return Ok(());
@@ -3722,6 +4168,35 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         expr: &ast::ExprList<'ast>,
         expected_ty: Option<ExpectedTy>,
     ) -> Result {
+        if self.m.is_feature_enabled(FeatureKind::TypeReconstruction) {
+            let elem_ty_id = if let Some(elem) = expr.elems.first() {
+                self.typeck_expr(elem, None)?;
+
+                self.m.exprs[elem.id].ty_id
+            } else {
+                self.make_fresh_var(self.m.exprs[expr_id].def.location)
+            };
+
+            for elem in expr.elems.iter().skip(1) {
+                self.typeck_expr(
+                    elem,
+                    Some((
+                        elem_ty_id,
+                        ExpectationSource::ListExprElem {
+                            first_elem_expr_id: expr.elems[0].id,
+                            ty_id: elem_ty_id,
+                            list_expr_id: expr_id,
+                        },
+                    )),
+                )?;
+            }
+
+            self.m.exprs[expr_id].ty_id = self.m.add_ty(TyKind::List(elem_ty_id));
+            self.unify_expr_with_expectation(expr_id, expected_ty)?;
+
+            return Ok(());
+        }
+
         if let Some((expected_ty_id, source)) = expected_ty {
             let elem_ty_id = if self.is_untyped(expected_ty_id) {
                 self.m.well_known_tys.error
@@ -3849,44 +4324,10 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             ));
         }
 
-        /*
-        // this is how it works in rust. I guess it's not how it works in Stella. weird.
-        if last_semi.is_some() {
-            if let Some((expected_ty_id, source)) = expected_ty {
-                if !self.ty_conforms_to(self.m.well_known_tys.unit, expected_ty_id) {
-                    self.diag.emit(self.make_expr_ty_error(
-                        expr_id,
-                        self.m.well_known_tys.unit,
-                        expected_ty_id,
-                        source,
-                    ));
-
-                    result = Err(());
-                }
-            }
-
-            result = result.and(self.typeck_expr(
-                last_expr,
-                Some((
-                    self.m.well_known_tys.unit,
-                    ExpectationSource::Seq {
-                        semi_location: last_semi.as_ref().unwrap().span.into(),
-                        expr_id,
-                    },
-                )),
-            ));
-
-            self.m.exprs[expr_id].ty_id = self.m.well_known_tys.unit;
-
-            result
-        } else {*/
-
         result = result.and(self.typeck_expr(last_expr, expected_ty));
         self.m.exprs[expr_id].ty_id = self.m.exprs[last_expr.id].ty_id;
 
         result
-
-        /*}*/
     }
 
     fn typeck_expr_let(
@@ -3946,6 +4387,10 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         expr: &ast::ExprGeneric<'ast>,
         expected_ty: Option<ExpectedTy>,
     ) -> Result {
+        if self.m.is_feature_enabled(FeatureKind::TypeReconstruction) {
+            unimplemented!()
+        }
+
         let mut result = Ok(());
 
         for binding in &expr.generics {
@@ -3976,6 +4421,36 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         expr: &ast::ExprUnary<'ast>,
         expected_ty: Option<ExpectedTy>,
     ) -> Result {
+        if self.m.is_feature_enabled(FeatureKind::TypeReconstruction) {
+            match expr.op {
+                ast::UnOp::New => {
+                    self.typeck_expr(&expr.rhs, None)?;
+                    let pointee_ty_id = self.m.exprs[expr.rhs.id].ty_id;
+                    self.m.exprs[expr_id].ty_id =
+                        self.m.add_ty(TyKind::Ref(pointee_ty_id, RefMode::Ref));
+                }
+
+                ast::UnOp::Deref => {
+                    let pointee_ty_id = self.make_fresh_var(expr.rhs.location);
+                    let ty_id = self.m.add_ty(TyKind::Ref(pointee_ty_id, RefMode::Ref));
+                    self.typeck_expr(
+                        &expr.rhs,
+                        Some((
+                            ty_id,
+                            ExpectationSource::Op {
+                                op_location: expr.token.as_ref().map(|token| token.span).into(),
+                            },
+                        )),
+                    )?;
+                    self.m.exprs[expr_id].ty_id = pointee_ty_id;
+                }
+            }
+
+            self.unify_expr_with_expectation(expr_id, expected_ty)?;
+
+            return Ok(());
+        }
+
         match expr.op {
             ast::UnOp::New => {
                 if let Some((expected_ty_id, source)) = expected_ty {
@@ -4064,6 +4539,122 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         expr: &ast::ExprBinary<'ast>,
         expected_ty: Option<ExpectedTy>,
     ) -> Result {
+        if self.m.is_feature_enabled(FeatureKind::TypeReconstruction) {
+            match expr.op {
+                ast::BinOp::Add | ast::BinOp::Sub | ast::BinOp::Mul | ast::BinOp::Div => {
+                    let operand_source = ExpectationSource::Op {
+                        op_location: expr.token.as_ref().map(|token| token.span).into(),
+                    };
+                    self.typeck_expr(
+                        &expr.lhs,
+                        Some((self.m.well_known_tys.nat, operand_source.clone())),
+                    )?;
+                    self.typeck_expr(
+                        &expr.rhs,
+                        Some((self.m.well_known_tys.nat, operand_source.clone())),
+                    )?;
+
+                    self.m.exprs[expr_id].ty_id = self.m.well_known_tys.nat;
+                }
+
+                ast::BinOp::And | ast::BinOp::Or => {
+                    let operand_source = ExpectationSource::Op {
+                        op_location: expr.token.as_ref().map(|token| token.span).into(),
+                    };
+                    self.typeck_expr(
+                        &expr.lhs,
+                        Some((self.m.well_known_tys.bool, operand_source.clone())),
+                    )?;
+                    self.typeck_expr(
+                        &expr.rhs,
+                        Some((self.m.well_known_tys.bool, operand_source.clone())),
+                    )?;
+
+                    self.m.exprs[expr_id].ty_id = self.m.well_known_tys.bool;
+                }
+
+                ast::BinOp::Lt
+                | ast::BinOp::Le
+                | ast::BinOp::Gt
+                | ast::BinOp::Ge
+                | ast::BinOp::Eq
+                | ast::BinOp::Ne => {
+                    let operand_source = ExpectationSource::Op {
+                        op_location: expr.token.as_ref().map(|token| token.span).into(),
+                    };
+                    self.typeck_expr(
+                        &expr.lhs,
+                        Some((self.m.well_known_tys.nat, operand_source.clone())),
+                    )?;
+                    self.typeck_expr(
+                        &expr.rhs,
+                        Some((self.m.well_known_tys.nat, operand_source.clone())),
+                    )?;
+
+                    self.m.exprs[expr_id].ty_id = self.m.well_known_tys.bool;
+                }
+
+                ast::BinOp::Assign => {
+                    self.typeck_expr(&expr.lhs, None)?;
+                    let ref_ty_id = self.find_ty_repr(self.m.exprs[expr.lhs.id].ty_id);
+
+                    let pointee_ty_id = match self.m.tys[ref_ty_id].kind {
+                        TyKind::Ref(pointee_ty_id, RefMode::Ref) => pointee_ty_id,
+
+                        TyKind::Ref(pointee_ty_id, RefMode::Source) => {
+                            let expected_ty_id =
+                                self.m.add_ty(TyKind::Ref(pointee_ty_id, RefMode::Ref));
+                            let expected_ty_id = self.retrieve_ty(expected_ty_id);
+                            let ref_ty_id = self.retrieve_ty(ref_ty_id);
+
+                            self.diag.emit(SemaDiag::ExprTyMismatch {
+                                location: self.m.exprs[expr.lhs.id].def.location,
+                                expected_ty: self.m.display_ty(expected_ty_id).to_string(),
+                                actual_ty: self.m.display_ty(ref_ty_id).to_string(),
+                            });
+
+                            return Err(());
+                        }
+
+                        TyKind::Untyped { .. } | TyKind::Var(_) => {
+                            let pointee_ty_id = self.make_fresh_var(expr.lhs.location);
+                            let ty_id = self.m.add_ty(TyKind::Ref(pointee_ty_id, RefMode::Ref));
+                            self.unify(ref_ty_id, ty_id, expr.lhs.location)?;
+
+                            pointee_ty_id
+                        }
+
+                        _ => {
+                            self.diag.emit(SemaDiag::ExprTyNotReference {
+                                location: expr.lhs.location,
+                                actual_ty: self.m.display_ty(ref_ty_id).to_string(),
+                            });
+
+                            return Err(());
+                        }
+                    };
+
+                    self.typeck_expr(
+                        &expr.rhs,
+                        Some((
+                            pointee_ty_id,
+                            ExpectationSource::AssignRhs {
+                                op_location: expr.token.as_ref().map(|token| token.span).into(),
+                                lhs_expr_id: expr.lhs.id,
+                                ty_id: ref_ty_id,
+                            },
+                        )),
+                    )?;
+
+                    self.m.exprs[expr_id].ty_id = self.m.well_known_tys.unit;
+                }
+            }
+
+            self.unify_expr_with_expectation(expr_id, expected_ty)?;
+
+            return Ok(());
+        }
+
         let mut result = Ok(());
 
         match expr.op {
@@ -4080,7 +4671,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                     }
                 }
 
-                let operand_source = ExpectationSource::BinOp {
+                let operand_source = ExpectationSource::Op {
                     op_location: expr.token.as_ref().map(|token| token.span).into(),
                 };
                 result = result.and(self.typeck_expr(
@@ -4110,7 +4701,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                     }
                 }
 
-                let operand_source = ExpectationSource::BinOp {
+                let operand_source = ExpectationSource::Op {
                     op_location: expr.token.as_ref().map(|token| token.span).into(),
                 };
                 result = result.and(self.typeck_expr(
@@ -4146,7 +4737,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                     }
                 }
 
-                let operand_source = ExpectationSource::BinOp {
+                let operand_source = ExpectationSource::Op {
                     op_location: expr.token.as_ref().map(|token| token.span).into(),
                 };
                 result = result.and(self.typeck_expr(
@@ -4243,6 +4834,10 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         pat: &ast::PatVariant<'ast>,
         expected_ty: Option<ExpectedTy>,
     ) -> Result {
+        if self.m.is_feature_enabled(FeatureKind::TypeReconstruction) {
+            unimplemented!()
+        }
+
         if let Some((expected_ty_id, source)) = expected_ty {
             if self.is_untyped(expected_ty_id) {
                 return Ok(());
@@ -4352,6 +4947,67 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         pat: &ast::PatCons<'ast>,
         expected_ty: Option<ExpectedTy>,
     ) -> Result {
+        if self.m.is_feature_enabled(FeatureKind::TypeReconstruction) {
+            let cons_ty = match pat.cons {
+                ast::Cons::Inl => {
+                    let lhs_ty_id = self.make_fresh_var(self.m.pats[pat_id].def.location);
+                    let rhs_ty_id = self.make_fresh_var(self.m.pats[pat_id].def.location);
+                    let ret = self.m.add_ty(TyKind::Sum(lhs_ty_id, rhs_ty_id));
+
+                    TyFn {
+                        params: vec![lhs_ty_id],
+                        ret,
+                    }
+                }
+
+                ast::Cons::Inr => {
+                    let lhs_ty_id = self.make_fresh_var(self.m.pats[pat_id].def.location);
+                    let rhs_ty_id = self.make_fresh_var(self.m.pats[pat_id].def.location);
+                    let ret = self.m.add_ty(TyKind::Sum(lhs_ty_id, rhs_ty_id));
+
+                    TyFn {
+                        params: vec![rhs_ty_id],
+                        ret,
+                    }
+                }
+
+                ast::Cons::Cons => {
+                    let elem_ty_id = self.make_fresh_var(self.m.pats[pat_id].def.location);
+                    let list_ty_id = self.m.add_ty(TyKind::List(elem_ty_id));
+
+                    TyFn {
+                        params: vec![elem_ty_id, list_ty_id],
+                        ret: list_ty_id,
+                    }
+                }
+
+                ast::Cons::Succ => TyFn {
+                    params: vec![self.m.well_known_tys.nat],
+                    ret: self.m.well_known_tys.nat,
+                },
+            };
+
+            self.check_pat_cons_arg_count(pat_id, pat.args.len(), cons_ty.params.len())?;
+
+            for (arg, &expected_ty_id) in pat.args.iter().zip(&cons_ty.params) {
+                self.typeck_pat(
+                    arg,
+                    Some((
+                        expected_ty_id,
+                        ExpectationSource::BuiltinConsPat {
+                            pat_id,
+                            cons: pat.cons,
+                        },
+                    )),
+                )?;
+            }
+
+            self.m.pats[pat_id].ty_id = cons_ty.ret;
+            self.unify_pat_with_expectation(pat_id, expected_ty)?;
+
+            return Ok(());
+        }
+
         match pat.cons {
             ast::Cons::Inl | ast::Cons::Inr => {
                 let Some((expected_ty_id, source)) = expected_ty else {
@@ -4516,6 +5172,21 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         pat: &ast::PatTuple<'ast>,
         expected_ty: Option<ExpectedTy>,
     ) -> Result {
+        if self.m.is_feature_enabled(FeatureKind::TypeReconstruction) {
+            let mut elem_ty_ids = Vec::with_capacity(pat.elems.len());
+
+            for elem in &pat.elems {
+                self.typeck_pat(elem, None)?;
+                elem_ty_ids.push(self.m.pats[elem.id].ty_id);
+            }
+
+            self.m.pats[pat_id].ty_id =
+                self.m.add_ty(TyKind::Tuple(TyTuple { elems: elem_ty_ids }));
+            self.unify_pat_with_expectation(pat_id, expected_ty)?;
+
+            return Ok(());
+        }
+
         if let Some((expected_ty_id, source)) = expected_ty {
             if self.is_untyped(expected_ty_id) {
                 return Ok(());
@@ -4607,6 +5278,28 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         pat: &ast::PatRecord<'ast>,
         expected_ty: Option<ExpectedTy>,
     ) -> Result {
+        if self.m.is_feature_enabled(FeatureKind::TypeReconstruction) {
+            let mut elems = Vec::with_capacity(pat.fields.len());
+
+            for field in &pat.fields {
+                self.typeck_pat(&field.pat, None)?;
+                elems.push((
+                    field.name.as_str().to_owned(),
+                    self.m.pats[field.pat.id].ty_id,
+                ));
+            }
+
+            self.m.pats[pat_id].ty_id = if elems.is_empty() {
+                self.m.well_known_tys.empty_tuple
+            } else {
+                self.m.add_ty(TyKind::Record(TyRecord::new(elems)))
+            };
+
+            self.unify_pat_with_expectation(pat_id, expected_ty)?;
+
+            return Ok(());
+        }
+
         if let Some((expected_ty_id, source)) = expected_ty {
             if self.is_untyped(expected_ty_id) {
                 return Ok(());
@@ -4728,6 +5421,35 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         pat: &ast::PatList<'ast>,
         expected_ty: Option<ExpectedTy>,
     ) -> Result {
+        if self.m.is_feature_enabled(FeatureKind::TypeReconstruction) {
+            let elem_ty_id = if let Some(elem) = pat.elems.first() {
+                self.typeck_pat(elem, None)?;
+
+                self.m.pats[elem.id].ty_id
+            } else {
+                self.make_fresh_var(self.m.pats[pat_id].def.location)
+            };
+
+            for elem in pat.elems.iter().skip(1) {
+                self.typeck_pat(
+                    elem,
+                    Some((
+                        elem_ty_id,
+                        ExpectationSource::ListPatElem {
+                            first_elem_pat_id: pat.elems[0].id,
+                            ty_id: elem_ty_id,
+                            list_pat_id: pat_id,
+                        },
+                    )),
+                )?;
+            }
+
+            self.m.pats[pat_id].ty_id = self.m.add_ty(TyKind::List(elem_ty_id));
+            self.unify_pat_with_expectation(pat_id, expected_ty)?;
+
+            return Ok(());
+        }
+
         if let Some((expected_ty_id, source)) = expected_ty {
             let elem_ty_id = if self.is_untyped(expected_ty_id) {
                 self.m.well_known_tys.error
@@ -4793,6 +5515,13 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         _pat: &ast::PatBool,
         expected_ty: Option<ExpectedTy>,
     ) -> Result {
+        if self.m.is_feature_enabled(FeatureKind::TypeReconstruction) {
+            self.m.pats[pat_id].ty_id = self.m.well_known_tys.bool;
+            self.unify_pat_with_expectation(pat_id, expected_ty)?;
+
+            return Ok(());
+        }
+
         if let Some((expected_ty_id, source)) = expected_ty {
             if !self.are_tys_equivalent(self.m.well_known_tys.bool, expected_ty_id) {
                 self.diag.emit(self.augment_error_with_expectation(
@@ -4818,6 +5547,13 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         _pat: &ast::PatUnit,
         expected_ty: Option<ExpectedTy>,
     ) -> Result {
+        if self.m.is_feature_enabled(FeatureKind::TypeReconstruction) {
+            self.m.pats[pat_id].ty_id = self.m.well_known_tys.unit;
+            self.unify_pat_with_expectation(pat_id, expected_ty)?;
+
+            return Ok(());
+        }
+
         if let Some((expected_ty_id, source)) = expected_ty {
             if !self.are_tys_equivalent(self.m.well_known_tys.unit, expected_ty_id) {
                 self.diag.emit(self.augment_error_with_expectation(
@@ -4843,6 +5579,13 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         _pat: &ast::PatInt,
         expected_ty: Option<ExpectedTy>,
     ) -> Result {
+        if self.m.is_feature_enabled(FeatureKind::TypeReconstruction) {
+            self.m.pats[pat_id].ty_id = self.m.well_known_tys.nat;
+            self.unify_pat_with_expectation(pat_id, expected_ty)?;
+
+            return Ok(());
+        }
+
         if let Some((expected_ty_id, source)) = expected_ty {
             if !self.are_tys_equivalent(self.m.well_known_tys.nat, expected_ty_id) {
                 self.diag.emit(self.augment_error_with_expectation(
@@ -4868,6 +5611,15 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         pat: &ast::PatName<'ast>,
         expected_ty: Option<ExpectedTy>,
     ) -> Result {
+        if self.m.is_feature_enabled(FeatureKind::TypeReconstruction) {
+            let ty_id = self.make_fresh_var(self.m.pats[pat_id].def.location);
+            self.m.bindings[pat.binding.id].ty_id = ty_id;
+            self.m.pats[pat_id].ty_id = ty_id;
+            self.unify_pat_with_expectation(pat_id, expected_ty)?;
+
+            return Ok(());
+        }
+
         let Some((expected_ty_id, _source)) = expected_ty else {
             self.diag.emit(SemaDiag::AmbiguousBindingPatTy {
                 location: self.m.pats[pat_id].def.location,
@@ -4890,6 +5642,23 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
     ) -> Result {
         let mut result = self.typeck_ty_expr(&pat.ty_expr);
         let ty_id = self.m.ty_exprs[pat.ty_expr.id].ty_id;
+
+        if self.m.is_feature_enabled(FeatureKind::TypeReconstruction) {
+            self.m.pats[pat_id].ty_id = ty_id;
+            self.unify_pat_with_expectation(pat_id, expected_ty)?;
+            self.typeck_pat(
+                &pat.pat,
+                Some((
+                    ty_id,
+                    ExpectationSource::AscriptionPat {
+                        pat_id,
+                        ty_expr_id: pat.ty_expr.id,
+                    },
+                )),
+            )?;
+
+            return Ok(());
+        }
 
         if let Some((expected_ty_id, source)) = expected_ty {
             if !self.are_tys_equivalent(ty_id, expected_ty_id) {
@@ -4928,6 +5697,23 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
     ) -> Result {
         let mut result = self.typeck_ty_expr(&pat.ty_expr);
         let ty_id = self.m.ty_exprs[pat.ty_expr.id].ty_id;
+
+        if self.m.is_feature_enabled(FeatureKind::TypeReconstruction) {
+            self.m.pats[pat_id].ty_id = ty_id;
+            self.unify_pat_with_expectation(pat_id, expected_ty)?;
+            self.typeck_pat(
+                &pat.pat,
+                Some((
+                    ty_id,
+                    ExpectationSource::CastPat {
+                        pat_id,
+                        ty_expr_id: pat.ty_expr.id,
+                    },
+                )),
+            )?;
+
+            return Ok(());
+        }
 
         let pat_ty_id = if let Some((expected_ty_id, source)) = expected_ty {
             // this is the only place that allows subtypes.

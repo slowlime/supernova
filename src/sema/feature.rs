@@ -229,7 +229,15 @@ impl Feature {
                     ),
                     (
                         TypeReconstruction,
-                        [Variants, Subtyping, AmbiguousTyAsBot, TopType, BottomType].as_slice(),
+                        [
+                            Variants,
+                            Subtyping,
+                            AmbiguousTyAsBot,
+                            TopType,
+                            BottomType,
+                            OpenVariantExceptions,
+                        ]
+                        .as_slice(),
                     ),
                 ]);
 
