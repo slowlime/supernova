@@ -316,6 +316,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         self.typeck_exc_ty()?;
         self.typeck_decls()?;
         self.check_main()?;
+        self.replace_tys_with_reprs();
 
         if cfg!(debug_assertions) {
             self.check_valid();
@@ -384,6 +385,28 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         }
 
         assert!(!failed, "detected a typeck bug");
+    }
+
+    fn replace_tys_with_reprs(&mut self) {
+        if !self.m.is_feature_enabled(FeatureKind::TypeReconstruction) {
+            return;
+        }
+
+        for expr_id in self.m.exprs.keys().collect::<Vec<_>>() {
+            self.m.exprs[expr_id].ty_id = self.retrieve_ty(self.m.exprs[expr_id].ty_id);
+        }
+
+        for ty_expr_id in self.m.ty_exprs.keys().collect::<Vec<_>>() {
+            self.m.ty_exprs[ty_expr_id].ty_id = self.retrieve_ty(self.m.ty_exprs[ty_expr_id].ty_id);
+        }
+
+        for pat_id in self.m.pats.keys().collect::<Vec<_>>() {
+            self.m.pats[pat_id].ty_id = self.retrieve_ty(self.m.pats[pat_id].ty_id);
+        }
+
+        for binding_id in self.m.bindings.keys().collect::<Vec<_>>() {
+            self.m.bindings[binding_id].ty_id = self.retrieve_ty(self.m.bindings[binding_id].ty_id);
+        }
     }
 
     fn add_well_known_tys(&mut self) {
