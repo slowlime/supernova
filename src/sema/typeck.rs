@@ -1053,7 +1053,13 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         do_subst(self, ty_id, subst, &vars)
     }
 
-    fn unify(&mut self, lhs_ty_id: TyId, rhs_ty_id: TyId, location: Location) -> Result<TyId> {
+    fn unify(
+        &mut self,
+        lhs_ty_id: TyId,
+        rhs_ty_id: TyId,
+        location: Location,
+        in_pat: bool,
+    ) -> Result<TyId> {
         let lhs_ty_id = self.find_ty_repr(lhs_ty_id);
         let rhs_ty_id = self.find_ty_repr(rhs_ty_id);
 
@@ -1073,21 +1079,29 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             | (TyKind::Bot, TyKind::Bot) => {}
 
             (&TyKind::Ref(l, lhs_mode), &TyKind::Ref(r, rhs_mode)) if lhs_mode == rhs_mode => {
-                self.unify(l, r, location)?;
+                self.unify(l, r, location, in_pat)?;
             }
 
             (&TyKind::Sum(l1, l2), &TyKind::Sum(r1, r2)) => {
-                self.unify(l1, r1, location)?;
-                self.unify(l2, r2, location)?;
+                self.unify(l1, r1, location, in_pat)?;
+                self.unify(l2, r2, location, in_pat)?;
             }
 
             (TyKind::Fn(l), TyKind::Fn(r)) => {
                 if l.params.len() != r.params.len() {
-                    self.diag.emit(SemaDiag::WrongArgCountInExpr {
-                        location,
-                        actual: l.params.len(),
-                        expected: r.params.len(),
-                    });
+                    if in_pat {
+                        self.diag.emit(SemaDiag::WrongArgCountInPat {
+                            location,
+                            actual: l.params.len(),
+                            expected: r.params.len(),
+                        });
+                    } else {
+                        self.diag.emit(SemaDiag::WrongArgCountInExpr {
+                            location,
+                            actual: l.params.len(),
+                            expected: r.params.len(),
+                        });
+                    }
 
                     return Err(());
                 }
@@ -1096,19 +1110,27 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 let r = r.clone();
 
                 for (&l, &r) in l.params.iter().zip(&r.params) {
-                    self.unify(l, r, location)?;
+                    self.unify(l, r, location, in_pat)?;
                 }
 
-                self.unify(l.ret, r.ret, location)?;
+                self.unify(l.ret, r.ret, location, in_pat)?;
             }
 
             (TyKind::Tuple(l), TyKind::Tuple(r)) => {
                 if l.elems.len() != r.elems.len() {
-                    self.diag.emit(SemaDiag::WrongTupleLengthInExpr {
-                        location,
-                        actual: l.elems.len(),
-                        expected: r.elems.len(),
-                    });
+                    if in_pat {
+                        self.diag.emit(SemaDiag::WrongTupleLengthInPat {
+                            location,
+                            actual: l.elems.len(),
+                            expected: r.elems.len(),
+                        });
+                    } else {
+                        self.diag.emit(SemaDiag::WrongTupleLengthInExpr {
+                            location,
+                            actual: l.elems.len(),
+                            expected: r.elems.len(),
+                        });
+                    }
 
                     return Err(());
                 }
@@ -1117,7 +1139,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 let r = r.clone();
 
                 for (&l, &r) in l.elems.iter().zip(&r.elems) {
-                    self.unify(l, r, location)?;
+                    self.unify(l, r, location, in_pat)?;
                 }
             }
 
@@ -1129,11 +1151,20 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
 
                     let name = name.clone();
                     let expected_ty = self.retrieve_ty(rhs_ty_id);
-                    self.diag.emit(SemaDiag::MissingRecordFieldInExpr {
-                        location,
-                        name,
-                        expected_ty: self.m.display_ty(expected_ty).to_string(),
-                    });
+
+                    if in_pat {
+                        self.diag.emit(SemaDiag::MissingRecordFieldInPat {
+                            location,
+                            name,
+                            expected_ty: self.m.display_ty(expected_ty).to_string(),
+                        });
+                    } else {
+                        self.diag.emit(SemaDiag::MissingRecordFieldInExpr {
+                            location,
+                            name,
+                            expected_ty: self.m.display_ty(expected_ty).to_string(),
+                        });
+                    }
 
                     return Err(());
                 }
@@ -1145,12 +1176,22 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
 
                     let name = name.clone();
                     let expected_ty = self.retrieve_ty(rhs_ty_id);
-                    self.diag.emit(SemaDiag::NoSuchRecordFieldInExpr {
-                        location,
-                        name,
-                        expected_ty: self.m.display_ty(expected_ty).to_string(),
-                        expr_location: Default::default(),
-                    });
+
+                    if in_pat {
+                        self.diag.emit(SemaDiag::NoSuchRecordFieldInPat {
+                            location,
+                            name,
+                            expected_ty: self.m.display_ty(expected_ty).to_string(),
+                            pat_location: Default::default(),
+                        });
+                    } else {
+                        self.diag.emit(SemaDiag::NoSuchRecordFieldInExpr {
+                            location,
+                            name,
+                            expected_ty: self.m.display_ty(expected_ty).to_string(),
+                            expr_location: Default::default(),
+                        });
+                    }
 
                     return Err(());
                 }
@@ -1160,12 +1201,22 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 if let Some((name, _)) = l.elems.first() {
                     let name = name.clone();
                     let expected_ty = self.retrieve_ty(rhs_ty_id);
-                    self.diag.emit(SemaDiag::NoSuchRecordFieldInExpr {
-                        location,
-                        name,
-                        expected_ty: self.m.display_ty(expected_ty).to_string(),
-                        expr_location: Default::default(),
-                    });
+
+                    if in_pat {
+                        self.diag.emit(SemaDiag::NoSuchRecordFieldInPat {
+                            location,
+                            name,
+                            expected_ty: self.m.display_ty(expected_ty).to_string(),
+                            pat_location: Default::default(),
+                        });
+                    } else {
+                        self.diag.emit(SemaDiag::NoSuchRecordFieldInExpr {
+                            location,
+                            name,
+                            expected_ty: self.m.display_ty(expected_ty).to_string(),
+                            expr_location: Default::default(),
+                        });
+                    }
                 }
             }
 
@@ -1173,11 +1224,20 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 if let Some((name, _)) = r.elems.first() {
                     let name = name.clone();
                     let expected_ty = self.retrieve_ty(rhs_ty_id);
-                    self.diag.emit(SemaDiag::MissingRecordFieldInExpr {
-                        location,
-                        name,
-                        expected_ty: self.m.display_ty(expected_ty).to_string(),
-                    });
+
+                    if in_pat {
+                        self.diag.emit(SemaDiag::MissingRecordFieldInPat {
+                            location,
+                            name,
+                            expected_ty: self.m.display_ty(expected_ty).to_string(),
+                        });
+                    } else {
+                        self.diag.emit(SemaDiag::MissingRecordFieldInExpr {
+                            location,
+                            name,
+                            expected_ty: self.m.display_ty(expected_ty).to_string(),
+                        });
+                    }
 
                     return Err(());
                 }
@@ -1186,7 +1246,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             (TyKind::Variant(_), _) | (_, TyKind::Variant(_)) => unimplemented!(),
 
             (&TyKind::List(l), &TyKind::List(r)) => {
-                self.unify(l, r, location)?;
+                self.unify(l, r, location, in_pat)?;
             }
 
             (&TyKind::Var(binding_id), _) => {
@@ -1196,6 +1256,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                         location,
                         ty_var: self.m.bindings[binding_id].name.clone(),
                         ty: self.m.display_ty(ty).to_string(),
+                        in_pat,
                     });
 
                     return Err(());
@@ -1213,6 +1274,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                         location,
                         ty_var: self.m.bindings[binding_id].name.clone(),
                         ty: self.m.display_ty(ty).to_string(),
+                        in_pat,
                     });
 
                     return Err(());
@@ -1244,6 +1306,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                     location,
                     lhs_ty: self.m.display_ty(lhs_ty).to_string(),
                     rhs_ty: self.m.display_ty(rhs_ty).to_string(),
+                    in_pat,
                 });
 
                 return Err(());
@@ -1258,9 +1321,10 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         lhs_ty_id: TyId,
         expected_ty: Option<ExpectedTy>,
         location: Location,
+        in_pat: bool,
     ) -> Result<TyId> {
         if let Some((expected_ty_id, _)) = expected_ty {
-            self.unify(lhs_ty_id, expected_ty_id, location)
+            self.unify(lhs_ty_id, expected_ty_id, location, in_pat)
         } else {
             Ok(lhs_ty_id)
         }
@@ -1272,7 +1336,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         expected_ty: Option<ExpectedTy>,
     ) -> Result<TyId> {
         let expr = &self.m.exprs[expr_id];
-        let result = self.unify_with_expectation(expr.ty_id, expected_ty, expr.def.location);
+        let result = self.unify_with_expectation(expr.ty_id, expected_ty, expr.def.location, false);
 
         if let Ok(ty_id) = result {
             self.m.exprs[expr_id].ty_id = ty_id;
@@ -1287,7 +1351,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
         expected_ty: Option<ExpectedTy>,
     ) -> Result<TyId> {
         let pat = &self.m.pats[pat_id];
-        let result = self.unify_with_expectation(pat.ty_id, expected_ty, pat.def.location);
+        let result = self.unify_with_expectation(pat.ty_id, expected_ty, pat.def.location, true);
 
         if let Ok(ty_id) = result {
             self.m.pats[pat_id].ty_id = ty_id;
@@ -2418,7 +2482,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                         let field_ty_id = self.make_fresh_var(expr.base.location);
                         let ty = TyRecord::new(vec![(name.as_str().into(), field_ty_id)]);
                         let ty_id = self.m.add_ty(TyKind::Record(ty));
-                        self.unify(base_ty_id, ty_id, expr.base.location)?;
+                        self.unify(base_ty_id, ty_id, expr.base.location, true)?;
                         let TyKind::Record(ty) = &self.m.tys[ty_id].kind else {
                             unreachable!()
                         };
@@ -2473,7 +2537,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                                 .collect(),
                         };
                         let ty_id = self.m.add_ty(TyKind::Tuple(ty));
-                        self.unify(base_ty_id, ty_id, expr.base.location)?;
+                        self.unify(base_ty_id, ty_id, expr.base.location, true)?;
                         let TyKind::Tuple(ty) = &self.m.tys[ty_id].kind else {
                             unreachable!()
                         };
@@ -2951,7 +3015,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                         params,
                         ret: ret_ty_id,
                     }));
-                    self.unify(fn_ty_id, ty_id, self.m.exprs[expr_id].def.location)?;
+                    self.unify(fn_ty_id, ty_id, self.m.exprs[expr_id].def.location, true)?;
                     let TyKind::Fn(ty) = &self.m.tys[ty_id].kind else {
                         unreachable!()
                     };
@@ -4642,7 +4706,7 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                         TyKind::Untyped { .. } | TyKind::Var(_) => {
                             let pointee_ty_id = self.make_fresh_var(expr.lhs.location);
                             let ty_id = self.m.add_ty(TyKind::Ref(pointee_ty_id, RefMode::Ref));
-                            self.unify(ref_ty_id, ty_id, expr.lhs.location)?;
+                            self.unify(ref_ty_id, ty_id, expr.lhs.location, true)?;
 
                             pointee_ty_id
                         }

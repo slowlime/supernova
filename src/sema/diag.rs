@@ -664,6 +664,7 @@ pub enum SemaDiag {
         location: Location,
         lhs_ty: String,
         rhs_ty: String,
+        in_pat: bool,
     },
 
     #[error(
@@ -673,6 +674,7 @@ pub enum SemaDiag {
         location: Location,
         ty_var: String,
         ty: String,
+        in_pat: bool,
     },
 }
 
@@ -1989,29 +1991,35 @@ impl IntoDiagnostic for SemaDiag {
                 .with_label(Label::primary(*location))
                 .make(),
 
-            Self::UnificationFailed { location, .. } => Diagnostic::error()
+            Self::UnificationFailed {
+                location, in_pat, ..
+            } => Diagnostic::error()
                 .at(*location)
-                .with_code(
-                    code!(sema::unification_failed as "ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION"),
-                )
+                .with_code(if *in_pat {
+                    code!(sema::unification_failed as "ERROR_UNEXPECTED_PATTERN_FOR_TYPE")
+                } else {
+                    code!(sema::unification_failed as "ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION")
+                })
                 .with_msg(&self)
-                .with_label(
-                    Label::primary(*location)
-                        .with_msg("the error occurred while type-checking this expression"),
-                )
+                .with_label(Label::primary(*location).with_msg(format!(
+                    "the error occurred while type-checking this {}",
+                    if *in_pat { "expression" } else { "pattern" },
+                )))
                 .make(),
 
-            Self::OccursCheckFailed { location, .. } => Diagnostic::error()
+            Self::OccursCheckFailed {
+                location, in_pat, ..
+            } => Diagnostic::error()
                 .at(*location)
                 .with_code(code!(
                     sema::occurs_check_failed
                     as "ERROR_OCCURS_CHECK_INFINITE_TYPE"
                 ))
                 .with_msg(&self)
-                .with_label(
-                    Label::primary(*location)
-                        .with_msg("the error occured while type-checking this expression"),
-                )
+                .with_label(Label::primary(*location).with_msg(format!(
+                    "the error occured while type-checking this {}",
+                    if *in_pat { "expression" } else { "pattern" },
+                )))
                 .make(),
         }
     }
