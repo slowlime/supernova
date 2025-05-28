@@ -37,6 +37,7 @@ In addition to the core language, the following extensions are also supported:
 - `#type-ascriptions`
 - `#type-cast-patterns`
 - `#type-cast`
+- `#type-reconstruction`
 - `#unit-type`
 - `#universal-types`
 - `#variants`
