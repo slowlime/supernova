@@ -197,9 +197,10 @@ impl Module<'_> {
 pub fn process<'ast>(
     ast: &'ast mut ast::Program<'ast>,
     diag: &mut impl DiagCtx,
+    extensions: Vec<ast::Extension>,
 ) -> (Module<'ast>, Result) {
     let mut module = Module::new();
-    module.load_ast(ast, diag);
+    module.load_ast(ast, diag, extensions);
 
     let result = (|| -> Result {
         module.process_features(diag)?;

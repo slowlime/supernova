@@ -1,3 +1,5 @@
+use supernova::ast;
+
 #[derive(clap::Parser, Debug)]
 #[command()]
 pub struct Args {
@@ -11,6 +13,10 @@ pub struct Args {
     /// Only print the first error found.
     #[arg(short = 'x', long)]
     pub first_error_only: bool,
+
+    /// Enable these extensions in addition to those specified in the source file.
+    #[arg(short = 'f', long = "extension")]
+    pub extensions: Vec<ast::Extension>,
 }
 
 impl Args {

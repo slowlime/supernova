@@ -260,8 +260,11 @@ impl Feature {
 
 #[derive(Display, Debug, Clone)]
 pub enum EnableReason {
-    #[display("enabled by extension")]
+    #[display("enabled by an extension")]
     Extension(Location),
+
+    #[display("enabled by a command-line flag")]
+    Flag(ast::Extension),
 
     #[display("enabled by another feature: {_0}")]
     Feature(FeatureKind),

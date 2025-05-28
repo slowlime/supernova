@@ -3,13 +3,19 @@ use fxhash::FxHashMap;
 use crate::ast;
 use crate::ast::visit::{AstRecurse, Visitor, VisitorMut};
 use crate::diag::DiagCtx;
+use crate::sema::feature::EnableReason;
 
-use super::feature::Feature;
+use super::feature::{Feature, FeatureKind};
 use super::{BindingInfo, BindingKind, DeclInfo, ExprInfo, Module, PatInfo, SemaDiag, TyExprInfo};
 
 impl<'ast> Module<'ast> {
-    pub(super) fn load_ast(&mut self, ast: &'ast mut ast::Program<'ast>, diag: &mut impl DiagCtx) {
-        Pass::new(self, ast, diag).run()
+    pub(super) fn load_ast(
+        &mut self,
+        ast: &'ast mut ast::Program<'ast>,
+        diag: &mut impl DiagCtx,
+        extensions: Vec<ast::Extension>,
+    ) {
+        Pass::new(self, ast, diag, extensions).run()
     }
 }
 
@@ -17,14 +23,21 @@ struct Pass<'ast, 'm, D> {
     m: &'m mut Module<'ast>,
     ast: Option<&'ast mut ast::Program<'ast>>,
     diag: &'m mut D,
+    extensions: Vec<ast::Extension>,
 }
 
 impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
-    fn new(m: &'m mut Module<'ast>, ast: &'ast mut ast::Program<'ast>, diag: &'m mut D) -> Self {
+    fn new(
+        m: &'m mut Module<'ast>,
+        ast: &'ast mut ast::Program<'ast>,
+        diag: &'m mut D,
+        extensions: Vec<ast::Extension>,
+    ) -> Self {
         Self {
             m,
             ast: Some(ast),
             diag,
+            extensions,
         }
     }
 
@@ -48,6 +61,15 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 });
             } else if let Some(feature) = Feature::from_extension(extension, location) {
                 self.m.features.insert(feature.kind, feature);
+            }
+        }
+
+        for &extension in &self.extensions {
+            if let Some(feature) = FeatureKind::from_extension(extension) {
+                self.m.features.entry(feature).or_insert(Feature {
+                    kind: feature,
+                    reason: EnableReason::Flag(extension),
+                });
             }
         }
     }

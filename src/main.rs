@@ -48,7 +48,7 @@ fn main() -> ExitCode {
         }
     };
 
-    let (_, result) = sema::process(&mut ast, &mut diag);
+    let (_, result) = sema::process(&mut ast, &mut diag, args.extensions);
 
     diag.finish();
 

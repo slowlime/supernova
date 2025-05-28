@@ -18,7 +18,16 @@ pub struct Program<'src> {
 }
 
 #[derive(
-    strum::Display, strum::EnumString, strum::VariantArray, Debug, Clone, Copy, PartialEq, Eq, Hash,
+    strum::Display,
+    strum::EnumString,
+    strum::VariantArray,
+    strum::IntoStaticStr,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
 )]
 #[strum(serialize_all = "kebab-case")]
 pub enum Extension {
@@ -61,6 +70,16 @@ pub enum Extension {
     UnitType,
     UniversalTypes,
     Variants,
+}
+
+impl clap::ValueEnum for Extension {
+    fn value_variants<'a>() -> &'a [Self] {
+        <Self as strum::VariantArray>::VARIANTS
+    }
+
+    fn to_possible_value(&self) -> Option<clap::builder::PossibleValue> {
+        Some(<&str>::from(*self).into())
+    }
 }
 
 #[derive(Debug, Default, Clone)]

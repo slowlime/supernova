@@ -724,6 +724,10 @@ impl IntoDiagnostic for SemaDiag {
                         EnableReason::Extension(_) => diag
                             .add_note(format!("the feature {feature} was enabled by an extension")),
 
+                        EnableReason::Flag(ext) => diag.add_note(format!(
+                            "the feature {feature} was enabled by a command-line flag `-f {ext}`",
+                        )),
+
                         EnableReason::Feature(f) => diag.add_note(format!(
                             "the feature {feature} was enabled as a dependency of the feature {f}"
                         )),
