@@ -1195,6 +1195,18 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
 
                     return Err(());
                 }
+
+                // accept field reordering: the reference implementation does this as well.
+                // talk about consistency.
+                let unification_pairs = l
+                    .elems
+                    .iter()
+                    .map(|(name, field_ty_id)| (*field_ty_id, r.elems[r.fields[name]].1))
+                    .collect::<Vec<_>>();
+
+                for (field_ty_id, expected_field_ty_id) in unification_pairs {
+                    self.unify(field_ty_id, expected_field_ty_id, location, in_pat)?;
+                }
             }
 
             (TyKind::Record(l), TyKind::Tuple(r)) if r.elems.is_empty() => {
@@ -2478,7 +2490,9 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 let ty = match &self.m.tys[base_ty_id].kind {
                     TyKind::Record(ty) => ty,
 
-                    _ if self.m.is_feature_enabled(FeatureKind::TypeReconstruction) => {
+                    TyKind::Untyped { .. } | TyKind::Var(_)
+                        if self.m.is_feature_enabled(FeatureKind::TypeReconstruction) =>
+                    {
                         let field_ty_id = self.make_fresh_var(expr.base.location);
                         let ty = TyRecord::new(vec![(name.as_str().into(), field_ty_id)]);
                         let ty_id = self.m.add_ty(TyKind::Record(ty));
@@ -2522,7 +2536,9 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 let ty = match &self.m.tys[base_ty_id].kind {
                     TyKind::Tuple(ty) => ty,
 
-                    _ if self.m.is_feature_enabled(FeatureKind::TypeReconstruction) => {
+                    TyKind::Untyped { .. } | TyKind::Var(_)
+                        if self.m.is_feature_enabled(FeatureKind::TypeReconstruction) =>
+                    {
                         let n = if !self.m.is_feature_enabled(FeatureKind::Tuples) {
                             debug_assert!(self.m.is_feature_enabled(FeatureKind::Pairs));
 
@@ -2789,13 +2805,33 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
     ) -> Result {
         if self.m.is_feature_enabled(FeatureKind::TypeReconstruction) {
             let ty_id = self.make_fresh_var(self.m.exprs[expr_id].def.location);
-            let inner_ty = self.m.add_ty(TyKind::Fn(TyFn {
+            let inner_ty_id = self.m.add_ty(TyKind::Fn(TyFn {
                 params: vec![ty_id],
                 ret: ty_id,
             }));
-            self.typeck_expr(
-                &expr.expr,
-                Some((inner_ty, ExpectationSource::FixArg { expr_id, ty_id })),
+            self.typeck_expr(&expr.expr, None)?;
+
+            let arg_ty_id = self.find_ty_repr(self.m.exprs[expr.expr.id].ty_id);
+
+            match &self.m.tys[arg_ty_id].kind {
+                TyKind::Untyped { .. } | TyKind::Var(_) | TyKind::Fn(_) => {}
+
+                _ => {
+                    let arg_ty_id = self.retrieve_ty(arg_ty_id);
+
+                    self.diag.emit(SemaDiag::FixNotFn {
+                        location: self.m.exprs[expr_id].def.location,
+                        actual_ty: self.m.display_ty(arg_ty_id).to_string(),
+                        inner_location: expr.expr.location,
+                    });
+
+                    return Err(());
+                }
+            }
+
+            self.unify_expr_with_expectation(
+                expr.expr.id,
+                Some((inner_ty_id, ExpectationSource::FixArg { expr_id, ty_id })),
             )?;
 
             self.m.exprs[expr_id].ty_id = ty_id;
@@ -3041,6 +3077,50 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
 
             for (arg_idx, (arg, &expected_ty_id)) in expr.args.iter().zip(&fn_ty.params).enumerate()
             {
+                // a hack to force a specific error code.
+                // (these error codes drive me insane, really. they're very inconstent.)
+                if arg_idx == 0
+                    && matches!(
+                        expr.callee,
+                        ast::Callee::Builtin {
+                            builtin: ast::Builtin::ListHead
+                                | ast::Builtin::ListIsEmpty
+                                | ast::Builtin::ListTail,
+                            ..
+                        }
+                    )
+                {
+                    self.typeck_expr(arg, None)?;
+                    let arg_ty_id = self.find_ty_repr(self.m.exprs[arg.id].ty_id);
+
+                    match &self.m.tys[arg_ty_id].kind {
+                        TyKind::Untyped { .. } | TyKind::Var(_) | TyKind::Fn(_) => {}
+
+                        _ => {
+                            let arg_ty_id = self.retrieve_ty(arg_ty_id);
+                            self.diag.emit(SemaDiag::ExprTyNotList {
+                                location: arg.location,
+                                actual_ty: self.m.display_ty(arg_ty_id).to_string(),
+                            });
+
+                            return Err(());
+                        }
+                    }
+
+                    self.unify_expr_with_expectation(
+                        arg.id,
+                        Some((
+                            expected_ty_id,
+                            ExpectationSource::FnArg {
+                                expr_id,
+                                arg_idx,
+                                callee_location: expr.callee.location(),
+                                callee_ty_id: fn_ty_id,
+                            },
+                        )),
+                    )?;
+                }
+
                 self.typeck_expr(
                     arg,
                     Some((
