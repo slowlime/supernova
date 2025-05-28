@@ -1756,7 +1756,7 @@ impl IntoDiagnostic for SemaDiag {
                 .at(*location)
                 .with_code(code!(
                     sema::unexpected_data_for_nullary_label
-                    as "ERROR_DATA_FOR_NULLARY_LABEL"
+                    as "ERROR_EXPECTED_DATA_FOR_NULLARY_LABEL"
                 ))
                 .with_msg(&self)
                 .with_label(Label::primary(*location))
