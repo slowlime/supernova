@@ -2007,7 +2007,7 @@ impl IntoDiagnostic for SemaDiag {
                 .with_msg(&self)
                 .with_label(Label::primary(*location).with_msg(format!(
                     "the error occurred while type-checking this {}",
-                    if *in_pat { "expression" } else { "pattern" },
+                    if *in_pat { "pattern" } else { "expression" },
                 )))
                 .make(),
 
@@ -2022,7 +2022,7 @@ impl IntoDiagnostic for SemaDiag {
                 .with_msg(&self)
                 .with_label(Label::primary(*location).with_msg(format!(
                     "the error occured while type-checking this {}",
-                    if *in_pat { "expression" } else { "pattern" },
+                    if *in_pat { "pattern" } else { "expression" },
                 )))
                 .make(),
         }
