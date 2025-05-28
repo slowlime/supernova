@@ -59,7 +59,7 @@ impl Test {
         let mut ast = parser.parse();
 
         let result = match ast {
-            Ok(ref mut ast) => sema::process(ast, &mut diag).1,
+            Ok(ref mut ast) => sema::process(ast, &mut diag, vec![]).1,
 
             Err(e) => {
                 diag.emit(e);
