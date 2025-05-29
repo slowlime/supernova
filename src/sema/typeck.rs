@@ -637,12 +637,20 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 (TyKind::Untyped { .. }, _) | (_, TyKind::Untyped { .. }) => Ordering::Equal,
 
                 // ∀T: T <: Top.
-                (_, TyKind::Top) => Ordering::Less,
-                (TyKind::Top, _) => Ordering::Greater,
+                (_, TyKind::Top) if self.m.is_feature_enabled(FeatureKind::Subtyping) => {
+                    Ordering::Less
+                }
+                (TyKind::Top, _) if self.m.is_feature_enabled(FeatureKind::Subtyping) => {
+                    Ordering::Greater
+                }
 
                 // ∀T: Bot <: T.
-                (TyKind::Bot, _) => Ordering::Less,
-                (_, TyKind::Bot) => Ordering::Greater,
+                (TyKind::Bot, _) if self.m.is_feature_enabled(FeatureKind::Subtyping) => {
+                    Ordering::Less
+                }
+                (_, TyKind::Bot) if self.m.is_feature_enabled(FeatureKind::Subtyping) => {
+                    Ordering::Greater
+                }
 
                 (&TyKind::Ref(lhs, _), &TyKind::Ref(rhs, RefMode::Source)) => {
                     self.cmp_tys(lhs, rhs, ctx)?
@@ -875,7 +883,9 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 (
                     // why not `_`?
                     // this makes sure I don't forget to fix this if I add new types.
-                    TyKind::Unit
+                    TyKind::Top
+                    | TyKind::Bot
+                    | TyKind::Unit
                     | TyKind::Bool
                     | TyKind::Nat
                     | TyKind::Sum(..)
@@ -3149,7 +3159,9 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                             return Ok(());
                         }
 
-                        if expected_ty_id == self.m.well_known_tys.top {
+                        if expected_ty_id == self.m.well_known_tys.top
+                            && self.m.is_feature_enabled(FeatureKind::Subtyping)
+                        {
                             return self.typeck_expr_apply(expr_id, expr, None);
                         }
 
@@ -3218,7 +3230,9 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                             return Ok(());
                         }
 
-                        if expected_ty_id == self.m.well_known_tys.top {
+                        if expected_ty_id == self.m.well_known_tys.top
+                            && self.m.is_feature_enabled(FeatureKind::Subtyping)
+                        {
                             return self.typeck_expr_apply(expr_id, expr, None);
                         }
 
@@ -3795,7 +3809,9 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 return Ok(());
             }
 
-            if expected_ty_id == self.m.well_known_tys.top {
+            if expected_ty_id == self.m.well_known_tys.top
+                && self.m.is_feature_enabled(FeatureKind::Subtyping)
+            {
                 return self.typeck_expr_fn(expr_id, expr, None);
             }
 
@@ -3909,7 +3925,9 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 return self.typeck_expr_tuple(expr_id, expr, None);
             }
 
-            if expected_ty_id == self.m.well_known_tys.top {
+            if expected_ty_id == self.m.well_known_tys.top
+                && self.m.is_feature_enabled(FeatureKind::Subtyping)
+            {
                 return self.typeck_expr_tuple(expr_id, expr, None);
             }
 
@@ -4029,7 +4047,9 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 return self.typeck_expr_record(expr_id, expr, None);
             }
 
-            if expected_ty_id == self.m.well_known_tys.top {
+            if expected_ty_id == self.m.well_known_tys.top
+                && self.m.is_feature_enabled(FeatureKind::Subtyping)
+            {
                 return self.typeck_expr_record(expr_id, expr, None);
             }
 
@@ -4165,7 +4185,9 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                 return Ok(());
             }
 
-            if expected_ty_id == self.m.well_known_tys.top {
+            if expected_ty_id == self.m.well_known_tys.top
+                && self.m.is_feature_enabled(FeatureKind::Subtyping)
+            {
                 return self.typeck_expr_variant(expr_id, expr, None);
             }
 
@@ -4368,7 +4390,9 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
             let elem_ty_id = if self.is_untyped(expected_ty_id) {
                 self.m.well_known_tys.error
             } else {
-                if expected_ty_id == self.m.well_known_tys.top {
+                if expected_ty_id == self.m.well_known_tys.top
+                    && self.m.is_feature_enabled(FeatureKind::Subtyping)
+                {
                     return self.typeck_expr_list(expr_id, expr, None);
                 }
 
@@ -4624,7 +4648,9 @@ impl<'ast, 'm, D: DiagCtx> Pass<'ast, 'm, D> {
                     let pointee_ty_id = if self.is_untyped(expected_ty_id) {
                         self.m.well_known_tys.error
                     } else {
-                        if expected_ty_id == self.m.well_known_tys.top {
+                        if expected_ty_id == self.m.well_known_tys.top
+                            && self.m.is_feature_enabled(FeatureKind::Subtyping)
+                        {
                             return self.typeck_expr_unary(expr_id, expr, None);
                         }
 
