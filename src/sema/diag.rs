@@ -1868,7 +1868,7 @@ impl IntoDiagnostic for SemaDiag {
                 scrutinee_location,
                 witness,
             } => Diagnostic::error()
-                .at(*location)
+                .at(*scrutinee_location)
                 .with_code(code!(
                     sema::match_non_exhaustive
                     as "ERROR_NONEXHAUSTIVE_MATCH_PATTERNS"
@@ -1878,6 +1878,7 @@ impl IntoDiagnostic for SemaDiag {
                     Label::primary(*scrutinee_location)
                         .with_msg(format!("no pattern matches `{witness}`")),
                 )
+                .with_label(Label::secondary(*location).with_msg("in this `match` expression"))
                 .make(),
 
             Self::NonIrrefutableLetPat { location, witness } => Diagnostic::error()
